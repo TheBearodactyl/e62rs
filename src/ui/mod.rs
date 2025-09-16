@@ -1,5 +1,6 @@
 use crate::config::get_config;
 use crate::ui::download::PostDownloader;
+use crate::ui::view::fetch_and_display_image_as_sixel;
 use crate::{client::E6Client, formatting::format_text, models::E6Post};
 use anyhow::{Context, Result};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -7,6 +8,7 @@ use inquire::{Confirm, MultiSelect, Select, Text};
 
 mod download;
 mod search;
+mod view;
 
 #[derive(Default)]
 pub struct E6Ui {
@@ -20,6 +22,8 @@ pub enum InteractionMenu {
     OpenInBrowser,
     /// Download the post
     Download,
+    /// View the post image in terminal (requires a sixel compatible terminal)
+    View,
     /// Go back to search
     Back,
 }
@@ -39,7 +43,7 @@ pub enum BatchAction {
 impl E6Ui {
     pub fn new(client: E6Client) -> Self {
         let settings = get_config().expect("Failed to get settings");
-        let downloader = PostDownloader::with_download_dir(settings.download_dir);
+        let downloader = PostDownloader::with_download_dir(settings.download_dir.unwrap());
 
         Self { client, downloader }
     }
@@ -154,7 +158,7 @@ impl E6Ui {
     fn get_post_limit(&self) -> Result<u64> {
         let settings = get_config()?;
 
-        if settings.post_count.eq(&32) {
+        if settings.post_count.unwrap_or(32).eq(&32) {
             let prompt = inquire::CustomType::<u64>::new("How many posts to return?")
                 .with_default(32)
                 .with_error_message("Please enter a valid number")
@@ -163,7 +167,7 @@ impl E6Ui {
 
             Ok(prompt.unwrap_or(32).min(320))
         } else {
-            Ok(settings.post_count)
+            Ok(settings.post_count.unwrap_or(32))
         }
     }
 
@@ -265,6 +269,12 @@ impl E6Ui {
                 self.downloader.download_post(post).await?;
             }
             InteractionMenu::Back => {}
+            InteractionMenu::View => {
+                let post_url = post.file.url.unwrap();
+                fetch_and_display_image_as_sixel(&post_url)
+                    .await
+                    .context("Failed to view image")?;
+            }
         }
 
         Ok(choice)

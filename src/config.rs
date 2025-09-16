@@ -1,16 +1,27 @@
 use config::Config;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ImageDisplay {
+    /// The max width of displayed images
+    pub width: Option<u64>,
+    /// The max height of displayed images
+    pub height: Option<u64>
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Cfg {
     /// The directory to download posts to
-    pub download_dir: String,
+    pub download_dir: Option<String>,
 
     /// The amount of posts to show in a search
-    pub post_count: u64,
+    pub post_count: Option<u64>,
 
     /// The base URL of the API (defaults to https://e621.net)
-    pub base_url: String
+    pub base_url: Option<String>,
+
+    /// Post viewing settings
+    pub display: Option<ImageDisplay>
 }
 
 pub fn get_config() -> anyhow::Result<Cfg> {
