@@ -11,6 +11,7 @@ pub struct PostDownloader {
 }
 
 impl PostDownloader {
+    #[allow(unused)]
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -18,10 +19,13 @@ impl PostDownloader {
         }
     }
 
-    pub fn with_download_dir(download_dir: PathBuf) -> Self {
+    pub fn with_download_dir<T>(download_dir: T) -> Self
+    where
+        T: AsRef<Path>, std::path::PathBuf: std::convert::From<T>
+    {
         Self {
             client: reqwest::Client::new(),
-            download_dir: Some(download_dir),
+            download_dir: Some(download_dir.into()),
         }
     }
 
@@ -34,8 +38,6 @@ impl PostDownloader {
 
         let filename = self.extract_filename(&url, &post)?;
         let filepath = self.get_filepath(&filename)?;
-
-        println!("Downloading to: {}", filepath.display());
 
         let response = self
             .client
@@ -51,8 +53,6 @@ impl PostDownloader {
             .with_context(|| format!("Server returned error for '{}'", url))?;
 
         self.save_to_file(response, &filepath, total_size).await?;
-
-        println!("✓ Downloaded '{}' successfully", filename);
         Ok(())
     }
 
@@ -116,4 +116,3 @@ impl PostDownloader {
         Ok(())
     }
 }
-

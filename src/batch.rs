@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::{
     client::E6Client,
     models::{E6Post, E6PostResponse},

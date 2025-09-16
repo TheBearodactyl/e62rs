@@ -1,22 +1,23 @@
+use crate::{cli::Cli, client::E6Client, ui::E6Ui};
 use anyhow::Result;
 use clap::Parser;
+use env_logger::{Builder, Env};
 use log::{error, info};
 use std::process;
+
+pub static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 mod batch;
 mod cli;
 mod client;
+mod formatting;
 mod models;
 mod ui;
-mod formatting;
-
-use crate::{cli::Cli, client::E6Client, ui::E6Ui};
-
-pub static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+mod config;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    Builder::from_env(Env::default().default_filter_or("info")).init();
 
     if let Err(e) = run().await {
         error!("Application error: {:#}", e);
@@ -26,8 +27,10 @@ async fn main() -> Result<()> {
     info!("Application finished successfully");
     Ok(())
 }
+
 async fn run() -> Result<()> {
     let argv = Cli::parse();
+
     let client = if argv.e926 {
         info!(
             "Starting {} v{} using e926",

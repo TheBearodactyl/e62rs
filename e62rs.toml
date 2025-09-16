@@ -1,0 +1,3 @@
+download_dir = "./output"
+post_count = 32
+base_url = "https://e621.net"

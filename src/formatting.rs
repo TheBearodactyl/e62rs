@@ -1,5 +1,5 @@
-use owo_colors::{OwoColorize, Style as OwoStyle};
-use std::{borrow::Cow, collections::HashMap};
+use owo_colors::OwoColorize;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 enum ScriptMode {

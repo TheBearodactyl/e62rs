@@ -1,3 +1,4 @@
+use crate::config::get_config;
 use crate::ui::download::PostDownloader;
 use crate::{client::E6Client, formatting::format_text, models::E6Post};
 use anyhow::{Context, Result};
@@ -37,10 +38,10 @@ pub enum BatchAction {
 
 impl E6Ui {
     pub fn new(client: E6Client) -> Self {
-        Self {
-            client,
-            downloader: PostDownloader::new(),
-        }
+        let settings = get_config().expect("Failed to get settings");
+        let downloader = PostDownloader::with_download_dir(settings.download_dir);
+
+        Self { client, downloader }
     }
 
     pub async fn search(&self) -> Result<()> {
@@ -151,13 +152,19 @@ impl E6Ui {
     }
 
     fn get_post_limit(&self) -> Result<u64> {
-        let prompt = inquire::CustomType::<u64>::new("How many posts to return?")
-            .with_default(20)
-            .with_error_message("Please enter a valid number")
-            .prompt()
-            .context("Failed to get post limit")?;
+        let settings = get_config()?;
 
-        Ok(prompt.min(320))
+        if settings.post_count.eq(&32) {
+            let prompt = inquire::CustomType::<u64>::new("How many posts to return?")
+                .with_default(32)
+                .with_error_message("Please enter a valid number")
+                .prompt_skippable()
+                .context("Failed to get post limit")?;
+
+            Ok(prompt.unwrap_or(32).min(320))
+        } else {
+            Ok(settings.post_count)
+        }
     }
 
     fn select_post<'a>(&self, posts: &'a [E6Post]) -> Result<Option<&'a E6Post>> {
@@ -317,11 +324,11 @@ impl E6Ui {
         .unwrap()
         .progress_chars("##-");
 
-        let total_downloaded_pb = multi_prog.add(ProgressBar::new(posts.len() as u64));
+        let total_downloaded_pb = multi_prog.add(ProgressBar::new(total as u64));
         total_downloaded_pb.set_style(sty.clone());
         total_downloaded_pb.set_message("Total");
 
-        for (index, post) in posts.into_iter().enumerate() {
+        for post in posts.into_iter() {
             total_downloaded_pb.inc(1);
             match self.downloader.download_post(post).await {
                 Ok(_) => println!("✓ Post downloaded successfully"),
