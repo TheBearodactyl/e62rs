@@ -1,6 +1,6 @@
 use crate::config::get_config;
 use crate::ui::download::PostDownloader;
-use crate::ui::view::fetch_and_display_image_as_sixel;
+use crate::ui::view::{fetch_and_display_image_as_sixel, fetch_and_display_images_as_sixel};
 use crate::{client::E6Client, formatting::format_text, models::E6Post};
 use anyhow::{Context, Result};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -36,6 +36,8 @@ pub enum BatchAction {
     OpenAllInBrowser,
     /// Download and open all selected posts
     DownloadAndOpenAll,
+    /// View all post images in terminal (requires a sixel compatible terminal)
+    ViewAll,
     /// Go back to search
     Back,
 }
@@ -300,6 +302,19 @@ impl E6Ui {
                 self.open_posts_in_browser(&posts_clone)?;
             }
             BatchAction::Back => {}
+            BatchAction::ViewAll => {
+                let posts_clone = posts.clone();
+                fetch_and_display_images_as_sixel(
+                    posts_clone
+                        .iter()
+                        .map(|post| post.file.url.clone().unwrap())
+                        .collect::<Vec<String>>()
+                        .iter()
+                        .map(|st| st.as_str())
+                        .collect::<Vec<&str>>(),
+                )
+                .await?;
+            }
         }
 
         Ok(choice)

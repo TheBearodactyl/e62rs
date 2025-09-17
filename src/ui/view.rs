@@ -102,6 +102,23 @@ pub async fn fetch_and_display_image_as_sixel(url: &str) -> anyhow::Result<()> {
         .context("Failed to convert image to SIXEL")?;
 
     print!("{}", sixel_data);
+    println!("");
+
+    Ok(())
+}
+pub async fn fetch_and_display_images_as_sixel(urls: Vec<&str>) -> anyhow::Result<()> {
+    for url in urls {
+        let (img_rgb888, width, height) = load_image_as_rgb888_from_url(url)
+            .await
+            .context("Failed to load image from URL")?;
+
+        let sixel_data = convert_rgb888_to_sixel(&img_rgb888, width, height)
+            .context("Failed to convert image to SIXEL")?;
+
+        print!("{}", sixel_data);
+    }
+
+    println!("");
 
     Ok(())
 }
