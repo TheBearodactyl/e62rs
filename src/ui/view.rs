@@ -25,7 +25,7 @@ pub async fn fetch_remote_file_as_bytes(url: &str) -> anyhow::Result<Vec<u8>> {
     Ok(bytes.to_vec())
 }
 
-async fn load_image_as_rgb888_from_url(url: &str) -> Result<(Vec<u8>, u32, u32)> {
+pub async fn load_image_as_rgb888_from_url(url: &str) -> Result<(Vec<u8>, u32, u32)> {
     let cfg = get_config()?;
     let target_width = cfg.display.clone().unwrap().width;
     let target_height = cfg.display.unwrap().height;
@@ -77,7 +77,7 @@ pub async fn load_png_as_rgb888_from_url(url: &str) -> anyhow::Result<(Vec<u8>, 
     Ok((img_rgb888, width, height))
 }
 
-fn convert_rgb888_to_sixel(rgb_data: &[u8], width: u32, height: u32) -> anyhow::Result<String> {
+pub fn convert_rgb888_to_sixel(rgb_data: &[u8], width: u32, height: u32) -> anyhow::Result<String> {
     let sixel_data = sixel_string(
         rgb_data,
         width as i32,

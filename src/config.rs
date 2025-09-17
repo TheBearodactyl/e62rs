@@ -6,7 +6,9 @@ pub struct ImageDisplay {
     /// The max width of displayed images
     pub width: Option<u64>,
     /// The max height of displayed images
-    pub height: Option<u64>
+    pub height: Option<u64>,
+    /// Whether or not to display the image of a post when displaying its info
+    pub image_when_info: Option<bool>
 }
 
 #[derive(Serialize, Deserialize, Clone)]

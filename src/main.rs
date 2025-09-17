@@ -15,6 +15,14 @@ mod models;
 mod ui;
 mod config;
 
+#[derive(inquiry::Choice, PartialEq, PartialOrd, Debug, Clone, Copy)]
+enum MainMenu {
+    /// Search for posts
+    Search,
+    /// View the latest posts
+    ViewLatest
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     Builder::from_env(Env::default().default_filter_or("info")).init();
@@ -30,6 +38,7 @@ async fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     let argv = Cli::parse();
+    let selection = MainMenu::choice("What would you like to do?")?;
 
     let client = if argv.e926 {
         info!(
@@ -50,5 +59,8 @@ async fn run() -> Result<()> {
     };
 
     let ui = E6Ui::new(client);
-    ui.search().await
+    match selection {
+        MainMenu::Search => ui.search().await,
+        MainMenu::ViewLatest => ui.display_latest_posts().await
+    }
 }

@@ -173,6 +173,7 @@ pub fn format_text(input: &str) -> String {
         }
     }
 
+    #[allow(unreachable_patterns)]
     fn parse(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
         let mut result = String::new();
 
@@ -347,7 +348,6 @@ pub fn format_text(input: &str) -> String {
 
                     result.push_str(&format!("[{}]", search.bright_blue().underline()));
                 }
-
                 '[' if chars.clone().nth(1) == Some('[') => {
                     chars.next();
                     chars.next();
