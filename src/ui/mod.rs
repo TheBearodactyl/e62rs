@@ -1,4 +1,5 @@
 use crate::config::get_config;
+use crate::tag_db::TagDatabase;
 use crate::ui::download::PostDownloader;
 use crate::ui::view::{fetch_and_display_image_as_sixel, fetch_and_display_images_as_sixel};
 use crate::{client::E6Client, formatting::format_text, models::E6Post};
@@ -6,14 +7,14 @@ use anyhow::{Context, Result};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use inquire::{Confirm, MultiSelect, Select, Text};
 
-mod download;
-mod search;
-mod view;
+pub mod download;
+pub mod view;
 
 #[derive(Default)]
 pub struct E6Ui {
     client: E6Client,
     downloader: PostDownloader,
+    tag_db: TagDatabase,
 }
 
 #[derive(inquiry::Choice, Clone, Copy, PartialEq, PartialOrd, Debug)]
@@ -43,11 +44,35 @@ pub enum BatchAction {
 }
 
 impl E6Ui {
-    pub fn new(client: E6Client) -> Self {
+    pub fn new(client: E6Client, tag_db: TagDatabase) -> Self {
         let settings = get_config().expect("Failed to get settings");
-        let downloader = PostDownloader::with_download_dir(settings.download_dir.unwrap());
+        let downloader = PostDownloader::with_download_dir_and_format(
+            settings.download_dir.clone().unwrap(),
+            settings.output_format.clone(),
+        );
 
-        Self { client, downloader }
+        if !std::fs::exists(
+            settings
+                .download_dir
+                .clone()
+                .unwrap_or("output".to_string()),
+        )
+        .is_ok()
+        {
+            std::fs::create_dir_all(
+                settings
+                    .download_dir
+                    .clone()
+                    .unwrap_or("output".to_string()),
+            )
+            .expect("Failed to create output directory");
+        }
+
+        Self {
+            client,
+            downloader,
+            tag_db,
+        }
     }
 
     pub async fn search(&self) -> Result<()> {
@@ -146,11 +171,33 @@ impl E6Ui {
             }
 
             let tag = Text::new("Enter tag:")
+                .with_autocomplete(move |input: &str| {
+                    let suggestions = self.tag_db.autocomplete(input, 5);
+                    Ok(suggestions)
+                })
                 .prompt()
                 .context("Failed to get tag input")?;
 
             if !tag.trim().is_empty() {
-                tags.push(tag.trim().to_string());
+                let tag = tag.trim().to_string();
+                if self.tag_db.exists(&tag) {
+                    tags.push(tag);
+                } else {
+                    let suggestions = self.tag_db.search(&tag, 5);
+                    if !suggestions.is_empty() {
+                        let msg = format!("Tag '{}' not found. Did you mean:", tag);
+                        let selected = Select::new(&msg, suggestions)
+                            .with_help_message("Select a tag or press ESC to cancel")
+                            .prompt_skippable()
+                            .context("Failed to get tag selection")?;
+
+                        if let Some(selected_tag) = selected {
+                            tags.push(selected_tag);
+                        }
+                    } else {
+                        println!("Tag '{}' not found and no similar tags found.", tag);
+                    }
+                }
             }
         }
 
@@ -356,10 +403,7 @@ impl E6Ui {
 
         for post in posts.into_iter() {
             total_downloaded_pb.inc(1);
-            match self.downloader.download_post(post).await {
-                Ok(_) => println!("✓ Post downloaded successfully"),
-                Err(e) => eprintln!("✗ Failed to download post: {}", e),
-            }
+            self.downloader.download_post(post).await?;
         }
 
         println!("\n✓ Batch download complete");
@@ -372,6 +416,7 @@ impl E6Ui {
             .prompt()
             .context("Failed to get retry confirmation")
     }
+
     pub async fn display_latest_posts(&self) -> Result<()> {
         let results = self
             .client
@@ -477,6 +522,7 @@ impl E6Ui {
         }
     }
 
+    #[allow(unused)]
     pub async fn browse_latest_posts(&self) -> Result<()> {
         loop {
             match self.perform_latest_posts_browse().await {
@@ -496,6 +542,7 @@ impl E6Ui {
         Ok(())
     }
 
+    #[allow(unused)]
     async fn perform_latest_posts_browse(&self) -> Result<bool> {
         let results = self
             .client

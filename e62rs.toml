@@ -1,6 +1,7 @@
 download_dir = "./output"
 post_count = 32
 base_url = "https://e621.net"
+output_format = "$artist/$rating/$id - $score.$ext"
 
 [display]
-height = 480
+width = 480

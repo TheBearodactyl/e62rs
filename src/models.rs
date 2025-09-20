@@ -14,7 +14,7 @@ pub struct E6PostsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct E6PostResponse {
     #[serde(default)]
-    pub post: E6Post
+    pub post: E6Post,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -242,6 +242,18 @@ pub struct Relationships {
     pub children: Option<Vec<i64>>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TagEntry {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub category: i64,
+    #[serde(default)]
+    pub post_count: i64,
+}
+
 macro_rules! impl_display {
     ($type:ty, $name:expr, $color:ident, $($field:ident: $format:expr),*) => {
         impl Display for $type {
@@ -275,7 +287,20 @@ impl_display!(E6PostsResponse, "E6PostsResponse", cyan, posts: |posts: &Vec<E6Po
 
 impl_display!(E6PostResponse, "E6PostResponse", cyan, post: |p: &E6Post| format!("{}", p));
 
-impl_display!(E6Post, "E6Post", green,
+impl_display!(
+    TagEntry,
+    "TagEntry",
+    green,
+    id: fmt_value!(),
+    name: fmt_value!(),
+    category: fmt_value!(),
+    post_count: fmt_value!()
+);
+
+impl_display!(
+    E6Post,
+    "E6Post",
+    green,
     id: fmt_value!(),
     created_at: fmt_value!(),
     updated_at: fmt_value!(),
@@ -302,7 +327,10 @@ impl_display!(E6Post, "E6Post", green,
     duration: fmt_value!(debug)
 );
 
-impl_display!(File, "File", blue,
+impl_display!(
+    File,
+    "File",
+    blue,
     width: fmt_value!(),
     height: fmt_value!(),
     ext: fmt_value!(),
@@ -311,14 +339,20 @@ impl_display!(File, "File", blue,
     url: fmt_value!(debug)
 );
 
-impl_display!(Preview, "Preview", blue,
+impl_display!(
+    Preview,
+    "Preview",
+    blue,
     width: fmt_value!(),
     height: fmt_value!(),
     url: fmt_value!(debug),
     alt: fmt_value!(debug)
 );
 
-impl_display!(Sample, "Sample", blue,
+impl_display!(
+    Sample,
+    "Sample",
+    blue,
     has: fmt_value!(),
     width: fmt_value!(),
     height: fmt_value!(),
@@ -327,14 +361,20 @@ impl_display!(Sample, "Sample", blue,
     alternates: fmt_value!()
 );
 
-impl_display!(Alternates, "Alternates", blue,
+impl_display!(
+    Alternates,
+    "Alternates",
+    blue,
     has: fmt_value!(),
     original: fmt_value!(debug),
     variants: fmt_value!(debug),
     samples: fmt_value!(debug)
 );
 
-impl_display!(Original, "Original", blue,
+impl_display!(
+    Original,
+    "Original",
+    blue,
     fps: fmt_value!(),
     codec: fmt_value!(),
     size: fmt_value!(),
@@ -343,11 +383,12 @@ impl_display!(Original, "Original", blue,
     url: fmt_value!(debug)
 );
 
-impl_display!(Variants, "Variants", blue,
-    mp4: fmt_value!(debug)
-);
+impl_display!(Variants, "Variants", blue, mp4: fmt_value!(debug));
 
-impl_display!(Mp4, "Mp4", blue,
+impl_display!(
+    Mp4,
+    "Mp4",
+    blue,
     codec: fmt_value!(),
     fps: fmt_value!(),
     size: fmt_value!(),
@@ -356,7 +397,10 @@ impl_display!(Mp4, "Mp4", blue,
     url: fmt_value!(debug)
 );
 
-impl_display!(Quality, "Quality", blue,
+impl_display!(
+    Quality,
+    "Quality",
+    blue,
     fps: fmt_value!(),
     size: fmt_value!(),
     codec: fmt_value!(),
@@ -365,13 +409,19 @@ impl_display!(Quality, "Quality", blue,
     url: fmt_value!(debug)
 );
 
-impl_display!(Score, "Score", blue,
+impl_display!(
+    Score,
+    "Score",
+    blue,
     up: fmt_value!(),
     down: fmt_value!(),
     total: fmt_value!()
 );
 
-impl_display!(Tags, "Tags", blue,
+impl_display!(
+    Tags,
+    "Tags",
+    blue,
     general: fmt_value!(debug),
     artist: fmt_value!(debug),
     contributor: fmt_value!(debug),
@@ -383,7 +433,10 @@ impl_display!(Tags, "Tags", blue,
     lore: fmt_value!(debug)
 );
 
-impl_display!(Flags, "Flags", blue,
+impl_display!(
+    Flags,
+    "Flags",
+    blue,
     pending: fmt_value!(),
     flagged: fmt_value!(),
     note_locked: fmt_value!(),
@@ -392,7 +445,10 @@ impl_display!(Flags, "Flags", blue,
     deleted: fmt_value!()
 );
 
-impl_display!(Relationships, "Relationships", blue,
+impl_display!(
+    Relationships,
+    "Relationships",
+    blue,
     parent_id: fmt_value!(debug),
     has_children: fmt_value!(),
     has_active_children: fmt_value!(),

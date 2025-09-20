@@ -1,5 +1,5 @@
-use crate::{cli::Cli, client::E6Client, ui::E6Ui};
-use anyhow::Result;
+use crate::{cli::Cli, client::E6Client, tag_db::TagDatabase, ui::E6Ui};
+use anyhow::{Context, Result};
 use clap::Parser;
 use env_logger::{Builder, Env};
 use log::{error, info};
@@ -10,17 +10,18 @@ pub static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 mod batch;
 mod cli;
 mod client;
+mod config;
 mod formatting;
 mod models;
+mod tag_db;
 mod ui;
-mod config;
 
 #[derive(inquiry::Choice, PartialEq, PartialOrd, Debug, Clone, Copy)]
 enum MainMenu {
     /// Search for posts
     Search,
     /// View the latest posts
-    ViewLatest
+    ViewLatest,
 }
 
 #[tokio::main]
@@ -38,6 +39,8 @@ async fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     let argv = Cli::parse();
+    let tag_db = TagDatabase::load()
+        .context("Failed to load tag database. Please ensure data/tags.csv exists")?;
     let selection = MainMenu::choice("What would you like to do?")?;
 
     let client = if argv.e926 {
@@ -58,9 +61,9 @@ async fn run() -> Result<()> {
         E6Client::default()
     };
 
-    let ui = E6Ui::new(client);
+    let ui = E6Ui::new(client, tag_db);
     match selection {
         MainMenu::Search => ui.search().await,
-        MainMenu::ViewLatest => ui.display_latest_posts().await
+        MainMenu::ViewLatest => ui.display_latest_posts().await,
     }
 }

@@ -8,6 +8,7 @@ use tokio::{fs::File, io::AsyncWriteExt};
 pub struct PostDownloader {
     client: reqwest::Client,
     download_dir: Option<PathBuf>,
+    output_format: Option<String>,
 }
 
 impl PostDownloader {
@@ -16,16 +17,19 @@ impl PostDownloader {
         Self {
             client: reqwest::Client::new(),
             download_dir: None,
+            output_format: None,
         }
     }
 
-    pub fn with_download_dir<T>(download_dir: T) -> Self
+    pub fn with_download_dir_and_format<T>(download_dir: T, output_format: Option<String>) -> Self
     where
-        T: AsRef<Path>, std::path::PathBuf: std::convert::From<T>
+        T: AsRef<Path>,
+        PathBuf: From<T>,
     {
         Self {
             client: reqwest::Client::new(),
             download_dir: Some(download_dir.into()),
+            output_format,
         }
     }
 
@@ -36,7 +40,7 @@ impl PostDownloader {
             .clone()
             .context("Post has no downloadable file URL")?;
 
-        let filename = self.extract_filename(&url, &post)?;
+        let filename = self.format_filename(&post)?;
         let filepath = self.get_filepath(&filename)?;
 
         let response = self
@@ -56,6 +60,29 @@ impl PostDownloader {
         Ok(())
     }
 
+    fn format_filename(&self, post: &E6Post) -> Result<String> {
+        let format = self.output_format.as_deref().unwrap_or("$id.$ext");
+        let artist = post
+            .tags
+            .artist
+            .first()
+            .map(|s| s.as_str())
+            .unwrap_or("unknown");
+
+        let formatted = format
+            .replace("$rating", &post.rating)
+            .replace("$artist", artist)
+            .replace("$id", &post.id.to_string())
+            .replace("$score", &post.score.total.to_string())
+            .replace("$score_up", &post.score.up.to_string())
+            .replace("$score_down", &post.score.down.to_string())
+            .replace("$md5", &post.file.md5)
+            .replace("$filesize", &post.file.size.to_string())
+            .replace("$ext", &post.file.ext);
+
+        Ok(formatted)
+    }
+
     fn extract_filename(&self, url: &str, post: &E6Post) -> Result<String> {
         url.split('/')
             .next_back()
@@ -70,6 +97,13 @@ impl PostDownloader {
         } else {
             PathBuf::from(filename)
         };
+
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+            }
+        }
 
         if path.exists() {
             anyhow::bail!("File '{}' already exists", path.display());
