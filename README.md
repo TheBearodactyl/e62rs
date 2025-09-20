@@ -1,5 +1,6 @@
 # CONFIG OPTIONS:
 
+```
 `download_dir`: The directory to download posts to
 `output_format`: The output format for downloaded files
 `post_count`: The amount of posts to show in a search
@@ -42,3 +43,4 @@
 `image_when_info`: Whether to display the image when showing post info
 `sixel_quality`: Image quality for sixel conversion (1-100)
 `resize_method`: Resize method (nearest, linear, cubic, gaussian, lanczos3)
+```
