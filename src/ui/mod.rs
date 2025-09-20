@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::config::get_config;
 use crate::tag_db::TagDatabase;
 use crate::ui::download::PostDownloader;
@@ -10,11 +12,11 @@ use inquire::{Confirm, MultiSelect, Select, Text};
 pub mod download;
 pub mod view;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct E6Ui {
-    client: E6Client,
-    downloader: PostDownloader,
-    tag_db: TagDatabase,
+    client: Arc<E6Client>,
+    downloader: Arc<PostDownloader>,
+    tag_db: Arc<TagDatabase>,
 }
 
 #[derive(inquiry::Choice, Clone, Copy, PartialEq, PartialOrd, Debug)]
@@ -44,12 +46,12 @@ pub enum BatchAction {
 }
 
 impl E6Ui {
-    pub fn new(client: E6Client, tag_db: TagDatabase) -> Self {
+    pub fn new(client: Arc<E6Client>, tag_db: Arc<TagDatabase>) -> Self {
         let settings = get_config().expect("Failed to get settings");
-        let downloader = PostDownloader::with_download_dir_and_format(
+        let downloader = Arc::new(PostDownloader::with_download_dir_and_format(
             settings.download_dir.clone().unwrap(),
             settings.output_format.clone(),
-        );
+        ));
 
         if !std::fs::exists(
             settings
@@ -401,10 +403,10 @@ impl E6Ui {
         total_downloaded_pb.set_style(sty.clone());
         total_downloaded_pb.set_message("Total");
 
-        for post in posts.into_iter() {
-            total_downloaded_pb.inc(1);
-            self.downloader.download_post(post).await?;
-        }
+        self.downloader
+            .clone()
+            .download_posts_concurrent(posts)
+            .await?;
 
         println!("\n✓ Batch download complete");
         Ok(())
@@ -523,7 +525,7 @@ impl E6Ui {
     }
 
     #[allow(unused)]
-    pub async fn browse_latest_posts(&self) -> Result<()> {
+    pub async fn browse_latest_posts(&'static self) -> Result<()> {
         loop {
             match self.perform_latest_posts_browse().await {
                 Ok(should_continue) => {
@@ -543,7 +545,7 @@ impl E6Ui {
     }
 
     #[allow(unused)]
-    async fn perform_latest_posts_browse(&self) -> Result<bool> {
+    async fn perform_latest_posts_browse(&'static self) -> Result<bool> {
         let results = self
             .client
             .get_latest_posts()

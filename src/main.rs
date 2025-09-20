@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use env_logger::{Builder, Env};
 use log::{error, info};
-use std::process;
+use std::{process, sync::Arc};
 
 pub static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
@@ -13,6 +13,7 @@ mod client;
 mod config;
 mod formatting;
 mod models;
+mod progress;
 mod tag_db;
 mod ui;
 
@@ -39,9 +40,10 @@ async fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     let argv = Cli::parse();
-    let tag_db = TagDatabase::load()
-        .context("Failed to load tag database. Please ensure data/tags.csv exists")?;
-    let selection = MainMenu::choice("What would you like to do?")?;
+    let tag_db = Arc::new(
+        TagDatabase::load()
+            .context("Failed to load tag database. Please ensure data/tags.csv exists")?,
+    );
 
     let client = if argv.e926 {
         info!(
@@ -49,19 +51,19 @@ async fn run() -> Result<()> {
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION")
         );
-
-        E6Client::new("https://e926.net")?
+        Arc::new(E6Client::new("https://e926.net")?)
     } else {
         info!(
             "Starting {} v{} using e621",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION")
         );
-
-        E6Client::default()
+        Arc::new(E6Client::default())
     };
 
+    let selection = MainMenu::choice("What would you like to do?")?;
     let ui = E6Ui::new(client, tag_db);
+
     match selection {
         MainMenu::Search => ui.search().await,
         MainMenu::ViewLatest => ui.display_latest_posts().await,

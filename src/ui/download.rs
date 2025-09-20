@@ -1,14 +1,19 @@
-use crate::models::E6Post;
+use crate::{config::get_config, models::E6Post, progress::ProgressManager};
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
-use std::path::{Path, PathBuf};
+use indicatif::ProgressBar;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::{fs::File, io::AsyncWriteExt};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PostDownloader {
     client: reqwest::Client,
     download_dir: Option<PathBuf>,
     output_format: Option<String>,
+    progress_manager: Arc<ProgressManager>,
 }
 
 impl PostDownloader {
@@ -18,6 +23,7 @@ impl PostDownloader {
             client: reqwest::Client::new(),
             download_dir: None,
             output_format: None,
+            progress_manager: Arc::new(ProgressManager::new()),
         }
     }
 
@@ -30,10 +36,62 @@ impl PostDownloader {
             client: reqwest::Client::new(),
             download_dir: Some(download_dir.into()),
             output_format,
+            progress_manager: Arc::new(ProgressManager::new()),
         }
     }
 
+    pub async fn download_posts_concurrent(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
+        let config = get_config().unwrap_or_default();
+        let concurrent_limit = config
+            .performance
+            .as_ref()
+            .and_then(|p| p.concurrent_downloads)
+            .unwrap_or(8);
+
+        let total_pb = self
+            .progress_manager
+            .create_bar("total", posts.len() as u64, "Total Downloads")
+            .await;
+
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
+
+        let tasks: Vec<_> = posts
+            .into_iter()
+            .enumerate()
+            .map(|(i, post)| {
+                let downloader = Arc::clone(&self);
+                let semaphore = Arc::clone(&semaphore);
+                let total_pb = total_pb.clone();
+
+                tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    let result = downloader.download_post_with_progress(post, i).await;
+                    total_pb.inc(1);
+                    result
+                })
+            })
+            .collect();
+
+        let results = futures_util::future::join_all(tasks).await;
+
+        total_pb.finish_with_message("All downloads completed");
+
+        for (i, result) in results.into_iter().enumerate() {
+            match result {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => log::warn!("Download {} failed: {}", i, e),
+                Err(e) => log::warn!("Task {} failed: {}", i, e),
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn download_post(&self, post: E6Post) -> Result<()> {
+        self.download_post_with_progress(post, 0).await
+    }
+
+    async fn download_post_with_progress(&self, post: E6Post, index: usize) -> Result<()> {
         let url = post
             .file
             .url
@@ -43,6 +101,12 @@ impl PostDownloader {
         let filename = self.format_filename(&post)?;
         let filepath = self.get_filepath(&filename)?;
 
+        let pb_key = format!("download_{}", index);
+        let pb = self
+            .progress_manager
+            .create_bar(&pb_key, 0, &format!("Downloading {}", filename))
+            .await;
+
         let response = self
             .client
             .get(&url)
@@ -50,13 +114,48 @@ impl PostDownloader {
             .await
             .with_context(|| format!("Failed to download from '{}'", url))?;
 
-        let total_size = response.content_length();
+        let total_size = response.content_length().unwrap_or(0);
+        pb.set_length(total_size);
 
         let response = response
             .error_for_status()
             .with_context(|| format!("Server returned error for '{}'", url))?;
 
-        self.save_to_file(response, &filepath, total_size).await?;
+        self.save_to_file_with_progress(response, &filepath, pb.clone())
+            .await?;
+
+        pb.finish_with_message(format!("Downloaded {}", filename));
+        self.progress_manager.remove_bar(&pb_key).await;
+
+        Ok(())
+    }
+
+    async fn save_to_file_with_progress(
+        &self,
+        response: reqwest::Response,
+        filepath: &Path,
+        pb: ProgressBar,
+    ) -> Result<()> {
+        let mut file = File::create(filepath)
+            .await
+            .with_context(|| format!("Failed to create file '{}'", filepath.display()))?;
+
+        let mut stream = response.bytes_stream();
+        let mut downloaded = 0u64;
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.context("Error reading chunk from response")?;
+            downloaded += chunk.len() as u64;
+
+            file.write_all(&chunk)
+                .await
+                .with_context(|| format!("Error writing to file '{}'", filepath.display()))?;
+
+            pb.set_position(downloaded);
+        }
+
+        file.flush().await.context("Failed to flush file to disk")?;
+
         Ok(())
     }
 
@@ -181,43 +280,5 @@ impl PostDownloader {
         }
 
         Ok(path)
-    }
-
-    async fn save_to_file(
-        &self,
-        response: reqwest::Response,
-        filepath: &Path,
-        total_size: Option<u64>,
-    ) -> Result<()> {
-        let mut file = File::create(filepath)
-            .await
-            .with_context(|| format!("Failed to create file '{}'", filepath.display()))?;
-
-        let mut stream = response.bytes_stream();
-        let mut downloaded = 0u64;
-
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.context("Error reading chunk from response")?;
-            downloaded += chunk.len() as u64;
-
-            file.write_all(&chunk)
-                .await
-                .with_context(|| format!("Error writing to file '{}'", filepath.display()))?;
-
-            if let Some(total) = total_size {
-                let progress = (downloaded as f64 / total as f64 * 100.0) as u32;
-                print!("\rProgress: {}%", progress);
-                use std::io::{self, Write};
-                io::stdout().flush().unwrap();
-            }
-        }
-
-        if total_size.is_some() {
-            println!();
-        }
-
-        file.flush().await.context("Failed to flush file to disk")?;
-
-        Ok(())
     }
 }
