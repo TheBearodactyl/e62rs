@@ -1,4 +1,4 @@
-use crate::config::{get_config, CacheConfig};
+use crate::config::{get_config, CacheConfig, HttpConfig};
 use crate::models::{E6PostResponse, E6PostsResponse};
 use anyhow::{Context, Result};
 use futures::future::join_all;
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::fs;
 use tokio::sync::RwLock;
 
 const BASE_URL: &str = "https://e621.net";
@@ -27,6 +28,7 @@ pub struct E6Client {
     base_url: String,
     cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
     cache_config: CacheConfig,
+    disk_cache_path: Option<std::path::PathBuf>,
 }
 
 impl Default for E6Client {
@@ -41,6 +43,35 @@ impl E6Client {
         let http_config = config.http.unwrap_or_default();
         let cache_config = config.cache.unwrap_or_default();
 
+        let client = Self::build_http_client(&http_config)?;
+
+        let disk_cache_path = if cache_config.enabled.unwrap_or(true) {
+            let cache_dir = cache_config.cache_dir.as_deref().unwrap_or(".cache");
+            let path = std::path::PathBuf::from(cache_dir);
+
+            std::fs::create_dir_all(&path)
+                .with_context(|| format!("Failed to create cache directory: {:?}", path))?;
+
+            Some(path)
+        } else {
+            None
+        };
+
+        info!(
+            "Initialized HTTP client with {} max connections",
+            http_config.max_connections.unwrap_or(100)
+        );
+
+        Ok(Self {
+            client,
+            base_url: base_url.to_string(),
+            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache_config,
+            disk_cache_path,
+        })
+    }
+
+    fn build_http_client(http_config: &HttpConfig) -> Result<Client> {
         let mut client_builder = Client::builder()
             .user_agent(
                 http_config
@@ -55,29 +86,19 @@ impl E6Client {
             .pool_max_idle_per_host(http_config.pool_max_idle_per_host.unwrap_or(32))
             .pool_idle_timeout(Duration::from_secs(
                 http_config.pool_idle_timeout_secs.unwrap_or(90),
-            ))
-            .http2_prior_knowledge()
-            .tcp_keepalive(Duration::from_secs(60));
+            ));
+
+        if http_config.http2_prior_knowledge.unwrap_or(true) {
+            client_builder = client_builder.http2_prior_knowledge();
+        }
 
         if http_config.tcp_keepalive.unwrap_or(true) {
             client_builder = client_builder.tcp_keepalive(Duration::from_secs(60));
         }
 
-        let client = client_builder
+        client_builder
             .build()
-            .context("Failed to build HTTP client")?;
-
-        info!(
-            "Initialized HTTP client with {} max idle connections per host",
-            http_config.pool_max_idle_per_host.unwrap_or(32)
-        );
-
-        Ok(Self {
-            client,
-            base_url: base_url.to_string(),
-            cache: Arc::new(RwLock::new(HashMap::new())),
-            cache_config,
-        })
+            .context("Failed to build HTTP client")
     }
 
     pub fn with_client(client: Client, base_url: &str) -> Self {
@@ -89,25 +110,39 @@ impl E6Client {
             base_url: base_url.to_string(),
             cache: Arc::new(RwLock::new(HashMap::new())),
             cache_config,
+            disk_cache_path: None,
         }
     }
 
     async fn get_cached_or_fetch(&self, url: &str) -> Result<Vec<u8>> {
         let cache_key = url.to_string();
 
-        if self.cache_config.enabled.unwrap_or(true) {
+        if !self.cache_config.enabled.unwrap_or(true) {
+            return self.fetch_from_network(url).await;
+        }
+
+        {
             let cache = self.cache.read().await;
             if let Some(entry) = cache.get(&cache_key) {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
                 let ttl = self.cache_config.ttl_secs.unwrap_or(3600);
 
                 if now - entry.timestamp < ttl {
-                    debug!("Cache hit for {}", url);
+                    debug!("Memory cache hit for {}", url);
                     return Ok(entry.data.clone());
                 }
             }
         }
 
+        if let Some(ref cache_dir) = self.disk_cache_path {
+            let cache_file = cache_dir.join(format!("{:x}.cache", md5::compute(&cache_key)));
+            if let Ok(data) = fs::read(&cache_file).await {}
+        }
+
+        todo!()
+    }
+
+    async fn fetch_from_network(&self, url: &str) -> Result<Vec<u8>> {
         debug!("Cache miss, fetching from network: {}", url);
         let start = Instant::now();
 
@@ -124,12 +159,6 @@ impl E6Client {
             anyhow::bail!("API returned error status: {} for {}", status, url);
         }
 
-        let etag = response
-            .headers()
-            .get("etag")
-            .and_then(|h| h.to_str().ok())
-            .map(String::from);
-
         let bytes = response
             .bytes()
             .await
@@ -138,36 +167,6 @@ impl E6Client {
 
         let elapsed = start.elapsed();
         debug!("Network fetch completed in {:?} for {}", elapsed, url);
-
-        if self.cache_config.enabled.unwrap_or(true) {
-            let mut cache = self.cache.write().await;
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-
-            cache.insert(
-                cache_key,
-                CacheEntry {
-                    data: bytes.clone(),
-                    timestamp: now,
-                    etag,
-                },
-            );
-
-            if cache.len() > 1000 {
-                let mut entries: Vec<_> = cache.iter().collect();
-                entries.sort_by_key(|(_, entry)| entry.timestamp);
-                let to_remove = entries.len() / 4; // Remove oldest 25%
-                let keys_to_remove: Vec<String> = entries
-                    .iter()
-                    .take(to_remove)
-                    .map(|(k, _)| k.to_string())
-                    .collect();
-
-                for key in keys_to_remove {
-                    cache.remove(&key);
-                }
-                debug!("Cleaned up {} old cache entries", to_remove);
-            }
-        }
 
         Ok(bytes)
     }

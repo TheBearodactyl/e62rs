@@ -1,9 +1,11 @@
+#![allow(unused)]
+
 use crate::{cli::Cli, client::E6Client, tag_db::TagDatabase, ui::E6Ui};
 use anyhow::{Context, Result};
 use clap::Parser;
 use env_logger::{Builder, Env};
 use log::{error, info};
-use std::{process, sync::Arc};
+use std::{process, sync::Arc, time::Instant};
 
 pub static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
@@ -11,6 +13,7 @@ mod batch;
 mod cli;
 mod client;
 mod config;
+mod error;
 mod formatting;
 mod models;
 mod progress;
@@ -40,9 +43,17 @@ async fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     let argv = Cli::parse();
+    let start = Instant::now();
     let tag_db = Arc::new(
         TagDatabase::load()
             .context("Failed to load tag database. Please ensure data/tags.csv exists")?,
+    );
+    let load_time = start.elapsed().as_millis();
+
+    println!(
+        "Loaded {} tags in {} milliseconds",
+        tag_db.tags.len(),
+        load_time
     );
 
     let client = if argv.e926 {
