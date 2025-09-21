@@ -43,17 +43,9 @@ async fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     let argv = Cli::parse();
-    let start = Instant::now();
     let tag_db = Arc::new(
         TagDatabase::load()
             .context("Failed to load tag database. Please ensure data/tags.csv exists")?,
-    );
-    let load_time = start.elapsed().as_millis();
-
-    println!(
-        "Loaded {} tags in {} milliseconds",
-        tag_db.tags.len(),
-        load_time
     );
 
     let client = if argv.e926 {
@@ -71,6 +63,8 @@ async fn run() -> Result<()> {
         );
         Arc::new(E6Client::default())
     };
+
+    client.update_tags().await?;
 
     let selection = MainMenu::choice("What would you like to do?")?;
     let ui = E6Ui::new(client, tag_db);

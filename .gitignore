@@ -1,3 +1,4 @@
 /target
+/.cache
 /output
-data/tags.csv
+data/**

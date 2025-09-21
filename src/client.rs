@@ -1,14 +1,20 @@
 use crate::config::{get_config, CacheConfig, HttpConfig};
 use crate::models::{E6PostResponse, E6PostsResponse};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use chrono::{Datelike, Utc};
+use flate2::read::GzDecoder;
 use futures::future::join_all;
 use log::{debug, info, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::io::Read;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
 const BASE_URL: &str = "https://e621.net";
@@ -97,6 +103,7 @@ impl E6Client {
         }
 
         client_builder
+            .http1_only()
             .build()
             .context("Failed to build HTTP client")
     }
@@ -117,29 +124,81 @@ impl E6Client {
     async fn get_cached_or_fetch(&self, url: &str) -> Result<Vec<u8>> {
         let cache_key = url.to_string();
 
-        if !self.cache_config.enabled.unwrap_or(true) {
-            return self.fetch_from_network(url).await;
-        }
-
-        {
+        if self.cache_config.enabled.unwrap_or(true) {
             let cache = self.cache.read().await;
             if let Some(entry) = cache.get(&cache_key) {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
                 let ttl = self.cache_config.ttl_secs.unwrap_or(3600);
 
                 if now - entry.timestamp < ttl {
-                    debug!("Memory cache hit for {}", url);
+                    debug!("Cache hit for {}", url);
                     return Ok(entry.data.clone());
                 }
             }
         }
 
-        if let Some(ref cache_dir) = self.disk_cache_path {
-            let cache_file = cache_dir.join(format!("{:x}.cache", md5::compute(&cache_key)));
-            if let Ok(data) = fs::read(&cache_file).await {}
+        debug!("Cache miss, fetching from network: {}", url);
+        let start = Instant::now();
+
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .context("Failed to fetch from network")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            warn!("API returned error status: {} for {}", status, url);
+            anyhow::bail!("API returned error status: {} for {}", status, url);
         }
 
-        todo!()
+        let etag = response
+            .headers()
+            .get("etag")
+            .and_then(|h| h.to_str().ok())
+            .map(String::from);
+
+        let bytes = response
+            .bytes()
+            .await
+            .context("Failed to read response body")?
+            .to_vec();
+
+        let elapsed = start.elapsed();
+        debug!("Network fetch completed in {:?} for {}", elapsed, url);
+
+        if self.cache_config.enabled.unwrap_or(true) {
+            let mut cache = self.cache.write().await;
+            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+
+            cache.insert(
+                cache_key,
+                CacheEntry {
+                    data: bytes.clone(),
+                    timestamp: now,
+                    etag,
+                },
+            );
+
+            if cache.len() > 1000 {
+                let mut entries: Vec<_> = cache.iter().collect();
+                entries.sort_by_key(|(_, entry)| entry.timestamp);
+                let to_remove = entries.len() / 4;
+                let keys_to_remove: Vec<String> = entries
+                    .iter()
+                    .take(to_remove)
+                    .map(|(k, _)| k.to_string())
+                    .collect();
+
+                for key in keys_to_remove {
+                    cache.remove(&key);
+                }
+                debug!("Cleaned up {} old cache entries", to_remove);
+            }
+        }
+
+        Ok(bytes)
     }
 
     async fn fetch_from_network(&self, url: &str) -> Result<Vec<u8>> {
@@ -293,5 +352,59 @@ impl E6Client {
         let size = cache.len();
         let total_bytes: u64 = cache.values().map(|entry| entry.data.len() as u64).sum();
         (size, total_bytes)
+    }
+
+    pub async fn update_tags(&self) -> Result<()> {
+        let local_file: &str = "data/tags.csv";
+        let local_hash_file: &str = "data/tags.csv.hash";
+
+        let now = Utc::now();
+        let url = format!(
+            "https://e621.net/db_export/tags-{:04}-{:02}-{:02}.csv.gz",
+            now.year(),
+            now.month(),
+            now.day()
+        );
+
+        let response = self.client.get(&url).send().await?;
+        if !response.status().clone().is_success() {
+            bail!("Failed to download tags: {}", response.status());
+        }
+
+        let mut remote_bytes = response.bytes().await?;
+        let mut hasher = Sha256::new();
+
+        hasher.update(&remote_bytes);
+
+        let remote_hash = hasher.finalize();
+        let remote_hash_hex = hex::encode(remote_hash);
+
+        let update_needed = if Path::new(local_hash_file).exists() {
+            let local_hash_hex = fs::read_to_string(local_hash_file).await?;
+            local_hash_hex.trim() != remote_hash_hex
+        } else {
+            true
+        };
+
+        if update_needed {
+            info!("Updating local tags snapshot...");
+
+            let mut gz = GzDecoder::new(&remote_bytes[..]);
+            let mut decompressed_data = Vec::new();
+            gz.read_to_end(&mut decompressed_data)?;
+
+            fs::create_dir_all("data").await?;
+            let mut file = fs::File::create(local_file).await?;
+            file.write_all(&decompressed_data).await?;
+
+            let mut hash_file = fs::File::create(local_hash_file).await?;
+            hash_file.write_all(remote_hash_hex.as_bytes()).await?;
+
+            info!("Updated local tags snapshot at {}", local_file);
+        } else {
+            info!("Local snapshot of `tags.csv` is up to date, continuing");
+        }
+
+        Ok(())
     }
 }
