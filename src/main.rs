@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use crate::{cli::Cli, client::E6Client, tag_db::TagDatabase, ui::E6Ui};
+use crate::{cli::Cli, client::E6Client, pool_db::PoolDatabase, tag_db::TagDatabase, ui::E6Ui};
 use anyhow::{Context, Result};
 use clap::Parser;
 use env_logger::{Builder, Env};
@@ -16,14 +16,19 @@ mod config;
 mod error;
 mod formatting;
 mod models;
+mod pool_db;
 mod progress;
 mod tag_db;
 mod ui;
 
 #[derive(inquiry::Choice, PartialEq, PartialOrd, Debug, Clone, Copy)]
 enum MainMenu {
-    /// Search for posts
-    Search,
+    /// Search posts
+    SearchPosts,
+    /// Search pools
+    SearchPools,
+    /// Search pools (advanced filters)
+    SearchPoolsAdv,
     /// View the latest posts
     ViewLatest,
 }
@@ -48,6 +53,11 @@ async fn run() -> Result<()> {
             .context("Failed to load tag database. Please ensure data/tags.csv exists")?,
     );
 
+    let pool_db = Arc::new(
+        PoolDatabase::load()
+            .context("Failed to load pool database. Please ensure data/pools.csv exists")?,
+    );
+
     let client = if argv.e926 {
         info!(
             "Starting {} v{} using e926",
@@ -65,12 +75,15 @@ async fn run() -> Result<()> {
     };
 
     client.update_tags().await?;
+    client.update_pools().await?;
 
     let selection = MainMenu::choice("What would you like to do?")?;
-    let ui = E6Ui::new(client, tag_db);
+    let ui = E6Ui::new(client, tag_db, pool_db);
 
     match selection {
-        MainMenu::Search => ui.search().await,
+        MainMenu::SearchPosts => ui.search_posts().await,
+        MainMenu::SearchPools => ui.search_pools().await,
+        MainMenu::SearchPoolsAdv => ui.search_pools_advanced().await,
         MainMenu::ViewLatest => ui.display_latest_posts().await,
     }
 }

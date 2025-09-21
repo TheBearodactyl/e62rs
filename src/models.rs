@@ -254,6 +254,99 @@ pub struct TagEntry {
     pub post_count: i64,
 }
 
+// Add these to the existing models.rs file
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct E6PoolsResponse {
+    #[serde(default)]
+    pub pools: Vec<E6Pool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct E6PoolResponse {
+    #[serde(default)]
+    pub pool: E6Pool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct E6Pool {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+    #[serde(default)]
+    pub creator_id: i64,
+    #[serde(default)]
+    pub creator_name: String, // This comes from API, not CSV
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub is_active: bool,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub post_ids: Vec<i64>,
+    #[serde(default)]
+    pub post_count: i64,
+}
+
+fn deserialize_bool_from_str<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(s == "t")
+}
+
+fn deserialize_post_ids<'de, D>(deserializer: D) -> Result<Vec<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+
+    if s.starts_with('{') && s.ends_with('}') {
+        let inner = &s[1..s.len() - 1];
+        if inner.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let ids: Result<Vec<i64>, _> = inner
+            .split(',')
+            .map(|id| id.trim().parse::<i64>())
+            .collect();
+
+        ids.map_err(serde::de::Error::custom)
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PoolEntry {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+    #[serde(default)]
+    pub creator_id: i64,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default, deserialize_with = "deserialize_bool_from_str")]
+    pub is_active: bool,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default, deserialize_with = "deserialize_post_ids")]
+    pub post_ids: Vec<i64>,
+}
+
 macro_rules! impl_display {
     ($type:ty, $name:expr, $color:ident, $($field:ident: $format:expr),*) => {
         impl Display for $type {
@@ -284,6 +377,43 @@ impl_display!(E6PostsResponse, "E6PostsResponse", cyan, posts: |posts: &Vec<E6Po
     }
     result
 });
+
+impl_display!(E6PoolsResponse, "E6PoolsResponse", cyan, pools: |pools: &Vec<E6Pool>| {
+    let mut result = String::new();
+    for pool in pools {
+        result.push_str(&format!("\n  {}", pool));
+    }
+    result
+});
+
+impl_display!(E6PoolResponse, "E6PoolResponse", cyan, pool: |p: &E6Pool| format!("{}", p));
+
+impl_display!(
+    E6Pool,
+    "E6Pool",
+    green,
+    id: fmt_value!(),
+    name: fmt_value!(),
+    created_at: fmt_value!(),
+    updated_at: fmt_value!(),
+    creator_id: fmt_value!(),
+    creator_name: fmt_value!(),
+    description: fmt_value!(),
+    is_active: fmt_value!(),
+    category: fmt_value!(),
+    post_ids: fmt_value!(debug),
+    post_count: fmt_value!()
+);
+
+impl_display!(
+    PoolEntry,
+    "PoolEntry",
+    green,
+    id: fmt_value!(),
+    name: fmt_value!(),
+    description: fmt_value!(),
+    category: fmt_value!()
+);
 
 impl_display!(E6PostResponse, "E6PostResponse", cyan, post: |p: &E6Post| format!("{}", p));
 
