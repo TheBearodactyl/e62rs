@@ -8,9 +8,10 @@ An extremely configurable client for browsing [e621](https://e621.net) and [e926
 
 Configuration is loaded in this order:
 
-1. `e62rs` file (e.g. `e62rs.toml`, `e62rs.yaml`, or `e62rs.json`) – optional.
-2. Environment variables prefixed with `E62RS_`.
-3. Defaults defined in code.
+1. Local `e62rs` file (e.g. `e62rs.toml`, `e62rs.yaml`, or `e62rs.json`) – optional.
+2. Global `e62rs` file (e.g. `~/.config/e62rs.toml`, `~/AppData/Roaming/e62rs.yaml`, or `~/Library/Application Support/e926.json`) – optional.
+3. Environment variables prefixed with `E62RS_`.
+4. Defaults defined in code.
 
 ---
 
