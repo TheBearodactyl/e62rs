@@ -1,10 +1,34 @@
-download_dir = "./output"
-post_count = 32
+download_dir = "./downloads"
+output_format = "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
+post_count = 320
 base_url = "https://e621.net"
-output_format = "$artist/$rating/$tags[2] - $id - $date $time - $score.$ext"
+blacklist = ["bestiality", "feral", "rape", "young"]
 
 [display]
 width = 480
+image_when_info = true
+sixel_quality = 100
+resize_method = "gaussian"
 
 [http]
-max_connections = 100
+max_connections = 10
+
+[cache]
+enabled = true
+cache_dir = "./.cache"
+ttl_secs = 3600
+max_size_mb = 500
+
+[performance]
+concurrent_downloads = 10
+prefetch_enabled = true
+prefetch_batch_size = 10
+preload_images = false
+max_preload_size_mb = 100
+
+[ui]
+progress_refresh_rate = 60
+detailed_progress = true
+auto_clear_progress = true
+pagination_size = 20
+colored_output = true
