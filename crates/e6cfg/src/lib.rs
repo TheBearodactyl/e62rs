@@ -2,7 +2,7 @@ use {
     anyhow::{Context, Result},
     config::Config,
     serde::{Deserialize, Serialize},
-    std::{fs, path::Path},
+    std::{fmt::format, fs, path::Path},
 };
 
 pub mod blacklist;
@@ -108,11 +108,22 @@ pub struct Cfg {
     pub blacklist: Option<Vec<String>>,
 }
 
+fn get_config_dir() -> String {
+    match dirs::config_dir() {
+        Some(path) => path.to_string_lossy().into_owned(),
+        None => format!(
+            "{}/.config/",
+            std::env::var("HOME").expect("Failed to get home dir")
+        ),
+    }
+}
+
 impl Cfg {
     pub fn get() -> Result<Self> {
-        let config_path = "e62rs.toml";
+        let config_path = &format!("{}/e62rs.toml", get_config_dir());
         let settings = Config::builder()
             .add_source(config::File::with_name("e62rs").required(false))
+            .add_source(config::File::with_name(config_path).required(false))
             .add_source(config::Environment::with_prefix("E62RS"))
             .build()?;
 
