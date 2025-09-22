@@ -74,9 +74,9 @@ impl PoolDatabase {
     }
 
     #[inline(always)]
-    pub unsafe fn iter_pools(&self) -> impl Iterator<Item = &PoolEntry> {
+    pub unsafe fn iter_pools(&self) -> impl Iterator<Item = &PoolEntry> { unsafe {
         slice::from_raw_parts(self.pools.ptr, self.pools.len).iter()
-    }
+    }}
 
     #[inline(always)]
     fn lowercase(s: &str) -> String {

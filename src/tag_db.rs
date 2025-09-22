@@ -70,9 +70,9 @@ impl TagDatabase {
     }
 
     #[inline(always)]
-    unsafe fn iter_tags(&self) -> impl Iterator<Item = &TagEntry> {
+    unsafe fn iter_tags(&self) -> impl Iterator<Item = &TagEntry> { unsafe {
         slice::from_raw_parts(self.tags.ptr, self.tags.len).iter()
-    }
+    }}
 
     #[inline(always)]
     fn lowercase(s: &str) -> String {
