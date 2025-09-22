@@ -9,7 +9,7 @@ use e6core::{
 };
 
 use anyhow::{Context, Result};
-use inquire::{Confirm, MultiSelect, Text};
+use inquire::{Confirm, MultiSelect};
 
 use crate::ui::{
     download::PostDownloader,

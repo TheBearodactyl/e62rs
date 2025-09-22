@@ -121,11 +121,12 @@ Forward slashes denote subfolders
 ### Tag placeholders:
 
 - `$tags[N]` → first `N` general tags joined by commas.
+- `$artists[N]` -> first `N` artist tags joined by commas.
 
 ### Example:
 
 ```toml
-output_format = "$id-$artist-$score.$ext"
+output_format = "$id-$artists[1]-$score.$ext"
 ```
 
 Might produce:
