@@ -8,7 +8,7 @@ homepage = "https://github.com/thebearodactyl/e62rs"
 repository = "https://github.com/thebearodactyl/e62rs"
 readme = "README.md"
 keywords = ["tui", "e621", "e926"]
-categories = ["cli"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0.99"
