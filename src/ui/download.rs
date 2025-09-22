@@ -172,19 +172,19 @@ impl PostDownloader {
         let mut formatted = format.to_string();
 
         for cap in re.captures_iter(format) {
-            if let Some(num_match) = cap.get(1) {
-                if let Ok(num_tags) = num_match.as_str().parse::<usize>() {
-                    let tags = post
-                        .tags
-                        .general
-                        .iter()
-                        .take(num_tags)
-                        .cloned()
-                        .collect::<Vec<String>>()
-                        .join(",");
+            if let Some(num_match) = cap.get(1)
+                && let Ok(num_tags) = num_match.as_str().parse::<usize>()
+            {
+                let tags = post
+                    .tags
+                    .general
+                    .iter()
+                    .take(num_tags)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(",");
 
-                    formatted = formatted.replace(&cap[0], &tags);
-                }
+                formatted = formatted.replace(&cap[0], &tags);
             }
         }
 
@@ -268,11 +268,11 @@ impl PostDownloader {
             PathBuf::from(filename)
         };
 
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
         if path.exists() {

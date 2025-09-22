@@ -65,7 +65,7 @@ impl E6Client {
 
         info!(
             "Initialized HTTP client with {} max connections",
-            http_config.max_connections.unwrap_or(100)
+            http_config.max_connections.unwrap_or(2)
         );
 
         Ok(Self {

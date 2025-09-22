@@ -124,7 +124,7 @@ impl Default for HttpConfig {
             pool_idle_timeout_secs: Some(90),
             timeout_secs: Some(30),
             connect_timeout_secs: Some(10),
-            max_connections: Some(100),
+            max_connections: Some(2),
             http2_prior_knowledge: Some(true),
             tcp_keepalive: Some(true),
             user_agent: None,
@@ -146,7 +146,7 @@ impl Default for CacheConfig {
 impl Default for PerformanceConfig {
     fn default() -> Self {
         Self {
-            concurrent_downloads: Some(8),
+            concurrent_downloads: Some(2),
             prefetch_enabled: Some(true),
             prefetch_batch_size: Some(10),
             preload_images: Some(false),
