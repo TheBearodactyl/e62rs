@@ -1,7 +1,7 @@
-use crate::config::{get_config, CacheConfig, HttpConfig};
+use crate::config::{CacheConfig, HttpConfig, get_config};
 use crate::models::{E6PoolResponse, E6PoolsResponse, E6PostResponse, E6PostsResponse};
-use anyhow::{bail, Context, Result};
-use chrono::{Datelike, Utc};
+use anyhow::{Context, Result, bail};
+use chrono::{Datelike, Local, Utc};
 use flate2::read::GzDecoder;
 use futures::future::join_all;
 use log::{debug, info, warn};
@@ -358,13 +358,15 @@ impl E6Client {
         let local_file: &str = "data/tags.csv";
         let local_hash_file: &str = "data/tags.csv.hash";
 
-        let now = Utc::now();
+        let now = Local::now();
         let url = format!(
             "https://e621.net/db_export/tags-{:04}-{:02}-{:02}.csv.gz",
             now.year(),
             now.month(),
             now.day()
         );
+
+        info!("{}", url);
 
         let response = self.client.get(&url).send().await?;
         if !response.status().clone().is_success() {
@@ -506,7 +508,7 @@ impl E6Client {
         let local_file: &str = "data/pools.csv";
         let local_hash_file: &str = "data/pools.csv.hash";
 
-        let now = Utc::now();
+        let now = Local::now();
         let url = format!(
             "https://e621.net/db_export/pools-{:04}-{:02}-{:02}.csv.gz",
             now.year(),
