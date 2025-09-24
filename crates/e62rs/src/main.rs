@@ -29,10 +29,6 @@ async fn run() -> Result<()> {
     client.update_tags().await?;
     client.update_pools().await?;
 
-    let default_cfg = Cfg::default();
-    let toml_str = toml::to_string(&default_cfg).unwrap();
-    println!("{}", toml_str);
-
     let tag_db = Arc::new(
         TagDatabase::load()
             .context("Failed to load tag database. Please ensure data/tags.csv exists")?,

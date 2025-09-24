@@ -673,9 +673,7 @@ dependencies = [
  "e6ui",
  "env_logger",
  "log",
- "serde",
  "tokio",
- "toml 0.9.7",
 ]
 
 [[package]]
@@ -710,7 +708,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "strsim",
  "tokio",
  "urlencoding",
 ]
@@ -2671,12 +2668,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "strsim"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "subtle"
