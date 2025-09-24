@@ -9,7 +9,7 @@ use e6core::{
 };
 
 use anyhow::{Context, Result};
-use inquire::{Confirm, MultiSelect};
+use inquire::{Confirm, MultiSelect, Select};
 
 use crate::ui::{
     download::PostDownloader,
@@ -144,14 +144,21 @@ impl E6Ui {
         Ok(selected_posts)
     }
 
-    pub fn collect_tags(&self) -> Result<Vec<String>> {
-        let mut tags = Vec::new();
+    pub fn collect_tags(&self) -> Result<(Vec<String>, Vec<String>)> {
+        let mut include_tags = Vec::new();
+        let mut exclude_tags = Vec::new();
 
         loop {
-            let prompt = if tags.is_empty() {
+            let prompt = if include_tags.is_empty() && exclude_tags.is_empty() {
                 "Would you like to add tags to the search?"
             } else {
-                println!("Current tags: {}", tags.join(" "));
+                if !include_tags.is_empty() {
+                    println!("Include tags: {}", include_tags.join(" "));
+                }
+                if !exclude_tags.is_empty() {
+                    println!("Exclude tags: -{}", exclude_tags.join(" -"));
+                }
+
                 "Would you like to add more tags?"
             };
 
@@ -164,6 +171,13 @@ impl E6Ui {
                 break;
             }
 
+            let tag_type = Select::new(
+                "What type of tags would you like to add?",
+                vec!["Include tags", "Exclude tags"],
+            )
+            .prompt()
+            .context("Failed to get tag type selection")?;
+
             let all_tags: Vec<String> = unsafe { self.tag_db.iter_tags() }
                 .map(|entry| entry.name.to_string())
                 .collect();
@@ -174,7 +188,11 @@ impl E6Ui {
             }
 
             let selected_tags = MultiSelect::new(
-                "Select tags (use spacebar to select, enter to confirm):",
+                if tag_type == "Include tags" {
+                    "Select tags to include (use spacebar to select, enter to confirm):"
+                } else {
+                    "Select tags to exclude (use spacebar to select, enter to confirm):"
+                },
                 all_tags,
             )
             .with_help_message("Select multiple tags using spacebar, press enter when done")
@@ -183,16 +201,26 @@ impl E6Ui {
             .context("Failed to get tag selection")?;
 
             if let Some(selected) = selected_tags {
+                let target_list = if tag_type == "Include tags" {
+                    &mut include_tags
+                } else {
+                    &mut exclude_tags
+                };
+
                 for tag in selected {
-                    if !tags.contains(&tag) {
-                        tags.push(tag);
+                    if !target_list.contains(&tag) {
+                        target_list.push(tag);
                     } else {
-                        println!("Tag '{}' is already selected.", tag);
+                        println!(
+                            "Tag '{}' is already selected for {}.",
+                            tag,
+                            tag_type.to_lowercase()
+                        );
                     }
                 }
             }
 
-            if tags.is_empty() {
+            if include_tags.is_empty() && exclude_tags.is_empty() {
                 let try_again = Confirm::new("No tags were selected. Would you like to try again?")
                     .with_default(true)
                     .prompt()
@@ -204,7 +232,7 @@ impl E6Ui {
             }
         }
 
-        Ok(tags)
+        Ok((include_tags, exclude_tags))
     }
 
     async fn interaction_menu(&self, post: E6Post) -> Result<InteractionMenu> {

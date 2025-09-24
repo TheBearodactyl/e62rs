@@ -41,7 +41,11 @@ impl E6Ui {
                 AdvPoolSearch::Back => break,
             }
 
-            if !self.ask_retry()? {
+            if !Confirm::new("Would you like to perform another search?")
+                .with_default(true)
+                .prompt()
+                .context("Failed to get retry confirmation")?
+            {
                 break;
             }
         }
@@ -357,12 +361,17 @@ impl E6Ui {
     }
 
     pub async fn perform_search(&self) -> Result<bool> {
-        let tags = self.collect_tags()?;
+        let (include_tags, exclude_tags) = self.collect_tags()?;
         let limit = self.get_post_limit()?;
+
+        let mut all_tags = include_tags;
+        for exclude_tag in exclude_tags {
+            all_tags.push(format!("-{}", exclude_tag));
+        }
 
         let results = self
             .client
-            .search_posts(tags, Some(limit))
+            .search_posts(all_tags, Some(limit))
             .await
             .context("Failed to search posts")?;
 

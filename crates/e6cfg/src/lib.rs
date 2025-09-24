@@ -2,7 +2,7 @@ use {
     anyhow::{Context, Result},
     config::Config,
     serde::{Deserialize, Serialize},
-    std::{fmt::format, fs, path::Path},
+    std::{fs, path::Path},
 };
 
 pub mod blacklist;
@@ -118,14 +118,43 @@ fn get_config_dir() -> String {
     }
 }
 
+fn find_local_config_file() -> Option<String> {
+    let extensions = ["toml", "yaml", "yml", "json"];
+
+    for ext in &extensions {
+        let filename = format!("e62rs.{}", ext);
+        if Path::new(&filename).exists() {
+            return Some(filename);
+        }
+    }
+
+    None
+}
+
 impl Cfg {
     pub fn get() -> Result<Self> {
-        let config_path = &format!("{}/e62rs.toml", get_config_dir());
-        let settings = Config::builder()
-            .add_source(config::File::with_name("e62rs").required(false))
-            .add_source(config::File::with_name(config_path).required(false))
-            .add_source(config::Environment::with_prefix("E62RS"))
-            .build()?;
+        let global_config_path = format!("{}/e62rs.toml", get_config_dir());
+
+        let mut builder = Config::builder();
+
+        builder = builder.add_source(config::File::with_name(&global_config_path).required(false));
+
+        if let Some(local_config) = find_local_config_file() {
+            let local_config_name = local_config
+                .strip_suffix(&format!(
+                    ".{}",
+                    local_config.split('.').next_back().unwrap_or("toml")
+                ))
+                .unwrap_or(&local_config);
+
+            builder =
+                builder.add_source(config::File::with_name(local_config_name).required(false));
+            log::info!("Using local config file: {}", local_config);
+        }
+
+        builder = builder.add_source(config::Environment::with_prefix("E62RS"));
+
+        let settings = builder.build()?;
 
         let mut cfg = settings
             .try_deserialize::<Cfg>()
@@ -160,9 +189,12 @@ impl Cfg {
             );
         }
 
-        if !Path::new(config_path).exists() {
-            log::info!("Creating default configuration file at {}", config_path);
-            if let Err(e) = cfg.save_to_file(config_path) {
+        if !Path::new(&global_config_path).exists() && find_local_config_file().is_none() {
+            log::info!(
+                "Creating default configuration file at {}",
+                global_config_path
+            );
+            if let Err(e) = cfg.save_to_file(&global_config_path) {
                 log::warn!("Failed to create default config file: {}", e);
             }
         }

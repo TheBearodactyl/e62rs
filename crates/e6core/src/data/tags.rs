@@ -27,7 +27,16 @@ impl TagDatabase {
     /// # Safety
     #[inline(always)]
     pub unsafe fn iter_tags(&self) -> impl Iterator<Item = &TagEntry> {
-        unsafe { self.tags.buffer.iter() }
+        let mut tags = unsafe {
+            self.tags
+                .buffer
+                .iter()
+                .filter(|tag| tag.post_count > 3)
+                .collect::<Vec<&TagEntry>>()
+        };
+
+        tags.sort_by(|a, b| b.post_count.cmp(&a.post_count));
+        tags.into_iter()
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<String> {

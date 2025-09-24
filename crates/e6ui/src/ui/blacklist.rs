@@ -196,13 +196,18 @@ impl E6Ui {
     async fn import_tags_to_blacklist(&self) -> Result<()> {
         println!("This will allow you to search for posts and add their tags to the blacklist.");
 
-        let tags = self.collect_tags()?;
-        if tags.is_empty() {
+        let (include_tags, exclude_tags) = self.collect_tags()?;
+        if include_tags.is_empty() && exclude_tags.is_empty() {
             println!("No search tags provided.");
             return Ok(());
         }
 
-        let results = self.client.search_posts(tags.clone(), Some(10)).await?;
+        let mut search_tags = include_tags.clone();
+        for exclude_tag in exclude_tags {
+            search_tags.push(format!("-{}", exclude_tag));
+        }
+
+        let results = self.client.search_posts(search_tags, Some(10)).await?;
 
         if results.posts.is_empty() {
             println!("No posts found for the given search.");
@@ -220,7 +225,7 @@ impl E6Ui {
             all_tags.extend(post.tags.lore.iter().cloned());
         }
 
-        for search_tag in &tags {
+        for search_tag in &include_tags {
             all_tags.remove(search_tag);
         }
 
