@@ -4,7 +4,7 @@ An extremely configurable client for browsing [e621](https://e621.net) and [e926
 
 ---
 
-## 📦 Configuration
+## Configuration
 
 Configuration is loaded in this order:
 
@@ -17,18 +17,22 @@ Configuration is loaded in this order:
 
 ## Top-Level Configuration (`Cfg`)
 
-| Key             | Type                | Default              | Description                                                           |
-| --------------- | ------------------- | -------------------- | --------------------------------------------------------------------- |
-| `download_dir`  | `String`            | `"downloads"`        | Directory where posts are saved.                                      |
-| `output_format` | `String`            | `"$id.$ext"`         | Filename template (see [Filename Formatting](#-filename-formatting)). |
-| `post_count`    | `u64`               | `32`                 | Number of posts returned per search.                                  |
-| `base_url`      | `String`            | `"https://e621.net"` | API base URL.                                                         |
-| `display`       | `ImageDisplay`      | see below            | Image preview/display settings.                                       |
-| `tags`          | `String`            | `"data/tags.csv"`    | Path to `tags.csv` for tag autocompletion.                            |
-| `http`          | `HttpConfig`        | see below            | HTTP client options.                                                  |
-| `cache`         | `CacheConfig`       | see below            | Caching options.                                                      |
-| `performance`   | `PerformanceConfig` | see below            | Performance tuning.                                                   |
-| `ui`            | `UiConfig`          | see below            | UI/console options.                                                   |
+| Key             | Type                | Default                                                                | Description                                                           |
+| --------------- | ------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `download_dir`  | `String`            | `"downloads"`                                                          | Directory where posts are saved.                                      |
+| `output_format` | `String`            | `"$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"`     | Filename template (see [Filename Formatting](#-filename-formatting)). |
+| `post_count`    | `u64`               | `320`                                                                  | Number of posts returned per search.                                  |
+| `base_url`      | `String`            | `"https://e621.net"`                                                   | API base URL.                                                         |
+| `display`       | `ImageDisplay`      | see [Image Display](#image-display-configuration-imagedisplay)         | Image preview/display settings.                                       |
+| `tags`          | `String`            | `"data/tags.csv"`                                                      | Path to `tags.csv` for tag autocompletion.                            |
+| `pools`         | `String`            | `"data/pools.csv"`                                                     | Path to `pools.csv` for pool autocompletion.                          |
+| `http`          | `HttpConfig`        | see [HTTP Config](#http-configuration-httpconfig)                      | HTTP client options.                                                  |
+| `cache`         | `CacheConfig`       | see [Cache Config](#cache-configuration-cacheconfig)                   | Caching options.                                                      |
+| `performance`   | `PerformanceConfig` | see [Performance Config](#performance-configuration-performanceconfig) | Performance tuning.                                                   |
+| `ui`            | `UiConfig`          | see [UI Config](#ui-configuration-uiconfig)                            | UI/console options.                                                   |
+| `search`        | `SearchCfg`         | see [Search Config](#search-configuration-searchcfg)                   | Search tuning.                                                        |
+| `completion`    | `CompletionCfg`     | see [Completion Config](#completion-configuration-completioncfg)       | Autocompletion settings.                                              |
+| `blacklist`     | `Vec<String>`       | `["young", "rape", "feral", "bestiality"]`                             | Blacklisted tags to always filter out.                                |
 
 ---
 
@@ -40,7 +44,7 @@ Configuration is loaded in this order:
 | `pool_idle_timeout_secs` | `u64`    | `90`    | Idle timeout for pooled connections. |
 | `timeout_secs`           | `u64`    | `30`    | Request timeout.                     |
 | `connect_timeout_secs`   | `u64`    | `10`    | Connection establishment timeout.    |
-| `max_connections`        | `usize`  | `2`     | Max concurrent connections.          |
+| `max_connections`        | `usize`  | `15`    | Max concurrent connections.          |
 | `http2_prior_knowledge`  | `bool`   | `true`  | Enable HTTP/2 prior knowledge.       |
 | `tcp_keepalive`          | `bool`   | `true`  | Enable TCP keep-alive.               |
 | `user_agent`             | `String` | _none_  | Custom User-Agent string.            |
@@ -62,7 +66,7 @@ Configuration is loaded in this order:
 
 | Key                    | Type    | Default | Description                         |
 | ---------------------- | ------- | ------- | ----------------------------------- |
-| `concurrent_downloads` | `usize` | `2`     | Number of concurrent downloads.     |
+| `concurrent_downloads` | `usize` | `15`    | Number of concurrent downloads.     |
 | `prefetch_enabled`     | `bool`  | `true`  | Enable prefetching posts.           |
 | `prefetch_batch_size`  | `usize` | `10`    | Number of posts per prefetch batch. |
 | `preload_images`       | `bool`  | `false` | Enable image preloading.            |
@@ -88,9 +92,32 @@ Configuration is loaded in this order:
 | ----------------- | -------- | ------------ | ------------------------------------------------------------------------ |
 | `width`           | `u64`    | `800`        | Max display width.                                                       |
 | `height`          | `u64`    | `600`        | Max display height.                                                      |
-| `image_when_info` | `bool`   | `false`      | Show image in post info.                                                 |
-| `sixel_quality`   | `u8`     | `75`         | Quality for sixel conversion (1–100).                                    |
+| `image_when_info` | `bool`   | `true`       | Show image in post info.                                                 |
+| `sixel_quality`   | `u8`     | `100`        | Quality for sixel conversion (1–100).                                    |
 | `resize_method`   | `String` | `"lanczos3"` | Resize algorithm (`nearest`, `linear`, `cubic`, `gaussian`, `lanczos3`). |
+
+---
+
+## Search Configuration (`SearchCfg`)
+
+| Key                        | Type   | Default | Description                                                  |
+| -------------------------- | ------ | ------- | ------------------------------------------------------------ |
+| `min_posts_on_tag`         | `u64`  | `2`     | Minimum number of posts for a tag to appear in suggestions.  |
+| `min_posts_on_pool`        | `u64`  | `2`     | Minimum number of posts for a pool to appear in suggestions. |
+| `show_inactive_pools`      | `bool` | `true`  | Show inactive pools.                                         |
+| `sort_pools_by_post_count` | `bool` | `false` | Sort pools by number of posts.                               |
+| `sort_tags_by_post_count`  | `bool` | `true`  | Sort tags by number of posts.                                |
+| `min_post_score`           | `i64`  | `0`     | Minimum score a post must have to appear in results.         |
+| `max_post_score`           | `i64`  | `∞`     | Maximum score a post can have to appear in results.          |
+| `reverse_tags_order`       | `bool` | `false` | Reverse alphabetic order of tag sorting.                     |
+
+---
+
+## Completion Configuration (`CompletionCfg`)
+
+| Key                        | Type  | Default | Description                                         |
+| -------------------------- | ----- | ------- | --------------------------------------------------- |
+| `tag_similarity_threshold` | `f64` | `0.8`   | Threshold for fuzzy tag autocompletion (0–1 range). |
 
 ---
 
@@ -98,7 +125,7 @@ Configuration is loaded in this order:
 
 The `output_format` setting controls how filenames are generated when saving posts.
 
-Forward slashes denote subfolders
+Forward slashes denote subfolders.
 
 ### Available placeholders:
 
@@ -122,7 +149,7 @@ Forward slashes denote subfolders
 ### Tag placeholders:
 
 - `$tags[N]` → first `N` general tags joined by commas.
-- `$artists[N]` -> first `N` artist tags joined by commas.
+- `$artists[N]` → first `N` artist tags joined by commas.
 
 ### Example:
 

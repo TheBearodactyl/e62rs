@@ -4,6 +4,7 @@ use {
         models::TagEntry,
     },
     anyhow::Result,
+    e6cfg::Cfg,
 };
 
 impl Entry for TagEntry {
@@ -27,15 +28,26 @@ impl TagDatabase {
     /// # Safety
     #[inline(always)]
     pub unsafe fn iter_tags(&self) -> impl Iterator<Item = &TagEntry> {
+        let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+
         let mut tags = unsafe {
             self.tags
                 .buffer
                 .iter()
-                .filter(|tag| tag.post_count > 3)
+                .filter(|tag| {
+                    tag.post_count > search_cfg.min_posts_on_tag.unwrap_or_default() as i64
+                })
                 .collect::<Vec<&TagEntry>>()
         };
 
-        tags.sort_by(|a, b| b.post_count.cmp(&a.post_count));
+        if search_cfg.sort_tags_by_post_count.unwrap_or_default() {
+            tags.sort_by(|a, b| b.post_count.cmp(&a.post_count));
+        }
+
+        if search_cfg.reverse_tags_order.unwrap_or_default() {
+            tags.reverse();
+        }
+
         tags.into_iter()
     }
 

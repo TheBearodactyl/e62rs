@@ -2,7 +2,10 @@ use {
     anyhow::{Context, Result},
     config::Config,
     serde::{Deserialize, Serialize},
-    std::{fs, path::Path},
+    std::{
+        fs::{self},
+        path::Path,
+    },
 };
 
 pub mod blacklist;
@@ -83,6 +86,32 @@ pub struct ImageDisplay {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SearchCfg {
+    /// The minimum amount of posts on a tag for it to show up in tag selection
+    pub min_posts_on_tag: Option<u64>,
+    /// The minimum amount of posts on a pool for it to show up in pool selection
+    pub min_posts_on_pool: Option<u64>,
+    /// Whether or not to show inactive pools
+    pub show_inactive_pools: Option<bool>,
+    /// Whether or not to sort pools by how many posts they contain
+    pub sort_pools_by_post_count: Option<bool>,
+    /// Whether or not to sort tags by their post count
+    pub sort_tags_by_post_count: Option<bool>,
+    /// The minimum score a post should have to show up in search
+    pub min_post_score: Option<i64>,
+    /// The maximum score a post should have to show up in search
+    pub max_post_score: Option<i64>,
+    /// Sort tags in reverse alphabetic order
+    pub reverse_tags_order: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CompletionCfg {
+    /// The similarity threshold to complete a tag
+    pub tag_similarity_threshold: Option<f64>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Cfg {
     /// The directory to download posts to
     pub download_dir: Option<String>,
@@ -96,6 +125,8 @@ pub struct Cfg {
     pub display: Option<ImageDisplay>,
     /// The path to `tags.csv` that's used for tag searching/autocompletion
     pub tags: Option<String>,
+    /// The path to `pools.csv` that's used for pool searching/autocompletion
+    pub pools: Option<String>,
     /// HTTP client configuration
     pub http: Option<HttpConfig>,
     /// Cache configuration
@@ -104,6 +135,10 @@ pub struct Cfg {
     pub performance: Option<PerformanceConfig>,
     /// UI settings
     pub ui: Option<UiConfig>,
+    /// Search settings
+    pub search: Option<SearchCfg>,
+    /// Completion Settings
+    pub completion: Option<CompletionCfg>,
     /// Blacklisted tags to filter out from all operations
     pub blacklist: Option<Vec<String>>,
 }
@@ -149,7 +184,6 @@ impl Cfg {
 
             builder =
                 builder.add_source(config::File::with_name(local_config_name).required(false));
-            log::info!("Using local config file: {}", local_config);
         }
 
         builder = builder.add_source(config::Environment::with_prefix("E62RS"));
@@ -178,6 +212,10 @@ impl Cfg {
 
         if cfg.display.is_none() {
             cfg.display = Some(ImageDisplay::default());
+        }
+
+        if cfg.search.is_none() {
+            cfg.search = Some(SearchCfg::default());
         }
 
         if cfg.blacklist.is_none() {

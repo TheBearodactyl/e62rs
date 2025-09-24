@@ -2,6 +2,8 @@ pub mod pools;
 pub mod tags;
 
 use anyhow::Result;
+use e6cfg::Cfg;
+use rapidfuzz::fuzz;
 use std::{fs::File, slice, sync::Arc};
 
 pub trait Entry: Clone + Send + Sync + for<'de> serde::Deserialize<'de> {
@@ -112,22 +114,19 @@ impl<T: Entry> Database<T> {
         unsafe {
             for entry in self.buffer.iter() {
                 let name_lower = Self::lowercase(entry.name());
-                let name_similarity = strsim::jaro_winkler(&name_lower, &query_lower);
+                let name_similarity = fuzz::ratio(name_lower.chars(), query_lower.chars()) / 100.0;
 
                 let max_similarity = if let Some(desc) = entry.description() {
-                    let desc_lower = Self::lowercase(desc);
-                    let desc_similarity = strsim::jaro_winkler(&desc_lower, &query_lower);
+                    let desc_lower = desc.to_lowercase();
+                    let desc_similarity =
+                        fuzz::ratio(desc_lower.chars(), query_lower.chars()) / 100.0;
+
                     name_similarity.max(desc_similarity)
                 } else {
                     name_similarity
                 };
 
-                let contains_match = name_lower.contains(&query_lower)
-                    || entry
-                        .description()
-                        .is_some_and(|desc| Self::lowercase(desc).contains(&query_lower));
-
-                if max_similarity > similarity_threshold || contains_match {
+                if max_similarity > similarity_threshold {
                     matches.push((max_similarity, entry.name().to_string()));
                 }
             }
@@ -142,12 +141,19 @@ impl<T: Entry> Database<T> {
     }
 
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
-        let query_lower = Self::lowercase(query);
+        let query_lower = query.to_lowercase();
+        let completion_cfg = Cfg::get()
+            .unwrap_or_default()
+            .completion
+            .unwrap_or_default();
         let mut results = Vec::new();
 
         unsafe {
             for entry in self.buffer.iter() {
-                if Self::lowercase(entry.name()).contains(&query_lower) {
+                let name_lower = entry.name().to_lowercase();
+                let name_similarity = fuzz::ratio(name_lower.chars(), query_lower.chars());
+
+                if name_similarity > completion_cfg.tag_similarity_threshold.unwrap_or_default() {
                     results.push(entry.name().to_string());
                     if results.len() >= limit {
                         break;

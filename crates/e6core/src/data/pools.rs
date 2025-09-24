@@ -4,6 +4,7 @@ use {
         models::PoolEntry,
     },
     anyhow::Result,
+    e6cfg::Cfg,
 };
 
 impl Entry for PoolEntry {
@@ -35,7 +36,29 @@ impl PoolDatabase {
     /// # Safety
     #[inline(always)]
     pub unsafe fn iter_pools(&self) -> impl Iterator<Item = &PoolEntry> {
-        unsafe { self.pools.buffer.iter() }
+        let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+        let mut pools = unsafe {
+            self.pools
+                .buffer
+                .iter()
+                .filter(|pool| {
+                    pool.post_ids.len() > search_cfg.min_posts_on_pool.unwrap_or_default() as usize
+                })
+                .filter(|pool| {
+                    if search_cfg.show_inactive_pools.unwrap_or_default() {
+                        true
+                    } else {
+                        pool.is_active
+                    }
+                })
+                .collect::<Vec<&PoolEntry>>()
+        };
+
+        if search_cfg.sort_pools_by_post_count.unwrap_or_default() {
+            pools.sort_by(|a, b| b.post_ids.len().cmp(&a.post_ids.len()));
+        }
+
+        pools.into_iter()
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<String> {

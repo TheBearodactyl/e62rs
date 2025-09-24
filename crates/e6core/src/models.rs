@@ -349,6 +349,14 @@ impl E6Post {
 
         false
     }
+
+    pub fn meets_score_requirements(&self) -> bool {
+        let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+        let min_score = search_cfg.min_post_score.unwrap_or_default();
+        let max_score = search_cfg.max_post_score.unwrap_or_default();
+
+        self.score.total >= min_score && self.score.total <= max_score
+    }
 }
 
 impl E6PostsResponse {
@@ -358,6 +366,11 @@ impl E6PostsResponse {
         }
 
         self.posts.retain(|post| !post.is_blacklisted());
+        self
+    }
+
+    pub fn filter_score(mut self) -> Self {
+        self.posts.retain(|post| post.meets_score_requirements());
         self
     }
 }

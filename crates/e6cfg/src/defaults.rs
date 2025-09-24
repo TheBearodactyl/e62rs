@@ -1,24 +1,40 @@
-use crate::{CacheConfig, Cfg, HttpConfig, ImageDisplay, PerformanceConfig, UiConfig};
+use crate::{
+    CacheConfig, Cfg, CompletionCfg, HttpConfig, ImageDisplay, PerformanceConfig, SearchCfg,
+    UiConfig,
+};
 
 impl Default for Cfg {
     fn default() -> Self {
         Self {
             download_dir: Some("downloads".to_string()),
-            output_format: Some("$id.$ext".to_string()),
-            post_count: Some(32),
+            output_format: Some(
+                "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string(),
+            ),
+            post_count: Some(320),
             base_url: Some("https://e621.net".to_string()),
             display: Some(ImageDisplay::default()),
             tags: Some("data/tags.csv".to_string()),
+            pools: Some("data/pools.csv".to_string()),
             http: Some(HttpConfig::default()),
             cache: Some(CacheConfig::default()),
             performance: Some(PerformanceConfig::default()),
             ui: Some(UiConfig::default()),
+            search: Some(SearchCfg::default()),
+            completion: Some(CompletionCfg::default()),
             blacklist: Some(
                 vec!["young", "rape", "feral", "bestiality"]
                     .into_iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<String>>(),
             ),
+        }
+    }
+}
+
+impl Default for CompletionCfg {
+    fn default() -> Self {
+        Self {
+            tag_similarity_threshold: Some(0.8),
         }
     }
 }
@@ -30,7 +46,7 @@ impl Default for HttpConfig {
             pool_idle_timeout_secs: Some(90),
             timeout_secs: Some(30),
             connect_timeout_secs: Some(10),
-            max_connections: Some(2),
+            max_connections: Some(15),
             http2_prior_knowledge: Some(true),
             tcp_keepalive: Some(true),
             user_agent: None,
@@ -52,7 +68,7 @@ impl Default for CacheConfig {
 impl Default for PerformanceConfig {
     fn default() -> Self {
         Self {
-            concurrent_downloads: Some(2),
+            concurrent_downloads: Some(15),
             prefetch_enabled: Some(true),
             prefetch_batch_size: Some(10),
             preload_images: Some(false),
@@ -78,9 +94,24 @@ impl Default for ImageDisplay {
         Self {
             width: Some(800),
             height: Some(600),
-            image_when_info: Some(false),
-            sixel_quality: Some(75),
+            image_when_info: Some(true),
+            sixel_quality: Some(100),
             resize_method: Some("lanczos3".to_string()),
+        }
+    }
+}
+
+impl Default for SearchCfg {
+    fn default() -> Self {
+        Self {
+            min_posts_on_tag: Some(2),
+            min_posts_on_pool: Some(2),
+            show_inactive_pools: Some(true),
+            sort_pools_by_post_count: Some(false),
+            sort_tags_by_post_count: Some(true),
+            min_post_score: Some(0),
+            max_post_score: Some(i64::MAX),
+            reverse_tags_order: Some(false),
         }
     }
 }

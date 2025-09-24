@@ -22,6 +22,7 @@ impl E6Client {
             serde_json::from_slice(&bytes).context("Failed to deserialize posts response")?;
 
         posts = posts.filter_blacklisted(&[]);
+        posts = posts.filter_score();
 
         debug!("Successfully fetched {} posts", posts.posts.len());
         Ok(posts)
