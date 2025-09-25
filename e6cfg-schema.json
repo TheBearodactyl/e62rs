@@ -1,0 +1,214 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Generated schema for e6cfg",
+  "type": "object",
+  "properties": {
+    "download_dir": {
+      "type": "string"
+    },
+    "output_format": {
+      "type": "string"
+    },
+    "post_count": {
+      "type": "number"
+    },
+    "base_url": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "string"
+    },
+    "pools": {
+      "type": "string"
+    },
+    "blacklist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "image_when_info": {
+          "type": "boolean"
+        },
+        "sixel_quality": {
+          "type": "number"
+        },
+        "resize_method": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "width",
+        "height",
+        "image_when_info",
+        "sixel_quality",
+        "resize_method"
+      ]
+    },
+    "http": {
+      "type": "object",
+      "properties": {
+        "pool_max_idle_per_host": {
+          "type": "number"
+        },
+        "pool_idle_timeout_secs": {
+          "type": "number"
+        },
+        "timeout_secs": {
+          "type": "number"
+        },
+        "connect_timeout_secs": {
+          "type": "number"
+        },
+        "max_connections": {
+          "type": "number"
+        },
+        "http2_prior_knowledge": {
+          "type": "boolean"
+        },
+        "tcp_keepalive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pool_max_idle_per_host",
+        "pool_idle_timeout_secs",
+        "timeout_secs",
+        "connect_timeout_secs",
+        "max_connections",
+        "http2_prior_knowledge",
+        "tcp_keepalive"
+      ]
+    },
+    "cache": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cache_dir": {
+          "type": "string"
+        },
+        "ttl_secs": {
+          "type": "number"
+        },
+        "max_size_mb": {
+          "type": "number"
+        }
+      },
+      "required": ["enabled", "cache_dir", "ttl_secs", "max_size_mb"]
+    },
+    "performance": {
+      "type": "object",
+      "properties": {
+        "concurrent_downloads": {
+          "type": "number"
+        },
+        "prefetch_enabled": {
+          "type": "boolean"
+        },
+        "prefetch_batch_size": {
+          "type": "number"
+        },
+        "preload_images": {
+          "type": "boolean"
+        },
+        "max_preload_size_mb": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "concurrent_downloads",
+        "prefetch_enabled",
+        "prefetch_batch_size",
+        "preload_images",
+        "max_preload_size_mb"
+      ]
+    },
+    "ui": {
+      "type": "object",
+      "properties": {
+        "progress_refresh_rate": {
+          "type": "number"
+        },
+        "detailed_progress": {
+          "type": "boolean"
+        },
+        "auto_clear_progress": {
+          "type": "boolean"
+        },
+        "pagination_size": {
+          "type": "number"
+        },
+        "colored_output": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "progress_refresh_rate",
+        "detailed_progress",
+        "auto_clear_progress",
+        "pagination_size",
+        "colored_output"
+      ]
+    },
+    "search": {
+      "type": "object",
+      "properties": {
+        "min_posts_on_tag": {
+          "type": "number"
+        },
+        "min_posts_on_pool": {
+          "type": "number"
+        },
+        "show_inactive_pools": {
+          "type": "boolean"
+        },
+        "sort_pools_by_post_count": {
+          "type": "boolean"
+        },
+        "sort_tags_by_post_count": {
+          "type": "boolean"
+        },
+        "min_post_score": {
+          "type": "number"
+        },
+        "max_post_score": {
+          "type": "number"
+        },
+        "reverse_tags_order": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "min_posts_on_tag",
+        "min_posts_on_pool",
+        "show_inactive_pools",
+        "sort_pools_by_post_count",
+        "sort_tags_by_post_count",
+        "min_post_score",
+        "max_post_score",
+        "reverse_tags_order"
+      ]
+    },
+    "completion": {
+      "type": "object",
+      "properties": {
+        "tag_similarity_threshold": {
+          "type": "number"
+        }
+      },
+      "required": ["tag_similarity_threshold"]
+    }
+  },
+  "required": []
+}
