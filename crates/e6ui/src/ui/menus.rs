@@ -78,8 +78,6 @@ pub enum MainMenu {
     SearchPoolsAdv,
     /// View the latest posts
     ViewLatest,
-    /// View your blacklist
-    ViewBlacklist,
     /// Manage your blacklist
     ManageBlacklist,
     /// Exit e62rs
