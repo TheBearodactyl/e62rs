@@ -21,7 +21,7 @@
     "max_connections": 15,
     "http2_prior_knowledge": true,
     "tcp_keepalive": true,
-    "user_agent": null
+    "user_agent": "e62rs/v0.1.0 (by bearodactyl on e621)"
   },
   "cache": {
     "enabled": true,

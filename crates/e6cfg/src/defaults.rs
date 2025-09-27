@@ -51,7 +51,12 @@ impl Default for HttpConfig {
             max_connections: Some(15),
             http2_prior_knowledge: Some(true),
             tcp_keepalive: Some(true),
-            user_agent: None,
+            user_agent: Some(format!(
+                "{}/v{} (by {} on e621)",
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+                "bearodactyl"
+            )),
         }
     }
 }
