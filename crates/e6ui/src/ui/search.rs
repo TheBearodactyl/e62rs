@@ -1,15 +1,16 @@
+use crate::ui::{
+    E6Ui,
+    menus::{AdvPoolSearch, BatchAction, InteractionMenu, PoolInteractionMenu},
+};
 use anyhow::{Context, Result};
 use e6cfg::Cfg;
 use e6core::{
     formatting::format_text,
     models::{E6Pool, E6Post, PoolEntry},
 };
+use futures::{StreamExt, TryStreamExt, stream};
+use indicatif::ProgressBar;
 use inquire::{Confirm, Select, Text};
-
-use crate::ui::{
-    E6Ui,
-    menus::{AdvPoolSearch, BatchAction, InteractionMenu, PoolInteractionMenu},
-};
 
 impl E6Ui {
     pub async fn search_pools_adv(&self) -> Result<()> {
@@ -390,16 +391,36 @@ impl E6Ui {
 
             if !selected_posts.is_empty() {
                 println!("\nSelected {} posts", selected_posts.len());
+                let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+                let pb = ProgressBar::new(selected_posts.len() as u64)
+                    .with_message("Total posts fetched");
 
-                let mut fetched_posts = Vec::new();
-                for post in &selected_posts {
-                    let fetched = self.client.get_post_by_id(post.id).await?;
-                    fetched_posts.push(fetched.post);
-                }
+                let fetched_posts: Result<Vec<_>, _> = stream::iter(selected_posts.iter())
+                    .map(|post| {
+                        let client = &self.client;
+                        let pb = &pb;
 
-                match self.batch_interaction_menu(fetched_posts).await? {
-                    BatchAction::Back => Ok(true),
-                    _ => Ok(self.ask_retry()?),
+                        async move {
+                            let result = client.get_post_by_id(post.id).await;
+                            pb.inc(1);
+                            result.map(|fetched| fetched.post)
+                        }
+                    })
+                    .buffered(search_cfg.fetch_threads.unwrap_or_default())
+                    .try_collect()
+                    .await;
+
+                pb.finish_with_message("Finished fetching posts");
+
+                match fetched_posts {
+                    Ok(posts) => match self.batch_interaction_menu(posts).await? {
+                        BatchAction::Back => Ok(true),
+                        _ => Ok(self.ask_retry()?),
+                    },
+                    Err(e) => {
+                        eprintln!("Error fetching posts: {}", e);
+                        Ok(self.ask_retry()?)
+                    }
                 }
             } else {
                 Ok(self.ask_retry()?)

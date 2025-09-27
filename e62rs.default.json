@@ -51,7 +51,8 @@
     "sort_tags_by_post_count": true,
     "min_post_score": 0,
     "max_post_score": 9223372036854775807,
-    "reverse_tags_order": false
+    "reverse_tags_order": false,
+    "fetch_threads": 8
   },
   "login": {
     "username": " ",

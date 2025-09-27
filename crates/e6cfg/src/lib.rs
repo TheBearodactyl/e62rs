@@ -162,6 +162,9 @@ pub struct SearchCfg {
 
     /// Sort tags in reverse alphabetic order
     pub reverse_tags_order: Option<bool>,
+
+    /// The number of threads to use when fetching post data
+    pub fetch_threads: Option<usize>,
 }
 
 /// Configuration options for completion in menus

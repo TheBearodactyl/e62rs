@@ -764,6 +764,7 @@ dependencies = [
  "chrono",
  "e6cfg",
  "e6core",
+ "futures",
  "futures-util",
  "indicatif",
  "inquire",

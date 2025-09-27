@@ -462,6 +462,11 @@
           "description": "Whether or not to sort tags by their post count",
           "type": ["boolean", "null"],
           "default": true
+        },
+        "fetch_threads": {
+          "description": "The number of threads to use when fetching post data",
+          "type": ["number", "null"],
+          "default": 8
         }
       }
     },

@@ -3,7 +3,7 @@ use anyhow::{Context, Result};
 use e6cfg::Cfg;
 use e6core::models::E6Post;
 use futures_util::StreamExt;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -300,17 +300,6 @@ impl PostDownloader {
 impl E6Ui {
     pub async fn download_posts(&self, posts: Vec<E6Post>) -> Result<()> {
         println!("Downloading {} posts...", posts.len());
-        let total = posts.len();
-        let multi_prog = MultiProgress::new();
-        let sty = ProgressStyle::with_template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
-        )
-        .unwrap()
-        .progress_chars("##-");
-
-        let total_downloaded_pb = multi_prog.add(ProgressBar::new(total as u64));
-        total_downloaded_pb.set_style(sty.clone());
-        total_downloaded_pb.set_message("Total");
 
         self.downloader.clone().download_posts(posts).await?;
 

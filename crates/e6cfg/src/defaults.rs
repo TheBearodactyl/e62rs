@@ -119,6 +119,7 @@ impl Default for SearchCfg {
             min_post_score: Some(0),
             max_post_score: Some(i64::MAX),
             reverse_tags_order: Some(false),
+            fetch_threads: Some(8),
         }
     }
 }
