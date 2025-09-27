@@ -2,7 +2,7 @@ use std::{io::Read, path::Path};
 
 use anyhow::{Context, Result, bail};
 use chrono::{Datelike, Local};
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use flate2::read::GzDecoder;
 use log::{debug, info};
 use sha2::{Digest, Sha256};
@@ -15,7 +15,7 @@ use crate::{
 
 impl E6Client {
     pub async fn update_pools(&self) -> Result<()> {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
         let local_file_cfg = cfg.pools.unwrap_or("data/pools.csv".to_owned());
         let local_file = local_file_cfg.as_str();
         let local_hash_file: &str = &format!("{}.hash", local_file);

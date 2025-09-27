@@ -4,7 +4,7 @@ use {
         models::TagEntry,
     },
     anyhow::Result,
-    e6cfg::Cfg,
+    e6cfg::E62Rs,
 };
 
 impl Entry for TagEntry {
@@ -20,7 +20,7 @@ pub struct TagDatabase {
 
 impl TagDatabase {
     pub fn load() -> Result<Self> {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
 
         Ok(Self {
             tags: Database::from_csv(cfg.tags.unwrap_or("data/tags.csv".to_owned()).as_str())?,
@@ -30,7 +30,7 @@ impl TagDatabase {
     /// # Safety
     #[inline(always)]
     pub unsafe fn iter_tags(&self) -> impl Iterator<Item = &TagEntry> {
-        let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+        let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
 
         let mut tags = unsafe {
             self.tags

@@ -16,13 +16,13 @@ fn main() {
     if argv.gen_schema {
         let settings = SchemaSettings::draft07().for_serialize();
         let generator = settings.into_generator();
-        let schema = generator.into_root_schema_for::<Cfg>();
+        let schema = generator.into_root_schema_for::<E62Rs>();
 
         println!("{}", serde_json::to_string_pretty(&schema).unwrap());
     }
 
     if argv.gen_default {
-        let defaults = serde_json::to_string_pretty(&Cfg::default()).unwrap();
+        let defaults = serde_json::to_string_pretty(&E62Rs::default()).unwrap();
 
         println!("{}", defaults);
     }

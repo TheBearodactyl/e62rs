@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use chrono::{Datelike, Local};
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use flate2::read::GzDecoder;
 use futures::future::join_all;
 use log::{debug, info, warn};
@@ -68,7 +68,7 @@ impl E6Client {
     }
 
     pub async fn get_posts_by_ids(&self, ids: Vec<i64>) -> Result<Vec<E6PostResponse>> {
-        let config = Cfg::get().unwrap_or_default();
+        let config = E62Rs::get().unwrap_or_default();
         let concurrent_limit = config
             .performance
             .as_ref()
@@ -108,7 +108,7 @@ impl E6Client {
     }
 
     pub async fn update_tags(&self) -> Result<()> {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
         let local_file_cfg = cfg.tags.unwrap_or("data/tags.csv".to_owned());
         let local_file = local_file_cfg.as_str();
         let local_hash_file: &str = &format!("{}.hash", local_file);

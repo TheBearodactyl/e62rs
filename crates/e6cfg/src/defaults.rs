@@ -1,15 +1,11 @@
 use crate::{
-    AutoUpdateCfg, CacheConfig, Cfg, CompletionCfg, HttpConfig, ImageDisplay, LoginCfg,
-    PerformanceConfig, SearchCfg, SizeFormat, UiConfig,
+    AutoUpdateCfg, CacheConfig, CompletionCfg, DownloadCfg, E62Rs, HttpConfig, ImageDisplay,
+    LoginCfg, PerformanceConfig, SearchCfg, SizeFormat, UiConfig,
 };
 
-impl Default for Cfg {
+impl Default for E62Rs {
     fn default() -> Self {
         Self {
-            download_dir: Some("downloads".to_string()),
-            output_format: Some(
-                "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string(),
-            ),
             progress_format: Some(SizeFormat::default()),
             post_count: Some(320),
             autoupdate: Some(AutoUpdateCfg::default()),
@@ -24,12 +20,25 @@ impl Default for Cfg {
             search: Some(SearchCfg::default()),
             completion: Some(CompletionCfg::default()),
             login: Some(LoginCfg::default()),
+            download: Some(DownloadCfg::default()),
             blacklist: Some(
                 vec!["young", "rape", "feral", "bestiality"]
                     .into_iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<String>>(),
             ),
+        }
+    }
+}
+
+impl Default for DownloadCfg {
+    fn default() -> Self {
+        Self {
+            download_dir: Some("downloads".to_string()),
+            output_format: Some(
+                "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string(),
+            ),
+            desc_as_ads: Some(true),
         }
     }
 }

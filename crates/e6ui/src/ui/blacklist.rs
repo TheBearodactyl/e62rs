@@ -1,11 +1,11 @@
 use crate::ui::{E6Ui, menus::BlacklistManager};
 use anyhow::Result;
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use inquire::{Confirm, MultiSelect, Select, Text};
 
 impl E6Ui {
     pub fn show_blacklist_info(&self) -> Result<()> {
-        let config = Cfg::get().unwrap_or_default();
+        let config = E62Rs::get().unwrap_or_default();
         if let Some(blacklist) = config.blacklist {
             if blacklist.is_empty() {
                 println!("Blacklist is empty.");
@@ -97,7 +97,7 @@ impl E6Ui {
     }
 
     async fn add_validated_tag_to_blacklist(&self, tag: String) -> Result<()> {
-        let mut config = Cfg::get().unwrap_or_default();
+        let mut config = E62Rs::get().unwrap_or_default();
 
         if let Some(blacklist) = &config.blacklist
             && blacklist.contains(&tag)
@@ -122,7 +122,7 @@ impl E6Ui {
     }
 
     async fn remove_tag_from_blacklist(&self) -> Result<()> {
-        let config = Cfg::get().unwrap_or_default();
+        let config = E62Rs::get().unwrap_or_default();
         let blacklist = match &config.blacklist {
             Some(bl) if !bl.is_empty() => bl,
             _ => {
@@ -141,7 +141,7 @@ impl E6Ui {
                 .prompt()?;
 
             if confirm {
-                let mut config = Cfg::get().unwrap_or_default();
+                let mut config = E62Rs::get().unwrap_or_default();
                 match config.remove_from_blacklist(&tag) {
                     Ok(true) => {
                         println!(
@@ -163,7 +163,7 @@ impl E6Ui {
     }
 
     async fn clear_blacklist(&self) -> Result<()> {
-        let config = Cfg::get().unwrap_or_default();
+        let config = E62Rs::get().unwrap_or_default();
         let blacklist_count = config.blacklist.as_ref().map(|bl| bl.len()).unwrap_or(0);
 
         if blacklist_count == 0 {
@@ -179,7 +179,7 @@ impl E6Ui {
         .prompt()?;
 
         if confirm {
-            let mut config = Cfg::get().unwrap_or_default();
+            let mut config = E62Rs::get().unwrap_or_default();
             match config.clear_blacklist() {
                 Ok(()) => {
                     println!("Successfully cleared blacklist and saved configuration.");
@@ -260,7 +260,7 @@ impl E6Ui {
         .prompt()?;
 
         if confirm {
-            let mut config = Cfg::get().unwrap_or_default();
+            let mut config = E62Rs::get().unwrap_or_default();
             let mut added_count = 0;
             let mut already_exists = 0;
 

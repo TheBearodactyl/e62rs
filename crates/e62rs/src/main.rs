@@ -1,6 +1,6 @@
 use {
     anyhow::{Context, Result},
-    e6cfg::Cfg,
+    e6cfg::E62Rs,
     e6core::{
         client::E6Client,
         data::{pools::PoolDatabase, tags::TagDatabase},
@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run() -> Result<()> {
-    let cfg = Cfg::get().unwrap_or_default();
+    let cfg = E62Rs::get().unwrap_or_default();
     let autoup = cfg.autoupdate.unwrap_or_default();
     let client = Arc::new(E6Client::default());
 

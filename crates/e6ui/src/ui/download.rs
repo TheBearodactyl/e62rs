@@ -1,10 +1,12 @@
 use crate::{progress::ProgressManager, ui::E6Ui};
 use anyhow::{Context, Result};
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use e6core::models::E6Post;
 use futures_util::StreamExt;
 use indicatif::ProgressBar;
 use std::{
+    fs::OpenOptions,
+    io::Write,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -33,7 +35,7 @@ impl PostDownloader {
     }
 
     pub async fn download_posts(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
         let concurrent_limit = cfg
             .performance
             .as_ref()
@@ -80,6 +82,25 @@ impl PostDownloader {
         Ok(())
     }
 
+    #[cfg(target_os = "windows")]
+    pub fn write_to_ads<P: AsRef<Path>>(
+        file_path: P,
+        stream_name: &str,
+        data: &str,
+    ) -> anyhow::Result<()> {
+        let file_path = file_path.as_ref();
+        let ads_path = format!("{}:{}", file_path.display(), stream_name);
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&ads_path)?;
+
+        file.write_all(data.as_bytes())?;
+        Ok(())
+    }
+
     pub async fn download_post(&self, post: E6Post, index: usize) -> Result<()> {
         let url = post
             .file
@@ -111,7 +132,8 @@ impl PostDownloader {
             .error_for_status()
             .with_context(|| format!("Server returned error for '{}'", url))?;
 
-        self.save_to_file(response, &filepath, pb.clone()).await?;
+        self.save_to_file(response, &filepath, pb.clone(), &post)
+            .await?;
 
         pb.finish_with_message(format!("Downloaded {}", filename));
         self.progress_manager.remove_bar(&pb_key).await;
@@ -124,10 +146,20 @@ impl PostDownloader {
         response: reqwest::Response,
         filepath: &Path,
         pb: ProgressBar,
+        post: &E6Post,
     ) -> Result<()> {
+        let cfg = E62Rs::get().unwrap_or_default();
+        let dl_cfg = cfg.download.unwrap_or_default();
         let mut file = File::create(filepath)
             .await
             .with_context(|| format!("Failed to create file '{}'", filepath.display()))?;
+
+        #[cfg(target_os = "windows")]
+        {
+            if dl_cfg.desc_as_ads.unwrap_or_default() {
+                e6core::utils::write_to_ads(filepath, "description", post.description.as_str())?;
+            }
+        }
 
         let mut stream = response.bytes_stream();
         let mut downloaded = 0u64;

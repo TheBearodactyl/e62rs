@@ -1,15 +1,16 @@
+use std::sync::Arc;
+
 use crate::ui::{
     E6Ui,
     menus::{AdvPoolSearch, BatchAction, InteractionMenu, PoolInteractionMenu},
 };
 use anyhow::{Context, Result};
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use e6core::{
     formatting::format_text,
     models::{E6Pool, E6Post, PoolEntry},
 };
-use futures::{StreamExt, TryStreamExt, stream};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use inquire::{Confirm, Select, Text};
 
 impl E6Ui {
@@ -144,7 +145,7 @@ impl E6Ui {
     }
 
     pub fn get_pool_limit(&self) -> Result<u64> {
-        let settings = Cfg::get().unwrap_or_default();
+        let settings = E62Rs::get().unwrap_or_default();
         let default_limit = settings.post_count.unwrap_or(32);
 
         let prompt = inquire::CustomType::<u64>::new("How many pools to return?")
@@ -391,36 +392,81 @@ impl E6Ui {
 
             if !selected_posts.is_empty() {
                 println!("\nSelected {} posts", selected_posts.len());
-                let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
-                let pb = ProgressBar::new(selected_posts.len() as u64)
-                    .with_message("Total posts fetched");
+                let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
+                let concurrent_limit = search_cfg.fetch_threads.unwrap_or(8).max(1);
+                let post_ids: Vec<i64> = selected_posts.iter().map(|post| post.id).collect();
+                let total_count = post_ids.len();
 
-                let fetched_posts: Result<Vec<_>, _> = stream::iter(selected_posts.iter())
-                    .map(|post| {
-                        let client = &self.client;
-                        let pb = &pb;
-
-                        async move {
-                            let result = client.get_post_by_id(post.id).await;
-                            pb.inc(1);
-                            result.map(|fetched| fetched.post)
-                        }
+                let pb = ProgressBar::new(total_count as u64);
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({percent}%) {msg}"
+                    )?
+                    .with_key("eta", |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
+                        write!(w, "{:.1}s", state.eta().as_secs_f64()).expect("Failed")
                     })
-                    .buffered(search_cfg.fetch_threads.unwrap_or_default())
-                    .try_collect()
-                    .await;
+                    .progress_chars("#>-")
+                );
+                pb.set_message("Fetching posts...");
 
-                pb.finish_with_message("Finished fetching posts");
+                let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
+                let pb_arc = Arc::new(pb);
 
-                match fetched_posts {
-                    Ok(posts) => match self.batch_interaction_menu(posts).await? {
+                let tasks = post_ids.into_iter().map(|post_id| {
+                    let client = self.client.clone();
+                    let semaphore = Arc::clone(&semaphore);
+                    let pb = Arc::clone(&pb_arc);
+
+                    tokio::task::spawn(async move {
+                        let _permit = semaphore.acquire().await.unwrap();
+
+                        let result = match client.get_post_by_id(post_id).await {
+                            Ok(fetched) => {
+                                pb.inc(1);
+                                Some(fetched.post)
+                            }
+                            Err(e) => {
+                                pb.inc(1);
+                                pb.println(format!("Failed to fetch post {}: {}", post_id, e));
+                                None
+                            }
+                        };
+
+                        let pos = pb.position();
+                        let len = pb.length().unwrap_or(0);
+                        if pos.is_multiple_of(25) || pos == len {
+                            pb.set_message(format!("Fetching posts... ({}/{})", pos, len));
+                        }
+
+                        result
+                    })
+                });
+
+                let mut all_fetched_posts = Vec::new();
+                for task in tasks {
+                    match task.await {
+                        Ok(Some(post)) => all_fetched_posts.push(post),
+                        Ok(None) => {}
+                        Err(e) => {
+                            pb_arc.println(format!("Task failed: {}", e));
+                        }
+                    }
+                }
+
+                pb_arc.finish_with_message(format!(
+                    "Successfully fetched {}/{} posts",
+                    all_fetched_posts.len(),
+                    total_count
+                ));
+
+                if !all_fetched_posts.is_empty() {
+                    match self.batch_interaction_menu(all_fetched_posts).await? {
                         BatchAction::Back => Ok(true),
                         _ => Ok(self.ask_retry()?),
-                    },
-                    Err(e) => {
-                        eprintln!("Error fetching posts: {}", e);
-                        Ok(self.ask_retry()?)
                     }
+                } else {
+                    eprintln!("Failed to fetch any posts");
+                    Ok(self.ask_retry()?)
                 }
             } else {
                 Ok(self.ask_retry()?)
@@ -443,7 +489,7 @@ impl E6Ui {
     }
 
     fn get_post_limit(&self) -> Result<u64> {
-        let settings = Cfg::get().unwrap_or_default();
+        let settings = E62Rs::get().unwrap_or_default();
 
         if settings.post_count.unwrap_or(32).eq(&32) {
             let prompt = inquire::CustomType::<u64>::new("How many posts to return?")

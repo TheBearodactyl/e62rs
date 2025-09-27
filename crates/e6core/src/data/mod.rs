@@ -2,7 +2,7 @@ pub mod pools;
 pub mod tags;
 
 use anyhow::Result;
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use rapidfuzz::fuzz;
 use std::{fs::File, slice, sync::Arc};
 
@@ -142,7 +142,7 @@ impl<T: Entry> Database<T> {
 
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
         let query_lower = query.to_lowercase();
-        let completion_cfg = Cfg::get()
+        let completion_cfg = E62Rs::get()
             .unwrap_or_default()
             .completion
             .unwrap_or_default();

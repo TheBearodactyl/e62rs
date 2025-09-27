@@ -1,7 +1,7 @@
-use crate::Cfg;
+use crate::E62Rs;
 use anyhow::Result;
 
-impl Cfg {
+impl E62Rs {
     pub fn add_to_blacklist(&mut self, tag: String) -> Result<()> {
         let blacklist = self.blacklist.get_or_insert_with(Vec::new);
 

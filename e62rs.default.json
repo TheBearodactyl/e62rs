@@ -1,6 +1,4 @@
 {
-  "download_dir": "downloads",
-  "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext",
   "progress_format": "MegaBytes",
   "post_count": 320,
   "base_url": "https://e621.net",
@@ -64,6 +62,11 @@
   "autoupdate": {
     "tags": true,
     "pools": true
+  },
+  "download": {
+    "download_dir": "downloads",
+    "desc_as_ads": true,
+    "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
   },
   "blacklist": [
     "young",

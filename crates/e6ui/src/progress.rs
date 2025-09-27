@@ -1,5 +1,5 @@
 use anyhow::Result;
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use std::{collections::HashMap, fmt::Write, sync::Arc};
 use tokio::sync::RwLock;
@@ -12,7 +12,7 @@ pub struct ProgressManager {
 
 impl ProgressManager {
     pub fn new() -> Self {
-        let config = Cfg::get().unwrap_or_default();
+        let config = E62Rs::get().unwrap_or_default();
         let refresh_rate = config
             .ui
             .as_ref()
@@ -32,7 +32,7 @@ impl ProgressManager {
     }
 
     pub async fn create_bar(&self, key: &str, len: u64, message: &str) -> Result<ProgressBar> {
-        let config = Cfg::get().unwrap_or_default();
+        let config = E62Rs::get().unwrap_or_default();
         let size_format = config.progress_format.unwrap_or_default();
         let detailed = config
             .ui
@@ -41,30 +41,29 @@ impl ProgressManager {
             .unwrap_or(true);
 
         let template = if detailed {
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos_size:>10}/{len_size:>10} {msg} ({eta_precise})"
+            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos_size:>10}/{len_size:>10} ({percent}%) {msg}"
         } else {
-            "{bar:40.cyan/blue} {pos_size:>10}/{len_size:>10} {msg}"
+            "{spinner:.green} [{wide_bar:.cyan/blue}] {pos_size:>10}/{len_size:>10} {msg}"
         };
 
-        let style = ProgressStyle::with_template(template)
-            .unwrap()
+        let style = ProgressStyle::with_template(template)?
             .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
-                write!(w, "{:.1}s", state.eta().as_secs_f64()).expect("Failed");
+                write!(w, "{:.1}s", state.eta().as_secs_f64()).expect("Failed")
             })
             .with_key(
                 "pos_size",
                 move |state: &ProgressState, w: &mut dyn Write| {
-                    write!(w, "{}", size_format.format_size(state.pos())).expect("Failed");
+                    write!(w, "{}", size_format.format_size(state.pos())).expect("Failed")
                 },
             )
             .with_key(
                 "len_size",
                 move |state: &ProgressState, w: &mut dyn Write| {
                     write!(w, "{}", size_format.format_size(state.len().unwrap_or(0)))
-                        .expect("Failed");
+                        .expect("Failed")
                 },
             )
-            .progress_chars("█▉▊▋▌▍▎");
+            .progress_chars("#>-");
 
         let pb = self.multi.add(ProgressBar::new(len));
         pb.set_style(style);

@@ -1,3 +1,5 @@
+use std::{fs::OpenOptions, io::Write, path::Path};
+
 use base64::{Engine, engine::general_purpose};
 use e6cfg::LoginCfg;
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
@@ -47,4 +49,22 @@ pub fn create_auth_header(login_cfg: &LoginCfg) -> anyhow::Result<HeaderMap> {
     headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_value)?);
 
     Ok(headers)
+}
+
+pub fn write_to_ads<P: AsRef<Path>>(
+    file_path: P,
+    stream_name: &str,
+    data: &str,
+) -> anyhow::Result<usize> {
+    let file_path = file_path.as_ref();
+    let ads_path = format!("{}:{}", file_path.display(), stream_name);
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&ads_path)?;
+
+    file.write_all(data.as_bytes())?;
+    Ok(data.len())
 }

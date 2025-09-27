@@ -239,13 +239,17 @@ pub struct AutoUpdateCfg {
     pub pools: Option<bool>,
 }
 
-/// Configuration options for general stuff
+/// Settings for post downloading
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
-pub struct Cfg {
+pub struct DownloadCfg {
     /// The directory to download posts to
     pub download_dir: Option<String>,
+
+    /// WINDOWS ONLY
+    /// Save post descriptions to <downloaded_file>:description for later use
+    pub desc_as_ads: Option<bool>,
 
     /// The output format for downloaded files
     ///
@@ -285,7 +289,13 @@ pub struct Cfg {
     /// - `$now_time`: Shorthand for "$now_hour-$now_minute-$now_second"
     /// - `$now_datetime`: Shorthand for "$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second"
     pub output_format: Option<String>,
+}
 
+/// E62RS configuration options
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[schemars(bound = "T: JsonSchema + Default")]
+#[schemars(default)]
+pub struct E62Rs {
     /// The format to display download progress in
     pub progress_format: Option<SizeFormat>,
 
@@ -329,6 +339,9 @@ pub struct Cfg {
     /// Autoupdate settings
     pub autoupdate: Option<AutoUpdateCfg>,
 
+    /// Post download settings
+    pub download: Option<DownloadCfg>,
+
     /// Blacklisted tags to filter out from all operations
     pub blacklist: Option<Vec<String>>,
 }
@@ -356,7 +369,7 @@ fn find_local_config_file() -> Option<String> {
     None
 }
 
-impl Cfg {
+impl E62Rs {
     pub fn get() -> Result<Self> {
         let global_config_path = format!("{}/e62rs.toml", get_config_dir());
 
@@ -381,8 +394,8 @@ impl Cfg {
         let settings = builder.build()?;
 
         let mut cfg = settings
-            .try_deserialize::<Cfg>()
-            .unwrap_or_else(|_| Cfg::default());
+            .try_deserialize::<E62Rs>()
+            .unwrap_or_else(|_| E62Rs::default());
 
         if cfg.http.is_none() {
             cfg.http = Some(HttpConfig::default());

@@ -4,7 +4,7 @@ use {
         models::PoolEntry,
     },
     anyhow::Result,
-    e6cfg::Cfg,
+    e6cfg::E62Rs,
 };
 
 impl Entry for PoolEntry {
@@ -24,7 +24,7 @@ pub struct PoolDatabase {
 
 impl PoolDatabase {
     pub fn load() -> Result<Self> {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
 
         Ok(Self {
             pools: Database::from_csv(cfg.pools.unwrap_or("data/pools.csv".to_owned()).as_str())?,
@@ -38,7 +38,7 @@ impl PoolDatabase {
     /// # Safety
     #[inline(always)]
     pub unsafe fn iter_pools(&self) -> impl Iterator<Item = &PoolEntry> {
-        let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+        let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
         let mut pools = unsafe {
             self.pools
                 .buffer

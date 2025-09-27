@@ -1,6 +1,6 @@
 use crate::{client::cache::CacheEntry, utils::create_auth_header};
 use anyhow::{Context, Result};
-use e6cfg::{CacheConfig, Cfg, HttpConfig};
+use e6cfg::{CacheConfig, E62Rs, HttpConfig};
 use log::{debug, info};
 use reqwest::Client;
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -23,14 +23,14 @@ pub struct E6Client {
 
 impl Default for E6Client {
     fn default() -> Self {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
         Self::new(&cfg.base_url.unwrap_or_default()).expect("Failed to create default E6Client")
     }
 }
 
 impl E6Client {
     pub fn new(base_url: &str) -> Result<Self> {
-        let cfg = Cfg::get().unwrap_or_default();
+        let cfg = E62Rs::get().unwrap_or_default();
         let http_config = cfg.http.unwrap_or_default();
         let cache_config = cfg.cache.unwrap_or_default();
         let client = Self::build_http_client(&http_config)?;
@@ -61,7 +61,7 @@ impl E6Client {
     }
 
     fn build_http_client(http_config: &HttpConfig) -> Result<Client> {
-        let login_cfg = Cfg::get().unwrap_or_default().login;
+        let login_cfg = E62Rs::get().unwrap_or_default().login;
         let mut client_builder = Client::builder()
             .user_agent(
                 http_config

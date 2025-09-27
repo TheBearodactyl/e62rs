@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use e6core::{
     client::E6Client,
     data::{pools::PoolDatabase, tags::TagDatabase},
@@ -37,27 +37,16 @@ impl E6Ui {
         tag_db: Arc<TagDatabase>,
         pool_db: Arc<PoolDatabase>,
     ) -> Self {
-        let settings = Cfg::get().unwrap_or_default();
+        let settings = E62Rs::get().unwrap_or_default();
+        let dl_cfg = settings.download.unwrap_or_default();
         let downloader = Arc::new(PostDownloader::with_download_dir_and_format(
-            settings.download_dir.clone().unwrap(),
-            settings.output_format.clone(),
+            dl_cfg.download_dir.clone().unwrap(),
+            dl_cfg.output_format.clone(),
         ));
 
-        if std::fs::exists(
-            settings
-                .download_dir
-                .clone()
-                .unwrap_or("output".to_string()),
-        )
-        .is_err()
-        {
-            std::fs::create_dir_all(
-                settings
-                    .download_dir
-                    .clone()
-                    .unwrap_or("output".to_string()),
-            )
-            .expect("Failed to create output directory");
+        if std::fs::exists(dl_cfg.download_dir.clone().unwrap_or("output".to_string())).is_err() {
+            std::fs::create_dir_all(dl_cfg.download_dir.clone().unwrap_or("output".to_string()))
+                .expect("Failed to create output directory");
         }
 
         Self {

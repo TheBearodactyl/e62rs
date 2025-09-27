@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use e6cfg::Cfg;
+use e6cfg::E62Rs;
 use icy_sixel::{DiffusionMethod, MethodForLargest, PixelFormat, Quality, sixel_string};
 use image::{GenericImageView, ImageReader, imageops::FilterType};
 use std::io::Cursor;
@@ -26,8 +26,8 @@ pub struct ImageDimensions {
     pub height: Option<u32>,
 }
 
-impl From<&Cfg> for ImageDimensions {
-    fn from(cfg: &Cfg) -> Self {
+impl From<&E62Rs> for ImageDimensions {
+    fn from(cfg: &E62Rs) -> Self {
         if let Some(display) = &cfg.display {
             ImageDimensions {
                 width: display.width.map(|w| w as u32),
@@ -116,7 +116,7 @@ pub fn convert_rgb888_to_sixel(rgb_data: &[u8], width: u32, height: u32) -> Stri
 }
 
 pub async fn fetch_and_display_image_as_sixel(url: &str) -> Result<()> {
-    let cfg = Cfg::get()?;
+    let cfg = E62Rs::get()?;
     let target_dimensions = ImageDimensions::from(&cfg);
 
     let (img_rgb888, width, height) = load_image_from_url(url, target_dimensions)
@@ -130,7 +130,7 @@ pub async fn fetch_and_display_image_as_sixel(url: &str) -> Result<()> {
 }
 
 pub async fn fetch_and_display_images_as_sixel(urls: &[&str]) -> Result<()> {
-    let cfg = Cfg::get()?;
+    let cfg = E62Rs::get()?;
     let target_dimensions = ImageDimensions::from(&cfg);
 
     for url in urls {

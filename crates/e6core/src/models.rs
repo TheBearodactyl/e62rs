@@ -314,7 +314,7 @@ pub struct PoolEntry {
 
 impl E6Post {
     pub fn is_blacklisted(&self) -> bool {
-        if let Ok(config) = Cfg::get()
+        if let Ok(config) = E62Rs::get()
             && let Some(blacklist) = config.blacklist
         {
             if blacklist.is_empty() {
@@ -341,7 +341,7 @@ impl E6Post {
     }
 
     pub fn search_includes_blacklisted(search_tags: &[String]) -> bool {
-        if let Ok(config) = Cfg::get()
+        if let Ok(config) = E62Rs::get()
             && let Some(blacklist) = config.blacklist
         {
             return search_tags.iter().any(|tag| blacklist.contains(tag));
@@ -351,7 +351,7 @@ impl E6Post {
     }
 
     pub fn meets_score_requirements(&self) -> bool {
-        let search_cfg = Cfg::get().unwrap_or_default().search.unwrap_or_default();
+        let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
         let min_score = search_cfg.min_post_score.unwrap_or_default();
         let max_score = search_cfg.max_post_score.unwrap_or_default();
 
