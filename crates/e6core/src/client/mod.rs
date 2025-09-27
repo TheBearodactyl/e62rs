@@ -1,4 +1,4 @@
-use crate::client::cache::CacheEntry;
+use crate::{client::cache::CacheEntry, utils::create_auth_header};
 use anyhow::{Context, Result};
 use e6cfg::{CacheConfig, Cfg, HttpConfig};
 use log::{debug, info};
@@ -61,6 +61,7 @@ impl E6Client {
     }
 
     fn build_http_client(http_config: &HttpConfig) -> Result<Client> {
+        let login_cfg = Cfg::get().unwrap_or_default().login;
         let mut client_builder = Client::builder()
             .user_agent(
                 http_config
@@ -79,6 +80,10 @@ impl E6Client {
 
         if http_config.http2_prior_knowledge.unwrap_or(true) {
             client_builder = client_builder.http2_prior_knowledge();
+        }
+
+        if let Some(login_creds) = login_cfg {
+            client_builder = client_builder.default_headers(create_auth_header(&login_creds)?);
         }
 
         if http_config.tcp_keepalive.unwrap_or(true) {

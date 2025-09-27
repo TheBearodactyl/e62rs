@@ -1,3 +1,6 @@
+use base64::{Engine, engine::general_purpose};
+use e6cfg::LoginCfg;
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Deserialize;
 
 pub fn deserialize_bool_from_str<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -29,4 +32,19 @@ where
     } else {
         Ok(Vec::new())
     }
+}
+
+pub fn create_auth_header(login_cfg: &LoginCfg) -> anyhow::Result<HeaderMap> {
+    let auth_str = format!(
+        "{}:{}",
+        login_cfg.clone().username.unwrap_or_default(),
+        login_cfg.clone().api_key.unwrap_or_default()
+    );
+    let encoded = general_purpose::STANDARD.encode(&auth_str);
+    let auth_value = format!("Basic {}", encoded);
+    let mut headers = HeaderMap::new();
+
+    headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_value)?);
+
+    Ok(headers)
 }

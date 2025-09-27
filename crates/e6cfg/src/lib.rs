@@ -174,15 +174,15 @@ pub struct CompletionCfg {
 }
 
 /// Your login credentials
-#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
 pub struct LoginCfg {
     /// Your username
-    pub username: Option<String>,
+    pub username: String,
 
     /// Your API key
-    pub api_key: Option<String>,
+    pub api_key: String,
 }
 
 /// Settings for automatically updating data snapshots

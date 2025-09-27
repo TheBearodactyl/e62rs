@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
+base64 = "0.22.1"
 chrono = "0.4.42"
 csv = "1.3.1"
 e6cfg = { version = "0.1.0", path = "../e6cfg" }

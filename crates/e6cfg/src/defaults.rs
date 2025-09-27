@@ -118,15 +118,6 @@ impl Default for SearchCfg {
     }
 }
 
-impl Default for LoginCfg {
-    fn default() -> Self {
-        Self {
-            username: Some(" ".to_string()),
-            api_key: Some(" ".to_string()),
-        }
-    }
-}
-
 impl Default for AutoUpdateCfg {
     fn default() -> Self {
         Self {

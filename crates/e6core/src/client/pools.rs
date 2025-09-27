@@ -18,7 +18,7 @@ impl E6Client {
         let cfg = Cfg::get().unwrap_or_default();
         let local_file_cfg = cfg.pools.unwrap_or("data/pools.csv".to_owned());
         let local_file = local_file_cfg.as_str();
-        let local_hash_file: &str = &format!("{}.hash", local_file.clone());
+        let local_hash_file: &str = &format!("{}.hash", local_file);
 
         let now = Local::now();
         let url = format!(

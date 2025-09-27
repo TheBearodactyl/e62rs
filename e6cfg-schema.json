@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "E62RS",
-  "description": "Configuration options for general stuff",
+  "description": "Configuration options for e62rs",
   "type": "object",
   "properties": {
     "autoupdate": {
@@ -119,8 +119,8 @@
         }
       ],
       "default": {
-        "api_key": null,
-        "username": null
+        "api_key": "",
+        "username": ""
       }
     },
     "output_format": {
@@ -401,13 +401,13 @@
       "properties": {
         "api_key": {
           "description": "Your API key",
-          "type": ["string", "null"],
-          "default": null
+          "type": "string",
+          "default": ""
         },
         "username": {
           "description": "Your username",
-          "type": ["string", "null"],
-          "default": null
+          "type": "string",
+          "default": ""
         }
       },
       "required": ["username", "api_key"]
