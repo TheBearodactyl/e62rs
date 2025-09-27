@@ -1,10 +1,12 @@
 {
+  "$schema": "https://github.com/TheBearodactyl/e62rs/raw/refs/heads/main/e6cfg-schema.json",
   "download_dir": "downloads",
   "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext",
   "post_count": 320,
   "base_url": "https://e621.net",
   "tags": "data/tags.csv",
   "pools": "data/pools.csv",
+  "username": "exampleusername",
   "blacklist": ["young", "rape", "feral", "bestiality", "incest"],
   "display": {
     "width": 800,

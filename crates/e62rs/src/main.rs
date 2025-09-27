@@ -1,14 +1,15 @@
-use anyhow::{Context, Result};
-use e6cfg::Cfg;
-use e6core::{
-    client::E6Client,
-    data::{pools::PoolDatabase, tags::TagDatabase},
+use {
+    anyhow::{Context, Result},
+    e6cfg::Cfg,
+    e6core::{
+        client::E6Client,
+        data::{pools::PoolDatabase, tags::TagDatabase},
+    },
+    e6ui::ui::{E6Ui, menus::MainMenu},
+    env_logger::{Builder, Env},
+    log::{error, info},
+    std::{process, sync::Arc},
 };
-use e6ui::ui::{E6Ui, menus::MainMenu};
-use env_logger::{Builder, Env};
-use log::error;
-use log::info;
-use std::{process, sync::Arc};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -24,10 +25,17 @@ async fn main() -> Result<()> {
 }
 
 async fn run() -> Result<()> {
+    let cfg = Cfg::get().unwrap_or_default();
+    let autoup = cfg.autoupdate.unwrap_or_default();
     let client = Arc::new(E6Client::default());
 
-    client.update_tags().await?;
-    client.update_pools().await?;
+    if autoup.tags.unwrap_or_default() {
+        client.update_tags().await?;
+    }
+
+    if autoup.pools.unwrap_or_default() {
+        client.update_pools().await?;
+    }
 
     let tag_db = Arc::new(
         TagDatabase::load()
@@ -40,9 +48,10 @@ async fn run() -> Result<()> {
     );
 
     info!(
-        "Starting {} v0.2.0 using {}",
+        "Starting {} v{} using {}",
         env!("CARGO_PKG_NAME"),
-        Cfg::get().unwrap_or_default().base_url.unwrap()
+        env!("CARGO_PKG_VERSION"),
+        cfg.base_url.unwrap_or_default()
     );
 
     let selection = MainMenu::select("What would you like to do?").prompt()?;

@@ -24,8 +24,10 @@ pub struct PoolDatabase {
 
 impl PoolDatabase {
     pub fn load() -> Result<Self> {
+        let cfg = Cfg::get().unwrap_or_default();
+
         Ok(Self {
-            pools: Database::from_csv("data/pools.csv")?,
+            pools: Database::from_csv(cfg.pools.unwrap_or("data/pools.csv".to_owned()).as_str())?,
         })
     }
 

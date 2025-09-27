@@ -8,5 +8,7 @@ anyhow = "1.0.100"
 config = "0.15.16"
 dirs = "6.0.0"
 log = "0.4.28"
+schemars = "1.0.4"
 serde = { version = "1.0.226", features = ["derive"] }
+serde_json = "1.0.145"
 toml = "0.9.7"

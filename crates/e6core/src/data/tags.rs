@@ -20,8 +20,10 @@ pub struct TagDatabase {
 
 impl TagDatabase {
     pub fn load() -> Result<Self> {
+        let cfg = Cfg::get().unwrap_or_default();
+
         Ok(Self {
-            tags: Database::from_csv("data/tags.csv")?,
+            tags: Database::from_csv(cfg.pools.unwrap_or("data/tags.csv".to_owned()).as_str())?,
         })
     }
 

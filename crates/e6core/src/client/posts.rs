@@ -108,8 +108,10 @@ impl E6Client {
     }
 
     pub async fn update_tags(&self) -> Result<()> {
-        let local_file: &str = "data/tags.csv";
-        let local_hash_file: &str = "data/tags.csv.hash";
+        let cfg = Cfg::get().unwrap_or_default();
+        let local_file_cfg = cfg.tags.unwrap_or("data/tags.csv".to_owned());
+        let local_file = local_file_cfg.as_str();
+        let local_hash_file: &str = &format!("{}.hash", local_file);
 
         let now = Local::now();
         let url = format!(

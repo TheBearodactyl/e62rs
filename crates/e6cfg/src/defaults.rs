@@ -1,6 +1,6 @@
 use crate::{
-    CacheConfig, Cfg, CompletionCfg, HttpConfig, ImageDisplay, PerformanceConfig, SearchCfg,
-    UiConfig,
+    AutoUpdateCfg, CacheConfig, Cfg, CompletionCfg, HttpConfig, ImageDisplay, LoginCfg,
+    PerformanceConfig, SearchCfg, UiConfig,
 };
 
 impl Default for Cfg {
@@ -11,6 +11,7 @@ impl Default for Cfg {
                 "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string(),
             ),
             post_count: Some(320),
+            autoupdate: Some(AutoUpdateCfg::default()),
             base_url: Some("https://e621.net".to_string()),
             display: Some(ImageDisplay::default()),
             tags: Some("data/tags.csv".to_string()),
@@ -21,6 +22,7 @@ impl Default for Cfg {
             ui: Some(UiConfig::default()),
             search: Some(SearchCfg::default()),
             completion: Some(CompletionCfg::default()),
+            login: Some(LoginCfg::default()),
             blacklist: Some(
                 vec!["young", "rape", "feral", "bestiality"]
                     .into_iter()
@@ -112,6 +114,15 @@ impl Default for SearchCfg {
             min_post_score: Some(0),
             max_post_score: Some(i64::MAX),
             reverse_tags_order: Some(false),
+        }
+    }
+}
+
+impl Default for AutoUpdateCfg {
+    fn default() -> Self {
+        Self {
+            tags: Some(true),
+            pools: Some(true),
         }
     }
 }
