@@ -37,8 +37,8 @@ where
 pub fn create_auth_header(login_cfg: &LoginCfg) -> anyhow::Result<HeaderMap> {
     let auth_str = format!(
         "{}:{}",
-        login_cfg.clone().username.unwrap_or_default(),
-        login_cfg.clone().api_key.unwrap_or_default()
+        login_cfg.clone().username,
+        login_cfg.clone().api_key,
     );
     let encoded = general_purpose::STANDARD.encode(&auth_str);
     let auth_value = format!("Basic {}", encoded);
