@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "E62RS",
+  "title": "e62rs",
   "description": "Configuration options for e62rs",
   "type": "object",
   "properties": {
@@ -105,7 +105,7 @@
         "pool_max_idle_per_host": 32,
         "tcp_keepalive": true,
         "timeout_secs": 30,
-        "user_agent": null
+        "user_agent": "e6cfg/v0.1.0 (by bearodactyl on e621)"
       }
     },
     "login": {
@@ -158,6 +158,18 @@
       "default": 320,
       "minimum": 0
     },
+    "progress_format": {
+      "description": "The format to display download progress in",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SizeFormat"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "MegaBytes"
+    },
     "search": {
       "description": "Search settings",
       "anyOf": [
@@ -169,6 +181,7 @@
         }
       ],
       "default": {
+        "fetch_threads": 8,
         "max_post_score": 9223372036854775807,
         "min_post_score": 0,
         "min_posts_on_pool": 2,
@@ -218,8 +231,7 @@
           "type": ["boolean", "null"],
           "default": true
         }
-      },
-      "required": ["tags", "pools"]
+      }
     },
     "CacheConfig": {
       "description": "Configuration options for the response cache",
@@ -316,7 +328,7 @@
         "user_agent": {
           "description": "User agent string in the format:\n`<project name>/<project version> (by <valid e6 username> on <e621/e926>)`\n\nSome examples of valid User Agents:\n- `my-project/1.2.3 (by username123 on e621)`\n- `another/2.0.0-beta.1 (by user7890 on e926)`\n- `test-proj/0.1.0+build.123 (by myuser12345 on e621)`",
           "type": ["string", "null"],
-          "default": null
+          "default": "e6cfg/v0.1.0 (by bearodactyl on e621)"
         }
       }
     },
@@ -417,6 +429,13 @@
       "description": "Configuration options for searching posts/pools",
       "type": "object",
       "properties": {
+        "fetch_threads": {
+          "description": "The number of threads to use when fetching post data",
+          "type": ["integer", "null"],
+          "format": "uint",
+          "default": 8,
+          "minimum": 0
+        },
         "max_post_score": {
           "description": "The maximum score a post should have to show up in search",
           "type": ["integer", "null"],
@@ -462,13 +481,43 @@
           "description": "Whether or not to sort tags by their post count",
           "type": ["boolean", "null"],
           "default": true
-        },
-        "fetch_threads": {
-          "description": "The number of threads to use when fetching post data",
-          "type": ["number", "null"],
-          "default": 8
         }
       }
+    },
+    "SizeFormat": {
+      "description": "Configuration options for making HTTP requests",
+      "oneOf": [
+        {
+          "description": "Show download progress in bits",
+          "type": "string",
+          "const": "Bits"
+        },
+        {
+          "description": "Show download progress in bytes",
+          "type": "string",
+          "const": "Bytes"
+        },
+        {
+          "description": "Show download progress in kilobytes",
+          "type": "string",
+          "const": "KiloBytes"
+        },
+        {
+          "description": "Show download progress in kilobits",
+          "type": "string",
+          "const": "KiloBits"
+        },
+        {
+          "description": "Show download progress in megabytes",
+          "type": "string",
+          "const": "MegaBytes"
+        },
+        {
+          "description": "Show download progress in megabits",
+          "type": "string",
+          "const": "MegaBits"
+        }
+      ]
     },
     "UiConfig": {
       "description": "Configuration options for the UI",

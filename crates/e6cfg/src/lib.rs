@@ -12,7 +12,47 @@ use {
 pub mod blacklist;
 pub mod defaults;
 
-static PATTERN_REGEX: &str = r"^[^/]+/(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?:[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))? \(by [a-zA-Z0-9]{7,20} on e(?:621|926)\)$";
+//static PATTERN_REGEX: &str = r"^[^/]+/(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?:[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))? \(by [a-zA-Z0-9]{7,20} on e(?:621|926)\)$";
+
+static PATTERN_REGEX: &str = "";
+
+/// Configuration options for making HTTP requests
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, JsonSchema, Default)]
+#[schemars(bound = "T: JsonSchema + Default")]
+pub enum SizeFormat {
+    /// Show download progress in bits
+    Bits,
+
+    /// Show download progress in bytes
+    Bytes,
+
+    /// Show download progress in kilobytes
+    KiloBytes,
+
+    /// Show download progress in kilobits
+    KiloBits,
+
+    /// Show download progress in megabytes
+    #[default]
+    MegaBytes,
+
+    /// Show download progress in megabits
+    MegaBits,
+}
+
+impl SizeFormat {
+    pub fn format_size(&self, bytes: u64) -> String {
+        let bits = bytes * 8;
+        match self {
+            SizeFormat::Bits => format!("{} b", bits),
+            SizeFormat::Bytes => format!("{} B", bytes),
+            SizeFormat::KiloBits => format!("{:.1} Kb", bits as f64 / 1000.0),
+            SizeFormat::KiloBytes => format!("{:.1} KB", bytes as f64 / 1024.0),
+            SizeFormat::MegaBits => format!("{:.2} Mb", bits as f64 / 1_000_000.0),
+            SizeFormat::MegaBytes => format!("{:.2} MB", bytes as f64 / (1024.0 * 1024.0)),
+        }
+    }
+}
 
 /// Configuration options for making HTTP requests
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -245,6 +285,9 @@ pub struct Cfg {
     /// - `$now_time`: Shorthand for "$now_hour-$now_minute-$now_second"
     /// - `$now_datetime`: Shorthand for "$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second"
     pub output_format: Option<String>,
+
+    /// The format to display download progress in
+    pub progress_format: Option<SizeFormat>,
 
     /// The amount of posts to show in a search
     pub post_count: Option<u64>,

@@ -1,6 +1,6 @@
 use crate::{
     AutoUpdateCfg, CacheConfig, Cfg, CompletionCfg, HttpConfig, ImageDisplay, LoginCfg,
-    PerformanceConfig, SearchCfg, UiConfig,
+    PerformanceConfig, SearchCfg, SizeFormat, UiConfig,
 };
 
 impl Default for Cfg {
@@ -10,6 +10,7 @@ impl Default for Cfg {
             output_format: Some(
                 "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string(),
             ),
+            progress_format: Some(SizeFormat::default()),
             post_count: Some(320),
             autoupdate: Some(AutoUpdateCfg::default()),
             base_url: Some("https://e621.net".to_string()),

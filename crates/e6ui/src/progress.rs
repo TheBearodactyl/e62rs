@@ -33,6 +33,7 @@ impl ProgressManager {
 
     pub async fn create_bar(&self, key: &str, len: u64, message: &str) -> Result<ProgressBar> {
         let config = Cfg::get().unwrap_or_default();
+        let size_format = config.progress_format.unwrap_or_default();
         let detailed = config
             .ui
             .as_ref()
@@ -40,9 +41,9 @@ impl ProgressManager {
             .unwrap_or(true);
 
         let template = if detailed {
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg} ({eta_precise})"
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos_size:>10}/{len_size:>10} {msg} ({eta_precise})"
         } else {
-            "{bar:40.cyan/blue} {pos:>7}/{len:7} {msg}"
+            "{bar:40.cyan/blue} {pos_size:>10}/{len_size:>10} {msg}"
         };
 
         let style = ProgressStyle::with_template(template)
@@ -50,7 +51,20 @@ impl ProgressManager {
             .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
                 write!(w, "{:.1}s", state.eta().as_secs_f64()).expect("Failed");
             })
-            .progress_chars("##-");
+            .with_key(
+                "pos_size",
+                move |state: &ProgressState, w: &mut dyn Write| {
+                    write!(w, "{}", size_format.format_size(state.pos())).expect("Failed");
+                },
+            )
+            .with_key(
+                "len_size",
+                move |state: &ProgressState, w: &mut dyn Write| {
+                    write!(w, "{}", size_format.format_size(state.len().unwrap_or(0)))
+                        .expect("Failed");
+                },
+            )
+            .progress_chars("█▉▊▋▌▍▎");
 
         let pb = self.multi.add(ProgressBar::new(len));
         pb.set_style(style);
