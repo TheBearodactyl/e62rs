@@ -174,7 +174,7 @@ pub struct CompletionCfg {
 }
 
 /// Your login credentials
-#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
 pub struct LoginCfg {

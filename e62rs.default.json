@@ -4,10 +4,6 @@
   "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext",
   "post_count": 320,
   "base_url": "https://e621.net",
-  "tags": "data/tags.csv",
-  "pools": "data/pools.csv",
-  "username": "exampleusername",
-  "blacklist": ["young", "rape", "feral", "bestiality", "incest"],
   "display": {
     "width": 800,
     "height": 600,
@@ -15,6 +11,8 @@
     "sixel_quality": 100,
     "resize_method": "lanczos3"
   },
+  "tags": "data/tags.csv",
+  "pools": "data/pools.csv",
   "http": {
     "pool_max_idle_per_host": 32,
     "pool_idle_timeout_secs": 90,
@@ -22,7 +20,8 @@
     "connect_timeout_secs": 10,
     "max_connections": 15,
     "http2_prior_knowledge": true,
-    "tcp_keepalive": true
+    "tcp_keepalive": true,
+    "user_agent": null
   },
   "cache": {
     "enabled": true,
@@ -54,7 +53,16 @@
     "max_post_score": 9223372036854775807,
     "reverse_tags_order": false
   },
+  "login": {
+    "username": " ",
+    "api_key": " "
+  },
   "completion": {
     "tag_similarity_threshold": 0.8
-  }
+  },
+  "autoupdate": {
+    "tags": true,
+    "pools": true
+  },
+  "blacklist": ["young", "rape", "feral", "bestiality"]
 }
