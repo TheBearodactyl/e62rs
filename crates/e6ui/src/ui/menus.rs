@@ -82,6 +82,8 @@ pub enum MainMenu {
     ManageBlacklist,
     /// Reorganize already downloaded files
     ReorganizeDownloads,
+    /// Edit your config file
+    EditConfig,
     /// Exit e62rs
     Exit,
 }

@@ -65,6 +65,7 @@ async fn run() -> Result<()> {
             MainMenu::ViewLatest => ui.display_latest_posts().await?,
             MainMenu::ManageBlacklist => ui.manage_blacklist().await?,
             MainMenu::ReorganizeDownloads => ui.reorganize_downloads().await?,
+            MainMenu::EditConfig => ui.edit_config_file().await?,
             MainMenu::Exit => break,
         }
     }

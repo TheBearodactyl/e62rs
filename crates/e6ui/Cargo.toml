@@ -11,7 +11,7 @@ e6core = { version = "0.1.0", path = "../e6core" }
 futures = "0.3.31"
 futures-util = "0.3.31"
 indicatif = { version = "0.18.0", features = ["tokio"] }
-inquire = { git = "https://github.com/thebearodactyl/inquire", version = "0.9.1" }
+inquire = { git = "https://github.com/thebearodactyl/inquire", version = "0.9.1", features = ["editor"] }
 inquire-derive = { git = "https://github.com/thebearodactyl/inquire", version = "0.9.1" }
 log = "0.4.28"
 open = "5.3.2"
@@ -26,6 +26,7 @@ reqwest = { version = "0.12.23", features = [
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tokio = { version = "1.47.1", features = ["full"] }
+toml = "0.9.7"
 url = "2.5.7"
 
 [build-dependencies]

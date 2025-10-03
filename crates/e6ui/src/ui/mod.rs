@@ -11,9 +11,10 @@ use e6core::{
     image::fetch_and_display_images_as_sixel,
     models::E6Post,
 };
-use inquire::{Confirm, MultiSelect, Select};
+use inquire::{Confirm, Editor, MultiSelect, Select};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::fs;
 
 pub mod blacklist;
 pub mod download;
@@ -104,6 +105,23 @@ impl E6Ui {
         }
 
         Ok(choice)
+    }
+
+    pub async fn edit_config_file(&self) -> Result<()> {
+        let curr_cfg = toml::to_string_pretty(&E62Rs::get().unwrap_or_default())?;
+        let new_cfg_text = Editor::new("Edit your config file")
+            .with_file_extension(".toml")
+            .with_predefined_text(&curr_cfg)
+            .prompt()?;
+
+        if let Ok(new_cfg) = toml::from_str::<E62Rs>(new_cfg_text.as_str()) {
+            fs::write("e62rs.toml", toml::to_string_pretty(&new_cfg)?).await?;
+        } else {
+            eprintln!("Error validating new config text");
+            std::process::exit(1);
+        }
+
+        Ok(())
     }
 
     pub fn select_multiple_posts<'a>(&self, posts: &'a [E6Post]) -> Result<Vec<&'a E6Post>> {
