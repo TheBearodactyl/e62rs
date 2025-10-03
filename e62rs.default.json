@@ -65,13 +65,9 @@
   },
   "download": {
     "download_dir": "downloads",
-    "desc_as_ads": true,
+    "save_metadata": true,
+    "save_download_data": true,
     "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
   },
-  "blacklist": [
-    "young",
-    "rape",
-    "feral",
-    "bestiality"
-  ]
+  "blacklist": ["young", "rape", "feral", "bestiality"]
 }

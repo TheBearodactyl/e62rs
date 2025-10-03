@@ -1,16 +1,19 @@
-use crate::{progress::ProgressManager, ui::E6Ui};
-use anyhow::{Context, Result};
-use e6cfg::E62Rs;
-use e6core::models::E6Post;
-use futures_util::StreamExt;
-use indicatif::ProgressBar;
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::{Path, PathBuf},
-    sync::Arc,
+use {
+    crate::{progress::ProgressManager, ui::E6Ui},
+    anyhow::{Context, Result},
+    e6cfg::E62Rs,
+    e6core::models::E6Post,
+    futures_util::StreamExt,
+    indicatif::ProgressBar,
+    std::{
+        fs::OpenOptions,
+        io::Write,
+        path::{Path, PathBuf},
+        sync::Arc,
+    },
+    tokio::{fs::File, io::AsyncWriteExt},
+    url::Url,
 };
-use tokio::{fs::File, io::AsyncWriteExt};
 
 #[derive(Default, Clone)]
 pub struct PostDownloader {
@@ -156,8 +159,21 @@ impl PostDownloader {
 
         #[cfg(target_os = "windows")]
         {
-            if dl_cfg.desc_as_ads.unwrap_or_default() {
-                e6core::utils::write_to_ads(filepath, "description", post.description.as_str())?;
+            if dl_cfg.save_metadata.unwrap_or_default() {
+                e6core::utils::write_to_ads(
+                    filepath,
+                    "metadata",
+                    serde_json::to_string_pretty(post)
+                        .expect("Failed to serialize")
+                        .as_str(),
+                )?;
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            if dl_cfg.save_metadata.unwrap_or_default() {
+                e6core::utils::write_to_json(filepath, serde_json::to_string_pretty(post)?)?;
             }
         }
 
@@ -180,8 +196,14 @@ impl PostDownloader {
         Ok(())
     }
 
+    fn get_source_name(post: &E6Post, source_idx: usize) -> Result<String> {
+        let parsed_url = Url::parse(post.sources.get(source_idx).unwrap())?;
+
+        Ok(parsed_url.domain().unwrap().to_string())
+    }
+
     pub fn format_filename(&self, post: &E6Post) -> Result<String> {
-        let format = self.output_format.as_deref().unwrap_or("$id.$ext");
+        let out_fmt = self.output_format.as_deref().unwrap_or("$id.$ext");
         let artist = post
             .tags
             .artist
@@ -191,9 +213,10 @@ impl PostDownloader {
 
         let tags_re = regex::Regex::new(r"\$tags\[(\d+)\]").unwrap();
         let artists_re = regex::Regex::new(r"\$artists\[(\d+)\]").unwrap();
-        let mut formatted = format.to_string();
+        let sources_re = regex::Regex::new(r"\$sources\[(\d+)\]").unwrap();
+        let mut formatted = out_fmt.to_string();
 
-        for cap in tags_re.captures_iter(format) {
+        for cap in tags_re.captures_iter(out_fmt) {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_tags) = num_match.as_str().parse::<usize>()
             {
@@ -210,7 +233,7 @@ impl PostDownloader {
             }
         }
 
-        for cap in artists_re.captures_iter(format) {
+        for cap in artists_re.captures_iter(out_fmt) {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_artists) = num_match.as_str().parse::<usize>()
             {
@@ -224,6 +247,22 @@ impl PostDownloader {
                     .join(", ");
 
                 formatted = formatted.replace(&cap[0], &tags);
+            }
+        }
+
+        for cap in sources_re.captures_iter(out_fmt) {
+            if let Some(num_match) = cap.get(1)
+                && let Ok(num_sources) = num_match.as_str().parse::<usize>()
+            {
+                let sources = post
+                    .sources
+                    .iter()
+                    .take(num_sources)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                formatted = formatted.replace(&cap[0], &sources);
             }
         }
 
@@ -285,6 +324,7 @@ impl PostDownloader {
             .replace("$hour", &hour)
             .replace("$minute", &minute)
             .replace("$second", &second)
+            .replace("$source", &Self::get_source_name(post, 0)?)
             .replace("$date", &format!("{}-{}-{}", year, month, day))
             .replace("$time", &format!("{}-{}-{}", hour, minute, second))
             .replace(
@@ -308,6 +348,8 @@ impl PostDownloader {
     }
 
     pub fn get_filepath(&self, filename: &str) -> Result<PathBuf> {
+        let filename = filename.replace(":", "_");
+
         let path = if let Some(ref dir) = self.download_dir {
             dir.join(filename)
         } else {

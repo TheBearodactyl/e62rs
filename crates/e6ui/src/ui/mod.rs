@@ -1,5 +1,9 @@
-use std::sync::Arc;
-
+use crate::ui::{
+    download::PostDownloader,
+    menus::{BatchAction, InteractionMenu},
+    view::*,
+};
+use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use e6core::{
     client::E6Client,
@@ -7,21 +11,27 @@ use e6core::{
     image::fetch_and_display_images_as_sixel,
     models::E6Post,
 };
-
-use anyhow::{Context, Result};
 use inquire::{Confirm, MultiSelect, Select};
-
-use crate::ui::{
-    download::PostDownloader,
-    menus::{BatchAction, InteractionMenu},
-    view::*,
-};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 pub mod blacklist;
 pub mod download;
 pub mod menus;
+pub mod reorganize;
 pub mod search;
 pub mod view;
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Download {
+    pub post_data: E6Post,
+    pub path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DownloadData {
+    pub posts: Vec<Download>,
+}
 
 #[derive(Default, Clone)]
 pub struct E6Ui {

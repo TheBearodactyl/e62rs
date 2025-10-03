@@ -68,3 +68,17 @@ pub fn write_to_ads<P: AsRef<Path>>(
     file.write_all(data.as_bytes())?;
     Ok(data.len())
 }
+
+pub fn write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> anyhow::Result<()> {
+    let file_path = file_path.as_ref();
+    let json_path = format!("{}.json", file_path.display());
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&json_path)?;
+
+    file.write_all(data.as_bytes())?;
+    Ok(())
+}

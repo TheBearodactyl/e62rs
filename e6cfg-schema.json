@@ -93,9 +93,10 @@
         }
       ],
       "default": {
-        "desc_as_ads": true,
         "download_dir": "downloads",
-        "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
+        "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext",
+        "save_download_data": true,
+        "save_metadata": true
       }
     },
     "http": {
@@ -237,7 +238,8 @@
           "type": ["boolean", "null"],
           "default": true
         }
-      }
+      },
+      "required": ["tags", "pools"]
     },
     "CacheConfig": {
       "description": "Configuration options for the response cache",
@@ -285,11 +287,6 @@
       "description": "Settings for post downloading",
       "type": "object",
       "properties": {
-        "desc_as_ads": {
-          "description": "WINDOWS ONLY\nSave post descriptions to <downloaded_file>:description for later use",
-          "type": ["boolean", "null"],
-          "default": true
-        },
         "download_dir": {
           "description": "The directory to download posts to",
           "type": ["string", "null"],
@@ -299,6 +296,16 @@
           "description": "The output format for downloaded files\n\nValid placeholders are as follows:\n- `$artists[N]`: The first N artists\n- `$tags[N]`: The first N general tags\n- `$id`: The ID of the post\n- `$rating`: The full content rating of the post (safe, questionable, explicit)\n- `$rating_first`: The first letter of the posts content rating (s, q, e)\n- `$score`: The total score of the post\n- `$fav_count`: The amount of people who favorited the post\n- `$comment_count`: The amount of comments on the post\n- `$md5`: The MD5 hash of the post file\n- `$ext`: The file extension of the post\n- `$width`: The original width of the post media in pixels\n- `$height`: The original height of the post media in pixels\n- `$size`: The file size of the post media\n- `$artist`: The first listed artist of the post\n- `$uploader`: The name of the person who uploaded the post\n- `$uploader_id`: The user ID of the person who uploaded the post\n- `$year`: The year when the post was uploaded\n- `$month`: The month when the post was uploaded\n- `$day`: The day when the post was uploaded\n- `$hour`: The hour the post was uploaded at\n- `$minute`: The minute the post was uploaded at\n- `$second`: The second the post was uploaded at\n- `$date`: Shorthand for \"$year-$month-$day\"\n- `$time`: Shorthand for \"$hour-$minute-$second\"\n- `$datetime`: Shorthand for \"$year-$month-$day $hour-$minute-$second\"\n- `$now_year`: The year at the time of downloading the post\n- `$now_month`: The month at the time of downloading the post\n- `$now_day`: The day at the time of downloading the post\n- `$now_hour`: The hour of the day at the time of downloading the post\n- `$now_minute`: The minute of the hour at the time of downloading the post\n- `$now_second`: The second of the minute at the time of downloading the post\n- `$now_date`: Shorthand for \"$now_year-$now_month-$now_day\"\n- `$now_time`: Shorthand for \"$now_hour-$now_minute-$now_second\"\n- `$now_datetime`: Shorthand for \"$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second\"",
           "type": ["string", "null"],
           "default": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
+        },
+        "save_download_data": {
+          "description": "Save the data of downloaded posts\n\nThis is useful for doing things like reorganizing\n(an automatic reorganizer is coming soon :3)",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "save_metadata": {
+          "description": "Save post metadata for later use\n\nWindows: Saves the metadata to `<imagefile>:metadata`\nUnix: Saves the metadata to `<imagefile>.json`",
+          "type": ["boolean", "null"],
+          "default": true
         }
       }
     },

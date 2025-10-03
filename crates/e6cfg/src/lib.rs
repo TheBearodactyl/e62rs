@@ -247,9 +247,17 @@ pub struct DownloadCfg {
     /// The directory to download posts to
     pub download_dir: Option<String>,
 
-    /// WINDOWS ONLY
-    /// Save post descriptions to <downloaded_file>:description for later use
-    pub desc_as_ads: Option<bool>,
+    /// Save post metadata for later use
+    ///
+    /// Windows: Saves the metadata to `<imagefile>:metadata`
+    /// Unix: Saves the metadata to `<imagefile>.json`
+    pub save_metadata: Option<bool>,
+
+    /// Save the data of downloaded posts
+    ///
+    /// This is useful for doing things like reorganizing
+    /// (an automatic reorganizer is coming soon :3)
+    pub save_download_data: Option<bool>,
 
     /// The output format for downloaded files
     ///

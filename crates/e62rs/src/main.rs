@@ -64,6 +64,7 @@ async fn run() -> Result<()> {
             MainMenu::SearchPoolsAdv => ui.search_pools_adv().await?,
             MainMenu::ViewLatest => ui.display_latest_posts().await?,
             MainMenu::ManageBlacklist => ui.manage_blacklist().await?,
+            MainMenu::ReorganizeDownloads => ui.reorganize_downloads().await?,
             MainMenu::Exit => break,
         }
     }

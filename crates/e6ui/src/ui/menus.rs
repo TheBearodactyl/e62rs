@@ -80,6 +80,8 @@ pub enum MainMenu {
     ViewLatest,
     /// Manage your blacklist
     ManageBlacklist,
+    /// Reorganize already downloaded files
+    ReorganizeDownloads,
     /// Exit e62rs
     Exit,
 }

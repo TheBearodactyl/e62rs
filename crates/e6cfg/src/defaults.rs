@@ -38,7 +38,11 @@ impl Default for DownloadCfg {
             output_format: Some(
                 "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string(),
             ),
-            desc_as_ads: Some(true),
+            #[cfg(target_os = "windows")]
+            save_metadata: Some(true),
+            #[cfg(not(target_os = "windows"))]
+            save_metadata: Some(false),
+            save_download_data: Some(true),
         }
     }
 }

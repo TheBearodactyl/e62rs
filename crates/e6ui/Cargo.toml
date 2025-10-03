@@ -16,5 +16,17 @@ inquire-derive = { git = "https://github.com/thebearodactyl/inquire", version = 
 log = "0.4.28"
 open = "5.3.2"
 regex = "1.11.2"
-reqwest = { version = "0.12.23", features = ["json", "stream", "gzip", "brotli", "deflate"] }
+reqwest = { version = "0.12.23", features = [
+    "json",
+    "stream",
+    "gzip",
+    "brotli",
+    "deflate",
+] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 tokio = { version = "1.47.1", features = ["full"] }
+url = "2.5.7"
+
+[build-dependencies]
+cc = "1.2.39"
