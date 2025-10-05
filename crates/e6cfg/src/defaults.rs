@@ -1,6 +1,6 @@
 use crate::{
-    AutoUpdateCfg, CacheConfig, CompletionCfg, DownloadCfg, E62Rs, HttpConfig, ImageDisplay,
-    LoginCfg, PerformanceConfig, SearchCfg, SizeFormat, UiConfig,
+    AutoUpdateCfg, CacheConfig, CompletionCfg, DownloadCfg, E62Rs, ExplorerCfg, HttpConfig,
+    ImageDisplay, LoginCfg, PerformanceConfig, SearchCfg, SizeFormat, UiConfig,
 };
 
 impl Default for E62Rs {
@@ -19,6 +19,7 @@ impl Default for E62Rs {
             completion: Some(CompletionCfg::default()),
             login: Some(LoginCfg::default()),
             download: Some(DownloadCfg::default()),
+            explorer: Some(ExplorerCfg::default()),
             blacklist: Some(
                 vec!["young", "rape", "feral", "bestiality"]
                     .into_iter()
@@ -71,6 +72,20 @@ impl Default for HttpConfig {
                 env!("CARGO_PKG_VERSION"),
                 "bearodactyl"
             )),
+        }
+    }
+}
+
+impl Default for ExplorerCfg {
+    fn default() -> Self {
+        Self {
+            recursive_scan: Some(true),
+            show_scan_progress: Some(true),
+            progress_threshold: Some(100),
+            default_sort: Some("date_newest".to_string()),
+            posts_per_page: Some(20),
+            cache_metadata: Some(true),
+            auto_display_image: Some(false),
         }
     }
 }

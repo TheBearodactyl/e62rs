@@ -1,17 +1,24 @@
+use crate::{
+    progress::ProgressManager,
+    ui::{
+        E6Ui,
+        menus::{ExplorerMenu, ExplorerSortBy},
+    },
+};
 use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use e6core::models::E6Post;
 use inquire::{Confirm, Select, Text};
-use walkdir::WalkDir;
-
-#[cfg(target_os = "windows")]
-use std::path::Path;
-use std::path::PathBuf;
-
-use crate::ui::{
-    E6Ui,
-    menus::{ExplorerMenu, ExplorerSortBy},
+use std::{
+    collections::HashMap,
+    io::Read,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
+
+lazy_static::lazy_static! {
+    static ref METADATA_CACHE: Arc<Mutex<HashMap<PathBuf, E6Post>>> = Arc::new(Mutex::new(HashMap::new()));
+}
 
 #[derive(Debug, Clone)]
 pub struct LocalPost {
@@ -27,7 +34,7 @@ impl LocalPost {
 
     #[cfg(target_os = "windows")]
     fn read_metadata(file_path: &Path) -> Result<E6Post> {
-        use std::{fs::OpenOptions, io::Read};
+        use std::fs::OpenOptions;
 
         let ads_path = format!("{}:metadata", file_path.display());
         let mut file = OpenOptions::new()
@@ -60,18 +67,6 @@ impl LocalPost {
         serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse metadata for {}", file_path.display()))
     }
-}
-
-#[derive(Debug)]
-pub struct ExplorerStatistics {
-    pub total_posts: usize,
-    pub filtered_posts: usize,
-    pub safe: usize,
-    pub questionable: usize,
-    pub explicit: usize,
-    pub unknown: usize,
-    pub avg_score: f64,
-    pub total_favorites: i64,
 }
 
 pub struct ExplorerState {
@@ -239,12 +234,26 @@ impl ExplorerState {
     }
 }
 
+#[derive(Debug)]
+pub struct ExplorerStatistics {
+    pub total_posts: usize,
+    pub filtered_posts: usize,
+    pub safe: usize,
+    pub questionable: usize,
+    pub explicit: usize,
+    pub unknown: usize,
+    pub avg_score: f64,
+    pub total_favorites: i64,
+}
+
 impl E6Ui {
     pub async fn explore_downloads(&self) -> Result<()> {
         println!("\n=== Downloads Explorer ===\n");
 
         let cfg = E62Rs::get().unwrap_or_default();
         let dl_cfg = cfg.download.unwrap_or_default();
+        let explorer_cfg = cfg.explorer.unwrap_or_default();
+
         let download_dir = dl_cfg
             .download_dir
             .unwrap_or_else(|| "downloads".to_string());
@@ -254,8 +263,9 @@ impl E6Ui {
             anyhow::bail!("Download directory does not exist: {}", directory.display());
         }
 
-        println!("Scanning downloads directory for metadata...");
-        let local_posts = self.scan_downloads_directory(directory)?;
+        let local_posts = self
+            .scan_downloads_directory(directory, &explorer_cfg)
+            .await?;
 
         if local_posts.is_empty() {
             println!("No posts with metadata found in {}", directory.display());
@@ -265,7 +275,22 @@ impl E6Ui {
         println!("Found {} posts with metadata\n", local_posts.len());
 
         let mut state = ExplorerState::new(local_posts);
-        state.sort(ExplorerSortBy::DateNewest);
+
+        let default_sort = match explorer_cfg
+            .default_sort
+            .as_deref()
+            .unwrap_or("date_newest")
+        {
+            "date_newest" => ExplorerSortBy::DateNewest,
+            "date_oldest" => ExplorerSortBy::DateOldest,
+            "score_highest" => ExplorerSortBy::ScoreHighest,
+            "score_lowest" => ExplorerSortBy::ScoreLowest,
+            "favorites_highest" => ExplorerSortBy::FavoritesHighest,
+            "id_ascending" => ExplorerSortBy::IdAscending,
+            "id_descending" => ExplorerSortBy::IdDescending,
+            _ => ExplorerSortBy::DateNewest,
+        };
+        state.sort(default_sort);
 
         loop {
             let action = ExplorerMenu::select(&format!(
@@ -280,7 +305,8 @@ impl E6Ui {
                         println!("No posts match the current filters.");
                         continue;
                     }
-                    self.browse_local_posts(&state.filtered_posts).await?;
+                    self.browse_local_posts(&state.filtered_posts, &explorer_cfg)
+                        .await?;
                 }
                 ExplorerMenu::SearchPosts => {
                     let query =
@@ -320,19 +346,77 @@ impl E6Ui {
         Ok(())
     }
 
-    fn scan_downloads_directory(&self, directory: &Path) -> Result<Vec<LocalPost>> {
+    async fn scan_downloads_directory(
+        &self,
+        directory: &Path,
+        explorer_cfg: &e6cfg::ExplorerCfg,
+    ) -> Result<Vec<LocalPost>> {
+        use walkdir::WalkDir;
+
         let mut local_posts = Vec::new();
         let mut skipped_count = 0;
+        let recursive = explorer_cfg.recursive_scan.unwrap_or(true);
+        let show_progress = explorer_cfg.show_scan_progress.unwrap_or(true);
+        let progress_threshold = explorer_cfg.progress_threshold.unwrap_or(100);
+        let cache_enabled = explorer_cfg.cache_metadata.unwrap_or(true);
 
-        for entry in WalkDir::new(directory)
-            .follow_links(false)
+        let walker = if recursive {
+            WalkDir::new(directory).follow_links(false)
+        } else {
+            WalkDir::new(directory).max_depth(1).follow_links(false)
+        };
+
+        let total_files: usize = walker
             .into_iter()
             .filter_map(|e| e.ok())
-        {
+            .filter(|e| e.path().is_file())
+            .count();
+
+        let show_progress_bar = show_progress && total_files >= progress_threshold;
+        let progress_manager = Arc::new(ProgressManager::new());
+
+        let pb = if show_progress_bar {
+            Some(
+                progress_manager
+                    .create_bar(
+                        "explorer_scan",
+                        total_files as u64,
+                        "Scanning files for metadata",
+                    )
+                    .await?,
+            )
+        } else {
+            None
+        };
+
+        let cache = if cache_enabled {
+            METADATA_CACHE.lock().ok()
+        } else {
+            None
+        };
+
+        let walker = if recursive {
+            WalkDir::new(directory).follow_links(false)
+        } else {
+            WalkDir::new(directory).max_depth(1).follow_links(false)
+        };
+
+        for entry in walker.into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
 
             if !path.is_file() {
                 continue;
+            }
+
+            if let Some(ref pb) = pb {
+                pb.inc(1);
+                let pos = pb.position();
+                if pos % 50 == 0 || pos == total_files as u64 {
+                    pb.set_message(format!(
+                        "Scanning files for metadata ({}/{})",
+                        pos, total_files
+                    ));
+                }
             }
 
             let has_metadata = {
@@ -354,16 +438,45 @@ impl E6Ui {
             };
 
             if has_metadata {
-                match LocalPost::from_file(path.to_path_buf()) {
-                    Ok(local_post) => {
-                        local_posts.push(local_post);
+                let post = if let Some(ref cache) = cache {
+                    cache.get(path).cloned()
+                } else {
+                    None
+                };
+
+                let local_post = if let Some(post) = post {
+                    LocalPost {
+                        post,
+                        file_path: path.to_path_buf(),
                     }
-                    Err(e) => {
-                        log::warn!("Failed to load metadata for {}: {}", path.display(), e);
-                        skipped_count += 1;
+                } else {
+                    match LocalPost::from_file(path.to_path_buf()) {
+                        Ok(local_post) => {
+                            if let Some(ref _cache) = cache
+                                && let Ok(mut cache_map) = METADATA_CACHE.lock()
+                            {
+                                cache_map.insert(path.to_path_buf(), local_post.post.clone());
+                            }
+                            local_post
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to load metadata for {}: {}", path.display(), e);
+                            skipped_count += 1;
+                            continue;
+                        }
                     }
-                }
+                };
+
+                local_posts.push(local_post);
             }
+        }
+
+        if let Some(pb) = pb {
+            pb.finish_with_message(format!(
+                "Scan complete: found {} posts with metadata",
+                local_posts.len()
+            ));
+            progress_manager.remove_bar("explorer_scan").await;
         }
 
         if skipped_count > 0 {
@@ -376,30 +489,62 @@ impl E6Ui {
         Ok(local_posts)
     }
 
-    async fn browse_local_posts(&self, posts: &[LocalPost]) -> Result<()> {
-        let options: Vec<String> = posts
-            .iter()
-            .map(|local_post| {
-                let post = &local_post.post;
-                format!(
-                    "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
-                    post.id,
-                    post.score.total,
-                    post.rating,
-                    post.fav_count,
-                    post.tags.artist.first().unwrap_or(&"unknown".to_string())
-                )
-            })
-            .collect();
+    async fn browse_local_posts(
+        &self,
+        posts: &[LocalPost],
+        explorer_cfg: &e6cfg::ExplorerCfg,
+    ) -> Result<()> {
+        let posts_per_page = explorer_cfg.posts_per_page.unwrap_or(20);
+        let mut current_page = 0;
+        let total_pages = posts.len().div_ceil(posts_per_page);
 
-        let selection = Select::new("Select a post to view:", options)
-            .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-            .prompt_skippable()?;
+        loop {
+            let start = current_page * posts_per_page;
+            let end = (start + posts_per_page).min(posts.len());
+            let page_posts = &posts[start..end];
 
-        if let Some(selected) = selection {
-            let index = posts
+            let mut options: Vec<String> = page_posts
                 .iter()
-                .position(|lp| {
+                .map(|local_post| {
+                    let post = &local_post.post;
+                    format!(
+                        "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
+                        post.id,
+                        post.score.total,
+                        post.rating,
+                        post.fav_count,
+                        post.tags.artist.first().unwrap_or(&"unknown".to_string())
+                    )
+                })
+                .collect();
+
+            if total_pages > 1 {
+                options.push(format!("--- Page {}/{} ---", current_page + 1, total_pages));
+                if current_page > 0 {
+                    options.push("◄ Previous Page".to_string());
+                }
+                if current_page < total_pages - 1 {
+                    options.push("Next Page ►".to_string());
+                }
+            }
+            options.push("◄ Back to Explorer Menu".to_string());
+
+            let selection = Select::new("Select a post to view:", options)
+                .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
+                .prompt_skippable()?;
+
+            if let Some(selected) = selection {
+                if selected.starts_with("Next Page") {
+                    current_page = (current_page + 1).min(total_pages - 1);
+                    continue;
+                } else if selected.starts_with("◄ Previous Page") {
+                    current_page = current_page.saturating_sub(1);
+                    continue;
+                } else if selected.starts_with("◄ Back") || selected.starts_with("---") {
+                    break;
+                }
+
+                let index = page_posts.iter().position(|lp| {
                     format!(
                         "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
                         lp.post.id,
@@ -412,17 +557,32 @@ impl E6Ui {
                             .first()
                             .unwrap_or(&"unknown".to_string())
                     ) == selected
-                })
-                .context("Failed to find selected post")?;
+                });
 
-            self.view_local_post(&posts[index]).await?;
+                if let Some(idx) = index {
+                    self.view_local_post(&page_posts[idx], explorer_cfg).await?;
+                }
+            } else {
+                break;
+            }
         }
 
         Ok(())
     }
 
-    async fn view_local_post(&self, local_post: &LocalPost) -> Result<()> {
+    async fn view_local_post(
+        &self,
+        local_post: &LocalPost,
+        explorer_cfg: &e6cfg::ExplorerCfg,
+    ) -> Result<()> {
         self.display_post(&local_post.post);
+
+        if explorer_cfg.auto_display_image.unwrap_or(false) {
+            use e6core::image::display_image_from_path_as_sixel;
+            if let Err(e) = display_image_from_path_as_sixel(&local_post.file_path) {
+                log::warn!("Failed to auto-display image: {}", e);
+            }
+        }
 
         loop {
             let action = Select::new(

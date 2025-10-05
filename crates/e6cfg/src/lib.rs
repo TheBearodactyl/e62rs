@@ -245,6 +245,33 @@ pub struct AutoUpdateCfg {
     pub pools: Option<bool>,
 }
 
+/// Settings for the downloads explorer
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
+#[schemars(bound = "T: JsonSchema + Default")]
+#[schemars(default)]
+pub struct ExplorerCfg {
+    /// Enable recursive directory scanning
+    pub recursive_scan: Option<bool>,
+
+    /// Show scanning progress for directories with many files
+    pub show_scan_progress: Option<bool>,
+
+    /// Minimum number of files before showing progress (0 = always show)
+    pub progress_threshold: Option<usize>,
+
+    /// Default sort order for explorer
+    pub default_sort: Option<String>,
+
+    /// Number of posts to display per page in explorer
+    pub posts_per_page: Option<usize>,
+
+    /// Cache scanned metadata in memory for faster subsequent access
+    pub cache_metadata: Option<bool>,
+
+    /// Automatically display image when viewing post details
+    pub auto_display_image: Option<bool>,
+}
+
 /// Settings for post downloading
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[schemars(bound = "T: JsonSchema + Default")]
@@ -360,6 +387,9 @@ pub struct E62Rs {
 
     /// Blacklisted tags to filter out from all operations
     pub blacklist: Option<Vec<String>>,
+
+    /// Downloads explorer settings
+    pub explorer: Option<ExplorerCfg>,
 }
 
 fn get_config_dir() -> String {
@@ -439,6 +469,10 @@ impl E62Rs {
 
         if cfg.autoupdate.is_none() {
             cfg.autoupdate = Some(AutoUpdateCfg::default());
+        }
+
+        if cfg.explorer.is_none() {
+            cfg.explorer = Some(ExplorerCfg::default());
         }
 
         if cfg.blacklist.is_none() {
