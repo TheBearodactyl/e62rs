@@ -21,25 +21,14 @@
     },
     "base_url": {
       "description": "The base URL of the API (defaults to https://e621.net)",
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "format": "uri",
       "default": "https://e621.net"
     },
     "blacklist": {
       "description": "Blacklisted tags to filter out from all operations",
-      "type": [
-        "array",
-        "null"
-      ],
-      "default": [
-        "young",
-        "rape",
-        "feral",
-        "bestiality"
-      ],
+      "type": ["array", "null"],
+      "default": ["young", "rape", "feral", "bestiality"],
       "items": {
         "type": "string"
       }
@@ -188,10 +177,7 @@
     },
     "post_count": {
       "description": "The amount of posts to show in a search",
-      "type": [
-        "integer",
-        "null"
-      ],
+      "type": ["integer", "null"],
       "format": "uint64",
       "default": 320,
       "minimum": 0
@@ -249,23 +235,6 @@
       }
     }
   },
-  "required": [
-    "progress_format",
-    "post_count",
-    "base_url",
-    "display",
-    "http",
-    "cache",
-    "performance",
-    "ui",
-    "search",
-    "login",
-    "completion",
-    "autoupdate",
-    "download",
-    "blacklist",
-    "explorer"
-  ],
   "$defs": {
     "AutoUpdateCfg": {
       "description": "Settings for automatically updating data snapshots",
@@ -273,25 +242,16 @@
       "properties": {
         "pools": {
           "description": "Whether or not to auto-update pools",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "tags": {
           "description": "Whether or not to auto-update tags",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         }
       },
-      "required": [
-        "tags",
-        "pools"
-      ]
+      "required": ["tags", "pools"]
     },
     "CacheConfig": {
       "description": "Configuration options for the response cache",
@@ -299,47 +259,29 @@
       "properties": {
         "cache_dir": {
           "description": "Cache directory",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": ".cache"
         },
         "enabled": {
           "description": "Enable response caching",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "max_size_mb": {
           "description": "Max cache size in MB",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 500,
           "minimum": 0
         },
         "ttl_secs": {
           "description": "Cache TTL in seconds",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 3600,
           "minimum": 0
         }
-      },
-      "required": [
-        "enabled",
-        "cache_dir",
-        "ttl_secs",
-        "max_size_mb"
-      ]
+      }
     },
     "CompletionCfg": {
       "description": "Configuration options for completion in menus",
@@ -347,35 +289,22 @@
       "properties": {
         "pools": {
           "description": "The path to `pools.csv` that's used for pool searching/autocompletion",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "data/pools.csv"
         },
         "tag_similarity_threshold": {
           "description": "The similarity threshold to complete a tag",
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": ["number", "null"],
           "format": "double",
           "default": 0.8
         },
         "tags": {
           "description": "The path to `tags.csv` that's used for tag searching/autocompletion",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "data/tags.csv"
         }
       },
-      "required": [
-        "tag_similarity_threshold",
-        "tags",
-        "pools"
-      ]
+      "required": ["tags", "pools"]
     },
     "DownloadCfg": {
       "description": "Settings for post downloading",
@@ -383,43 +312,25 @@
       "properties": {
         "download_dir": {
           "description": "The directory to download posts to",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "downloads"
         },
         "output_format": {
           "description": "The output format for downloaded files\n\nValid placeholders are as follows:\n- `$artists[N]`: The first N artists\n- `$tags[N]`: The first N general tags\n- `$characters[N]`: The first N character tags\n- `$sources[N]`: The first N sources (domain names)\n- `$id`: The ID of the post\n- `$rating`: The full content rating of the post (safe, questionable, explicit)\n- `$rating_first`: The first letter of the posts content rating (s, q, e)\n- `$score`: The total score of the post\n- `$fav_count`: The amount of people who favorited the post\n- `$comment_count`: The amount of comments on the post\n- `$md5`: The MD5 hash of the post file\n- `$ext`: The file extension of the post\n- `$width`: The original width of the post media in pixels\n- `$height`: The original height of the post media in pixels\n- `$size`: The file size of the post media\n- `$artist`: The first listed artist of the post\n- `$uploader`: The name of the person who uploaded the post\n- `$uploader_id`: The user ID of the person who uploaded the post\n- `$year`: The year when the post was uploaded\n- `$month`: The month when the post was uploaded\n- `$day`: The day when the post was uploaded\n- `$hour`: The hour the post was uploaded at\n- `$minute`: The minute the post was uploaded at\n- `$second`: The second the post was uploaded at\n- `$date`: Shorthand for \"$year-$month-$day\"\n- `$time`: Shorthand for \"$hour-$minute-$second\"\n- `$datetime`: Shorthand for \"$year-$month-$day $hour-$minute-$second\"\n- `$now_year`: The year at the time of downloading the post\n- `$now_month`: The month at the time of downloading the post\n- `$now_day`: The day at the time of downloading the post\n- `$now_hour`: The hour of the day at the time of downloading the post\n- `$now_minute`: The minute of the hour at the time of downloading the post\n- `$now_second`: The second of the minute at the time of downloading the post\n- `$now_date`: Shorthand for \"$now_year-$now_month-$now_day\"\n- `$now_time`: Shorthand for \"$now_hour-$now_minute-$now_second\"\n- `$now_datetime`: Shorthand for \"$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second\"",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
         },
         "save_download_data": {
           "description": "Save the data of downloaded posts\n\nThis is used in the auto-reorganizer to enable\nfully offline metadata queries\n\nUnix systems: Will save the JSON data to `<imagepath>.json`\n  To read it: Run `cat <imagepath>.json`\n\nWindows systems: Will save the JSON data to `<imagepath>:metadata`\n     To read it: Run `cat <imagepath>:metadata`",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "save_metadata": {
           "description": "Save post metadata for later use\n\nWindows: Saves the metadata to `<imagefile>:metadata`\nUnix: Saves the metadata to `<imagefile>.json`",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         }
-      },
-      "required": [
-        "download_dir",
-        "save_metadata",
-        "save_download_data",
-        "output_format"
-      ]
+      }
     },
     "ExplorerCfg": {
       "description": "Settings for the downloads explorer",
@@ -427,74 +338,44 @@
       "properties": {
         "auto_display_image": {
           "description": "Automatically display image when viewing post details",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": false
         },
         "cache_metadata": {
           "description": "Cache scanned metadata in memory for faster subsequent access",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "default_sort": {
           "description": "Default sort order for explorer",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "date_newest"
         },
         "posts_per_page": {
           "description": "Number of posts to display per page in explorer",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 20,
           "minimum": 0
         },
         "progress_threshold": {
           "description": "Minimum number of files before showing progress (0 = always show)",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 100,
           "minimum": 0
         },
         "recursive_scan": {
           "description": "Enable recursive directory scanning",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "show_scan_progress": {
           "description": "Show scanning progress for directories with many files",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         }
-      },
-      "required": [
-        "recursive_scan",
-        "show_scan_progress",
-        "progress_threshold",
-        "default_sort",
-        "posts_per_page",
-        "cache_metadata",
-        "auto_display_image"
-      ]
+      }
     },
     "HttpConfig": {
       "description": "Configuration options for making HTTP requests",
@@ -502,28 +383,19 @@
       "properties": {
         "connect_timeout_secs": {
           "description": "Connection timeout in seconds",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 10,
           "minimum": 0
         },
         "http2_prior_knowledge": {
           "description": "Enable HTTP/2",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "max_connections": {
           "description": "Max concurrent connections",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 15,
           "maximum": 15,
@@ -531,61 +403,36 @@
         },
         "pool_idle_timeout_secs": {
           "description": "Connection pool idle timeout in seconds",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 90,
           "minimum": 0
         },
         "pool_max_idle_per_host": {
           "description": "Connection pool size per host",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 32,
           "minimum": 0
         },
         "tcp_keepalive": {
           "description": "Enable keep-alive",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "timeout_secs": {
           "description": "Request timeout in seconds",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 30,
           "minimum": 0
         },
         "user_agent": {
           "description": "User agent string in the format:\n`<project name>/<project version> (by <valid e6 username> on <e621/e926>)`\n\nSome examples of valid User Agents:\n- `my-project/1.2.3 (by username123 on e621)`\n- `another/2.0.0-beta.1 (by user7890 on e926)`\n- `test-proj/0.1.0+build.123 (by myuser12345 on e621)`",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "e6cfg/v0.1.0 (by bearodactyl on e621)"
         }
-      },
-      "required": [
-        "pool_max_idle_per_host",
-        "pool_idle_timeout_secs",
-        "timeout_secs",
-        "connect_timeout_secs",
-        "max_connections",
-        "http2_prior_knowledge",
-        "tcp_keepalive",
-        "user_agent"
-      ]
+      }
     },
     "ImageDisplay": {
       "description": "Configuration options for displaying images",
@@ -593,36 +440,24 @@
       "properties": {
         "height": {
           "description": "The max height of displayed images",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 600,
           "minimum": 0
         },
         "image_when_info": {
           "description": "Whether to display the image when showing post info",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "resize_method": {
           "description": "Resize method (nearest, linear, cubic, gaussian, lanczos3)",
-          "type": [
-            "string",
-            "null"
-          ],
+          "type": ["string", "null"],
           "default": "lanczos3"
         },
         "sixel_quality": {
           "description": "Image quality for sixel conversion (1-100)",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint8",
           "default": 100,
           "maximum": 255,
@@ -630,22 +465,12 @@
         },
         "width": {
           "description": "The max width of displayed images",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 800,
           "minimum": 0
         }
-      },
-      "required": [
-        "width",
-        "height",
-        "image_when_info",
-        "sixel_quality",
-        "resize_method"
-      ]
+      }
     },
     "LoginCfg": {
       "description": "Your login credentials",
@@ -662,10 +487,7 @@
           "default": ""
         }
       },
-      "required": [
-        "username",
-        "api_key"
-      ]
+      "required": ["username", "api_key"]
     },
     "PerformanceConfig": {
       "description": "Configuration options for performance",
@@ -673,10 +495,7 @@
       "properties": {
         "concurrent_downloads": {
           "description": "Number of concurrent downloads",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 15,
           "maximum": 15,
@@ -684,48 +503,29 @@
         },
         "max_preload_size_mb": {
           "description": "Max image preload size in MB",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 100,
           "minimum": 0
         },
         "prefetch_batch_size": {
           "description": "Prefetch batch size",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 10,
           "minimum": 0
         },
         "prefetch_enabled": {
           "description": "Prefetch next batch of posts",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "preload_images": {
           "description": "Enable image preloading",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": false
         }
-      },
-      "required": [
-        "concurrent_downloads",
-        "prefetch_enabled",
-        "prefetch_batch_size",
-        "preload_images",
-        "max_preload_size_mb"
-      ]
+      }
     },
     "SearchCfg": {
       "description": "Configuration options for searching posts/pools",
@@ -733,96 +533,58 @@
       "properties": {
         "fetch_threads": {
           "description": "The number of threads to use when fetching post data",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 8,
           "minimum": 0
         },
         "max_post_score": {
           "description": "The maximum score a post should have to show up in search",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "int64",
           "default": 9223372036854775807
         },
         "min_post_score": {
           "description": "The minimum score a post should have to show up in search",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "int64",
           "default": 0
         },
         "min_posts_on_pool": {
           "description": "The minimum amount of posts on a pool for it to show up in pool selection",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 2,
           "minimum": 0
         },
         "min_posts_on_tag": {
           "description": "The minimum amount of posts on a tag for it to show up in tag selection",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 2,
           "minimum": 0
         },
         "reverse_tags_order": {
           "description": "Sort tags in reverse alphabetic order",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": false
         },
         "show_inactive_pools": {
           "description": "Whether or not to show inactive pools",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "sort_pools_by_post_count": {
           "description": "Whether or not to sort pools by how many posts they contain",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": false
         },
         "sort_tags_by_post_count": {
           "description": "Whether or not to sort tags by their post count",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         }
-      },
-      "required": [
-        "min_posts_on_tag",
-        "min_posts_on_pool",
-        "show_inactive_pools",
-        "sort_pools_by_post_count",
-        "sort_tags_by_post_count",
-        "min_post_score",
-        "max_post_score",
-        "reverse_tags_order",
-        "fetch_threads"
-      ]
+      }
     },
     "SizeFormat": {
       "description": "Configuration options for making HTTP requests",
@@ -865,56 +627,34 @@
       "properties": {
         "auto_clear_progress": {
           "description": "Auto-clear completed progress bars",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "colored_output": {
           "description": "Enable colored output",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "detailed_progress": {
           "description": "Show detailed progress info",
-          "type": [
-            "boolean",
-            "null"
-          ],
+          "type": ["boolean", "null"],
           "default": true
         },
         "pagination_size": {
           "description": "Pagination size for post listings",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint",
           "default": 20,
           "minimum": 0
         },
         "progress_refresh_rate": {
           "description": "Progress bar refresh rate (Hz)",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint64",
           "default": 20,
           "minimum": 0
         }
-      },
-      "required": [
-        "progress_refresh_rate",
-        "detailed_progress",
-        "auto_clear_progress",
-        "pagination_size",
-        "colored_output"
-      ]
+      }
     }
   }
 }
