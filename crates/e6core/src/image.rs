@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use icy_sixel::{DiffusionMethod, MethodForLargest, PixelFormat, Quality, sixel_string};
 use image::{GenericImageView, ImageReader, imageops::FilterType};
-use std::io::Cursor;
+use std::{io::Cursor, path::Path};
 
 pub async fn fetch_remote_file_as_bytes(url: &str) -> Result<Vec<u8>> {
     let response = reqwest::get(url)
@@ -155,4 +155,75 @@ pub async fn load_png_as_rgb888_from_url(url: &str) -> Result<(Vec<u8>, u32, u32
         },
     )
     .await
+}
+
+pub fn load_image_from_path(
+    path: &Path,
+    target_dimensions: ImageDimensions,
+) -> Result<(Vec<u8>, u32, u32)> {
+    if !path.exists() {
+        anyhow::bail!("File does not exist: {}", path.display());
+    }
+
+    let mut img = ImageReader::open(path)
+        .with_context(|| format!("Failed to open image file: {}", path.display()))?
+        .decode()
+        .with_context(|| format!("Failed to decode image: {}", path.display()))?;
+
+    let original_dimensions = img.dimensions();
+    let target_dimensions = compute_target_dimensions(original_dimensions, target_dimensions);
+
+    if original_dimensions != target_dimensions {
+        img = img.resize_exact(
+            target_dimensions.0,
+            target_dimensions.1,
+            FilterType::Lanczos3,
+        );
+    }
+
+    let img_rgb8 = img.to_rgb8();
+    let dimensions = img_rgb8.dimensions();
+    let img_rgb888 = img_rgb8.into_raw();
+
+    Ok((img_rgb888, dimensions.0, dimensions.1))
+}
+
+pub fn display_image_from_path_as_sixel(path: &Path) -> Result<()> {
+    let cfg = E62Rs::get()?;
+    let target_dimensions = ImageDimensions::from(&cfg);
+
+    let (img_rgb888, width, height) =
+        load_image_from_path(path, target_dimensions).context("Failed to load image from path")?;
+
+    let sixel_data = convert_rgb888_to_sixel(&img_rgb888, width, height);
+
+    println!("{}", sixel_data);
+    Ok(())
+}
+
+pub fn display_images_from_paths_as_sixel(paths: &[&Path]) -> Result<()> {
+    let cfg = E62Rs::get()?;
+    let target_dimensions = ImageDimensions::from(&cfg);
+
+    for path in paths {
+        let (img_rgb888, width, height) = load_image_from_path(path, target_dimensions).context(
+            format!("Failed to load image from path: {}", path.display()),
+        )?;
+
+        let sixel_data = convert_rgb888_to_sixel(&img_rgb888, width, height);
+
+        println!("{}", sixel_data);
+    }
+
+    Ok(())
+}
+
+pub fn load_image_as_rgb888_from_path(path: &Path) -> Result<(Vec<u8>, u32, u32)> {
+    load_image_from_path(
+        path,
+        ImageDimensions {
+            width: None,
+            height: None,
+        },
+    )
 }

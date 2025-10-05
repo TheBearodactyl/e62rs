@@ -1,15 +1,25 @@
 use {
     anyhow::{Context, Result},
+    clap::Parser,
     e6cfg::E62Rs,
     e6core::{
         client::E6Client,
         data::{pools::PoolDatabase, tags::TagDatabase},
     },
-    e6ui::ui::{E6Ui, menus::MainMenu},
+    e6ui::ui::{
+        E6Ui,
+        menus::{MainMenu, PoolSearchModeMenu},
+    },
     env_logger::{Builder, Env},
     log::{error, info},
     std::{process, sync::Arc},
 };
+
+#[derive(Parser)]
+struct Cli {
+    #[arg(short, long)]
+    init: bool,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -25,9 +35,14 @@ async fn main() -> Result<()> {
 }
 
 async fn run() -> Result<()> {
+    let argv = Cli::parse();
     let cfg = E62Rs::get().unwrap_or_default();
-    let autoup = cfg.autoupdate.unwrap_or_default();
+    let autoup = cfg.clone().autoupdate.unwrap_or_default();
     let client = Arc::new(E6Client::default());
+
+    if argv.init {
+        cfg.save_to_file("./e62rs.toml")?;
+    }
 
     if autoup.tags.unwrap_or_default() {
         client.update_tags().await?;
@@ -59,13 +74,42 @@ async fn run() -> Result<()> {
 
     loop {
         match selection {
-            MainMenu::SearchPosts => ui.search_posts().await?,
-            MainMenu::SearchPools => ui.search_pools().await?,
-            MainMenu::SearchPoolsAdv => ui.search_pools_adv().await?,
-            MainMenu::ViewLatest => ui.display_latest_posts().await?,
-            MainMenu::ManageBlacklist => ui.manage_blacklist().await?,
-            MainMenu::ReorganizeDownloads => ui.reorganize_downloads().await?,
-            MainMenu::EditConfig => ui.edit_config_file().await?,
+            MainMenu::SearchPosts => {
+                ui.search_posts().await?;
+                continue;
+            }
+            MainMenu::SearchPools => {
+                let search_mode =
+                    PoolSearchModeMenu::select("Which search mode would you like to use?")
+                        .prompt()?;
+
+                match search_mode {
+                    PoolSearchModeMenu::Simple => ui.search_pools().await?,
+                    PoolSearchModeMenu::Advanced => ui.search_pools_adv().await?,
+                }
+
+                continue;
+            }
+            MainMenu::ViewLatest => {
+                ui.display_latest_posts().await?;
+                continue;
+            }
+            MainMenu::ManageBlacklist => {
+                ui.manage_blacklist().await?;
+                continue;
+            }
+            MainMenu::ReorganizeDownloads => {
+                ui.reorganize_downloads().await?;
+                continue;
+            }
+            MainMenu::EditConfig => {
+                ui.edit_config_file().await?;
+                continue;
+            }
+            MainMenu::ExploreDownloads => {
+                ui.explore_downloads().await?;
+                continue;
+            }
             MainMenu::Exit => break,
         }
     }

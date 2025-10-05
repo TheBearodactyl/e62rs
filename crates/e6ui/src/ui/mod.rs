@@ -18,6 +18,7 @@ use tokio::fs;
 
 pub mod blacklist;
 pub mod download;
+pub mod explorer;
 pub mod menus;
 pub mod reorganize;
 pub mod search;

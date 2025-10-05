@@ -82,3 +82,32 @@ pub fn write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> anyhow::Resu
     file.write_all(data.as_bytes())?;
     Ok(())
 }
+
+pub trait AndOr {
+    fn and<T>(self, f: T)
+    where
+        T: FnOnce();
+    fn or<T>(self, f: T)
+    where
+        T: FnOnce();
+}
+
+impl AndOr for bool {
+    fn and<T>(self, f: T)
+    where
+        T: FnOnce(),
+    {
+        if self {
+            f();
+        }
+    }
+
+    fn or<T>(self, f: T)
+    where
+        T: FnOnce(),
+    {
+        if !self {
+            f();
+        }
+    }
+}

@@ -11,8 +11,6 @@ impl Default for E62Rs {
             autoupdate: Some(AutoUpdateCfg::default()),
             base_url: Some("https://e621.net".to_string()),
             display: Some(ImageDisplay::default()),
-            tags: Some("data/tags.csv".to_string()),
-            pools: Some("data/pools.csv".to_string()),
             http: Some(HttpConfig::default()),
             cache: Some(CacheConfig::default()),
             performance: Some(PerformanceConfig::default()),
@@ -51,6 +49,8 @@ impl Default for CompletionCfg {
     fn default() -> Self {
         Self {
             tag_similarity_threshold: Some(0.8),
+            tags: Some("data/tags.csv".to_string()),
+            pools: Some("data/pools.csv".to_string()),
         }
     }
 }

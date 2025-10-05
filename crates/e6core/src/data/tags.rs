@@ -23,7 +23,13 @@ impl TagDatabase {
         let cfg = E62Rs::get().unwrap_or_default();
 
         Ok(Self {
-            tags: Database::from_csv(cfg.tags.unwrap_or("data/tags.csv".to_owned()).as_str())?,
+            tags: Database::from_csv(
+                cfg.completion
+                    .unwrap_or_default()
+                    .tags
+                    .unwrap_or("data/tags.csv".to_owned())
+                    .as_str(),
+            )?,
         })
     }
 

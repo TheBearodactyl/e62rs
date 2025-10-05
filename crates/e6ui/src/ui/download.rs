@@ -196,12 +196,6 @@ impl PostDownloader {
         Ok(())
     }
 
-    fn get_source_name(post: &E6Post, source_idx: usize) -> Result<String> {
-        let parsed_url = Url::parse(post.sources.get(source_idx).unwrap())?;
-
-        Ok(parsed_url.domain().unwrap().to_string())
-    }
-
     pub fn format_filename(&self, post: &E6Post) -> Result<String> {
         let out_fmt = self.output_format.as_deref().unwrap_or("$id.$ext");
         let artist = post
@@ -213,6 +207,7 @@ impl PostDownloader {
 
         let tags_re = regex::Regex::new(r"\$tags\[(\d+)\]").unwrap();
         let artists_re = regex::Regex::new(r"\$artists\[(\d+)\]").unwrap();
+        let characters_re = regex::Regex::new(r"\$characters\[(\d+)\]").unwrap();
         let sources_re = regex::Regex::new(r"\$sources\[(\d+)\]").unwrap();
         let mut formatted = out_fmt.to_string();
 
@@ -250,6 +245,23 @@ impl PostDownloader {
             }
         }
 
+        for cap in characters_re.captures_iter(out_fmt) {
+            if let Some(num_match) = cap.get(1)
+                && let Ok(num_chars) = num_match.as_str().parse::<usize>()
+            {
+                let sources = post
+                    .tags
+                    .character
+                    .iter()
+                    .take(num_chars)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                formatted = formatted.replace(&cap[0], &sources);
+            }
+        }
+
         for cap in sources_re.captures_iter(out_fmt) {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_sources) = num_match.as_str().parse::<usize>()
@@ -258,7 +270,7 @@ impl PostDownloader {
                     .sources
                     .iter()
                     .take(num_sources)
-                    .cloned()
+                    .map(|source| Url::parse(source).unwrap().domain().unwrap().to_string())
                     .collect::<Vec<String>>()
                     .join(", ");
 
@@ -324,7 +336,6 @@ impl PostDownloader {
             .replace("$hour", &hour)
             .replace("$minute", &minute)
             .replace("$second", &second)
-            .replace("$source", &Self::get_source_name(post, 0)?)
             .replace("$date", &format!("{}-{}-{}", year, month, day))
             .replace("$time", &format!("{}-{}-{}", hour, minute, second))
             .replace(

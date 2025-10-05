@@ -3,13 +3,13 @@ use {
     anyhow::{Context, Result},
     e6cfg::E62Rs,
     e6core::models::E6Post,
-    regex::Regex,
     std::{
         fs,
         io::Read,
         path::{Path, PathBuf},
         sync::Arc,
     },
+    url::Url,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -194,7 +194,7 @@ impl FileReorganizer {
         Ok(())
     }
 
-    fn format_filename(&self, post: &E6Post, output_format: &str) -> Result<String> {
+    fn format_filename(&self, post: &E6Post, out_fmt: &str) -> Result<String> {
         let artist = post
             .tags
             .artist
@@ -202,12 +202,13 @@ impl FileReorganizer {
             .map(|s| s.as_str())
             .unwrap_or("unknown");
 
-        let tags_re = Regex::new(r"\$tags\[(\d+)\]").unwrap();
-        let artists_re = Regex::new(r"\$artists\[(\d+)\]").unwrap();
-        let sources_re = Regex::new(r"\$sources\[(\d+)\]").unwrap();
-        let mut formatted = output_format.to_string();
+        let tags_re = regex::Regex::new(r"\$tags\[(\d+)\]").unwrap();
+        let artists_re = regex::Regex::new(r"\$artists\[(\d+)\]").unwrap();
+        let characters_re = regex::Regex::new(r"\$characters\[(\d+)\]").unwrap();
+        let sources_re = regex::Regex::new(r"\$sources\[(\d+)\]").unwrap();
+        let mut formatted = out_fmt.to_string();
 
-        for cap in tags_re.captures_iter(output_format) {
+        for cap in tags_re.captures_iter(out_fmt) {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_tags) = num_match.as_str().parse::<usize>()
             {
@@ -224,7 +225,7 @@ impl FileReorganizer {
             }
         }
 
-        for cap in artists_re.captures_iter(output_format) {
+        for cap in artists_re.captures_iter(out_fmt) {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_artists) = num_match.as_str().parse::<usize>()
             {
@@ -241,7 +242,24 @@ impl FileReorganizer {
             }
         }
 
-        for cap in sources_re.captures_iter(output_format) {
+        for cap in characters_re.captures_iter(out_fmt) {
+            if let Some(num_match) = cap.get(1)
+                && let Ok(num_chars) = num_match.as_str().parse::<usize>()
+            {
+                let sources = post
+                    .tags
+                    .character
+                    .iter()
+                    .take(num_chars)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ");
+
+                formatted = formatted.replace(&cap[0], &sources);
+            }
+        }
+
+        for cap in sources_re.captures_iter(out_fmt) {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_sources) = num_match.as_str().parse::<usize>()
             {
@@ -249,7 +267,7 @@ impl FileReorganizer {
                     .sources
                     .iter()
                     .take(num_sources)
-                    .cloned()
+                    .map(|source| Url::parse(source).unwrap().domain().unwrap().to_string())
                     .collect::<Vec<String>>()
                     .join(", ");
 
@@ -334,7 +352,7 @@ impl FileReorganizer {
                 &now.format("%Y-%m-%d %H-%M-%S").to_string(),
             );
 
-        Ok(formatted.replace(":", "_"))
+        Ok(formatted)
     }
 
     fn move_file_with_metadata(

@@ -214,6 +214,12 @@ pub struct SearchCfg {
 pub struct CompletionCfg {
     /// The similarity threshold to complete a tag
     pub tag_similarity_threshold: Option<f64>,
+
+    /// The path to `tags.csv` that's used for tag searching/autocompletion
+    pub tags: Option<String>,
+
+    /// The path to `pools.csv` that's used for pool searching/autocompletion
+    pub pools: Option<String>,
 }
 
 /// Your login credentials
@@ -255,8 +261,14 @@ pub struct DownloadCfg {
 
     /// Save the data of downloaded posts
     ///
-    /// This is useful for doing things like reorganizing
-    /// (an automatic reorganizer is coming soon :3)
+    /// This is used in the auto-reorganizer to enable
+    /// fully offline metadata queries
+    ///
+    /// Unix systems: Will save the JSON data to `<imagepath>.json`
+    ///   To read it: Run `cat <imagepath>.json`
+    ///
+    /// Windows systems: Will save the JSON data to `<imagepath>:metadata`
+    ///      To read it: Run `cat <imagepath>:metadata`
     pub save_download_data: Option<bool>,
 
     /// The output format for downloaded files
@@ -264,6 +276,8 @@ pub struct DownloadCfg {
     /// Valid placeholders are as follows:
     /// - `$artists[N]`: The first N artists
     /// - `$tags[N]`: The first N general tags
+    /// - `$characters[N]`: The first N character tags
+    /// - `$sources[N]`: The first N sources (domain names)
     /// - `$id`: The ID of the post
     /// - `$rating`: The full content rating of the post (safe, questionable, explicit)
     /// - `$rating_first`: The first letter of the posts content rating (s, q, e)
@@ -316,12 +330,6 @@ pub struct E62Rs {
 
     /// Post viewing settings
     pub display: Option<ImageDisplay>,
-
-    /// The path to `tags.csv` that's used for tag searching/autocompletion
-    pub tags: Option<String>,
-
-    /// The path to `pools.csv` that's used for pool searching/autocompletion
-    pub pools: Option<String>,
 
     /// HTTP client configuration
     pub http: Option<HttpConfig>,
@@ -427,6 +435,10 @@ impl E62Rs {
 
         if cfg.search.is_none() {
             cfg.search = Some(SearchCfg::default());
+        }
+
+        if cfg.autoupdate.is_none() {
+            cfg.autoupdate = Some(AutoUpdateCfg::default());
         }
 
         if cfg.blacklist.is_none() {

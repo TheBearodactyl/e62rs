@@ -27,7 +27,13 @@ impl PoolDatabase {
         let cfg = E62Rs::get().unwrap_or_default();
 
         Ok(Self {
-            pools: Database::from_csv(cfg.pools.unwrap_or("data/pools.csv".to_owned()).as_str())?,
+            pools: Database::from_csv(
+                cfg.completion
+                    .unwrap_or_default()
+                    .pools
+                    .unwrap_or("data/pools.csv".to_owned())
+                    .as_str(),
+            )?,
         })
     }
 

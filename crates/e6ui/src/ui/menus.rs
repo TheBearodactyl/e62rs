@@ -74,10 +74,10 @@ pub enum MainMenu {
     SearchPosts,
     /// Search pools
     SearchPools,
-    /// Search pools (advanced filters)
-    SearchPoolsAdv,
     /// View the latest posts
     ViewLatest,
+    /// View downloaded files
+    ExploreDownloads,
     /// Manage your blacklist
     ManageBlacklist,
     /// Reorganize already downloaded files
@@ -86,4 +86,61 @@ pub enum MainMenu {
     EditConfig,
     /// Exit e62rs
     Exit,
+}
+
+#[derive(Selectable, Clone, Copy, PartialEq, PartialOrd, Debug)]
+pub enum PoolSearchModeMenu {
+    /// Simple search
+    Simple,
+
+    /// Advanced search
+    Advanced,
+}
+
+#[derive(Selectable, Clone, Copy, PartialEq, PartialOrd, Debug)]
+pub enum ExplorerMenu {
+    /// Browse downloaded posts
+    BrowsePosts,
+    /// Search posts by tags, ID, uploader, or description
+    SearchPosts,
+    /// Filter by rating
+    FilterByRating,
+    /// Sort posts
+    SortBy,
+    /// View statistics
+    ViewStatistics,
+    /// Clear all filters
+    ClearFilters,
+    /// Go back to main menu
+    Back,
+}
+
+#[derive(Selectable, Clone, Copy, PartialEq, PartialOrd, Debug)]
+pub enum ExplorerSortBy {
+    /// Sort by date (newest first)
+    DateNewest,
+    /// Sort by date (oldest first)
+    DateOldest,
+    /// Sort by score (highest first)
+    ScoreHighest,
+    /// Sort by score (lowest first)
+    ScoreLowest,
+    /// Sort by favorites (highest first)
+    FavoritesHighest,
+    /// Sort by ID (ascending)
+    IdAscending,
+    /// Sort by ID (descending)
+    IdDescending,
+}
+
+#[derive(Selectable, Clone, Copy, PartialEq, PartialOrd, Debug)]
+pub enum ExplorerFilterBy {
+    /// All ratings
+    AllRatings,
+    /// Safe only
+    Safe,
+    /// Questionable only
+    Questionable,
+    /// Explicit only
+    Explicit,
 }
