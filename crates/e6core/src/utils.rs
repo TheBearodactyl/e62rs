@@ -102,3 +102,60 @@ pub fn shorten_path(path: &str, max_len: usize) -> String {
         .to_string_lossy()
         .to_string()
 }
+
+#[macro_export]
+macro_rules! check_e62rs_logging {
+    () => {
+        E62Rs::get()
+            .unwrap_or_default()
+            .ui
+            .unwrap_or_default()
+            .logging
+            .unwrap_or(false)
+    };
+}
+
+#[macro_export]
+macro_rules! e62rs_error {
+    ($($arg:tt)+) => {
+        if check_e62rs_logging!() {
+            log::error!($($arg)+);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! e62rs_warn {
+    ($($arg:tt)+) => {
+        if check_e62rs_logging!() {
+            log::warn!($($arg)+);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! e62rs_info {
+    ($($arg:tt)+) => {
+        if check_e62rs_logging!() {
+            log::info!($($arg)+);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! e62rs_debug {
+    ($($arg:tt)+) => {
+        if check_e62rs_logging!() {
+            log::debug!($($arg)+);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! e62rs_trace {
+    ($($arg:tt)+) => {
+        if check_e62rs_logging!() {
+            log::trace!($($arg)+);
+        }
+    };
+}

@@ -1,10 +1,9 @@
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
-
-use anyhow::{Context, Result};
-use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
-
 use crate::client::E6Client;
+use crate::{check_e62rs_logging, e62rs_debug as debug, e62rs_info as info, e62rs_warn as warn};
+use anyhow::{Context, Result};
+use e6cfg::E62Rs;
+use serde::{Deserialize, Serialize};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CacheEntry {

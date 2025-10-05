@@ -1,8 +1,12 @@
-"$schema" = "https://github.com/TheBearodactyl/e62rs/raw/refs/heads/main/crates/e6cfg/e6cfg-schema.json"
 progress_format = "MegaBytes"
 post_count = 320
 base_url = "https://e621.net"
-blacklist = ["young", "rape", "feral", "bestiality"]
+blacklist = [
+    "young",
+    "rape",
+    "feral",
+    "bestiality",
+]
 
 [display]
 width = 800
@@ -19,7 +23,7 @@ connect_timeout_secs = 10
 max_connections = 15
 http2_prior_knowledge = true
 tcp_keepalive = true
-user_agent = "e6cfg/v0.3.0 (by bearodactyl on e621)"
+user_agent = "e6cfg/v0.2.0 (by bearodactyl on e621)"
 
 [cache]
 enabled = true
@@ -40,6 +44,7 @@ detailed_progress = true
 auto_clear_progress = true
 pagination_size = 20
 colored_output = true
+logging = true
 
 [search]
 min_posts_on_tag = 2
@@ -79,3 +84,4 @@ default_sort = "date_newest"
 posts_per_page = 20
 cache_metadata = true
 auto_display_image = false
+

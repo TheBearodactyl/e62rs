@@ -8,6 +8,7 @@ use crate::{
 use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use e6core::models::E6Post;
+use e6core::{check_e62rs_logging, e62rs_warn as warn};
 use inquire::{Confirm, Select, Text};
 use std::{
     collections::HashMap,
@@ -460,7 +461,7 @@ impl E6Ui {
                             local_post
                         }
                         Err(e) => {
-                            log::warn!("Failed to load metadata for {}: {}", path.display(), e);
+                            warn!("Failed to load metadata for {}: {}", path.display(), e);
                             skipped_count += 1;
                             continue;
                         }
@@ -580,7 +581,7 @@ impl E6Ui {
         if explorer_cfg.auto_display_image.unwrap_or(false) {
             use e6core::image::display_image_from_path_as_sixel;
             if let Err(e) = display_image_from_path_as_sixel(&local_post.file_path) {
-                log::warn!("Failed to auto-display image: {}", e);
+                warn!("Failed to auto-display image: {}", e);
             }
         }
 

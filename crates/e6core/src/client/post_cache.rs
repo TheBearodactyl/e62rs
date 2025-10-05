@@ -1,11 +1,11 @@
 use std::{path::PathBuf, sync::Arc};
 
+use crate::models::E6Post;
+use crate::{check_e62rs_logging, e62rs_debug as debug, e62rs_info as info, e62rs_warn as warn};
 use anyhow::{Context, Result};
-use log::{debug, info, warn};
+use e6cfg::E62Rs;
 use redb::{Database, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use tokio::sync::RwLock;
-
-use crate::models::E6Post;
 
 const POSTS_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("posts");
 

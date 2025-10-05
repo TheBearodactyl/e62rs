@@ -207,7 +207,10 @@ impl E6Ui {
             search_tags.push(format!("-{}", exclude_tag));
         }
 
-        let results = self.client.search_posts(search_tags, Some(10)).await?;
+        let results = self
+            .client
+            .search_posts(search_tags, Some(10), None)
+            .await?;
 
         if results.posts.is_empty() {
             println!("No posts found for the given search.");

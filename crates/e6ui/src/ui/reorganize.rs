@@ -2,7 +2,7 @@ use {
     crate::{progress::ProgressManager, ui::E6Ui},
     anyhow::{Context, Result},
     e6cfg::E62Rs,
-    e6core::models::E6Post,
+    e6core::{check_e62rs_logging, e62rs_debug as debug, e62rs_warn as warn, models::E6Post},
     std::{
         fs,
         io::Read,
@@ -577,7 +577,7 @@ impl FileReorganizer {
 
             let new_ads_path = format!("{}:metadata", final_path.display());
             if OpenOptions::new().read(true).open(&new_ads_path).is_err() {
-                log::warn!(
+                warn!(
                     "Metadata ADS may not have moved with file: {}",
                     final_path.display()
                 );
@@ -705,11 +705,11 @@ impl FileReorganizer {
                 Err(e) => {
                     if e.to_string().contains("already exists") {
                         result.skipped += 1;
-                        log::debug!("Skipped {}: {}", file_path.display(), e);
+                        debug!("Skipped {}: {}", file_path.display(), e);
                     } else {
                         result.failed += 1;
                         result.errors.push((file_path.clone(), e.to_string()));
-                        log::warn!("Failed to process {}: {}", file_path.display(), e);
+                        warn!("Failed to process {}: {}", file_path.display(), e);
                     }
                 }
             }

@@ -151,6 +151,9 @@ pub struct UiConfig {
 
     /// Enable colored output
     pub colored_output: Option<bool>,
+
+    /// Enable logging (HIGHLY RECCOMEND TO KEEP ON)
+    pub logging: Option<bool>,
 }
 
 /// Configuration options for displaying images

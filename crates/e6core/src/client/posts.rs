@@ -1,7 +1,7 @@
-use std::{io::Read, path::Path, sync::Arc};
-
 use crate::{
+    check_e62rs_logging,
     client::{DEFAULT_LIMIT, E6Client},
+    e62rs_debug, e62rs_info, e62rs_warn,
     models::{E6PostResponse, E6PostsResponse},
 };
 use anyhow::{Context, Result, bail};
@@ -9,8 +9,8 @@ use chrono::{Datelike, Local};
 use e6cfg::E62Rs;
 use flate2::read::GzDecoder;
 use futures::future::join_all;
-use log::{debug, info, warn};
 use sha2::{Digest, Sha256};
+use std::{io::Read, path::Path, sync::Arc};
 use tokio::{fs, io::AsyncWriteExt};
 
 impl E6Client {
@@ -24,13 +24,17 @@ impl E6Client {
         if !posts.posts.is_empty()
             && let Err(e) = self.post_cache.insert_batch(&posts.posts).await
         {
-            warn!("Failed to cache posts: {}", e);
+            e62rs_warn!("Failed to cache posts: {}", e);
         }
 
-        posts = posts.filter_blacklisted(&[]);
-        posts = posts.filter_score();
+        let cfg = E62Rs::get().unwrap_or_default();
+        let apply_blacklist = !cfg.blacklist.unwrap_or_default().is_empty();
 
-        debug!("Successfully fetched {} posts", posts.posts.len());
+        if apply_blacklist {
+            posts = posts.filter_blacklisted(&[]);
+        }
+
+        e62rs_debug!("Successfully fetched {} posts", posts.posts.len());
         Ok(posts)
     }
 
@@ -38,31 +42,47 @@ impl E6Client {
         &self,
         tags: Vec<String>,
         limit: Option<u64>,
+        page_before_id: Option<i64>,
     ) -> Result<E6PostsResponse> {
         let url = format!("{}/posts.json", self.base_url);
         let limit = limit.unwrap_or(DEFAULT_LIMIT);
 
-        let query_url = format!(
+        let mut query_url = format!(
             "{}?tags={}&limit={}",
             url,
             urlencoding::encode(&tags.join(" ")),
             limit
         );
 
+        if let Some(before_id) = page_before_id {
+            query_url.push_str(&format!("&page=b{}", before_id));
+        }
+
+        e62rs_debug!("Fetching posts from: {}", query_url);
         let bytes = self.get_cached_or_fetch(&query_url).await?;
 
         let mut posts: E6PostsResponse =
             serde_json::from_slice(&bytes).context("Failed to deserialize search response")?;
 
+        let count_before_filtering = posts.posts.len();
+
         if !posts.posts.is_empty()
             && let Err(e) = self.post_cache.insert_batch(&posts.posts).await
         {
-            warn!("Failed to cache posts: {}", e);
+            e62rs_warn!("Failed to cache posts: {}", e);
         }
 
         posts = posts.filter_blacklisted(&tags);
 
-        debug!(
+        if posts.posts.len() < count_before_filtering {
+            e62rs_info!(
+                "Filtered out {} blacklisted posts ({} remaining)",
+                count_before_filtering - posts.posts.len(),
+                posts.posts.len()
+            );
+        }
+
+        e62rs_debug!(
             "Successfully searched and found {} posts",
             posts.posts.len()
         );
@@ -71,7 +91,7 @@ impl E6Client {
 
     pub async fn get_post_by_id(&self, id: i64) -> Result<E6PostResponse> {
         if let Ok(Some(cached_post)) = self.post_cache.get(id).await {
-            debug!("Post {} retrieved from persistent cache", id);
+            e62rs_debug!("Post {} retrieved from persistent cache", id);
             return Ok(E6PostResponse { post: cached_post });
         }
 
@@ -82,7 +102,7 @@ impl E6Client {
             .with_context(|| format!("Failed to deserialize post {}", id))?;
 
         if let Err(e) = self.post_cache.insert(&post.post).await {
-            warn!("Failed to cache post {}: {}", id, e);
+            e62rs_warn!("Failed to cache post {}: {}", id, e);
         }
 
         Ok(post)
@@ -106,7 +126,7 @@ impl E6Client {
             }
         }
 
-        info!(
+        e62rs_info!(
             "Retrieved {}/{} posts from cache, fetching {} from network",
             posts.len(),
             ids.len(),
@@ -144,8 +164,8 @@ impl E6Client {
                             posts.push(post)
                         }
                     }
-                    Ok(Err(e)) => warn!("Failed to fetch post: {}", e),
-                    Err(e) => warn!("Task failed: {}", e),
+                    Ok(Err(e)) => e62rs_warn!("Failed to fetch post: {}", e),
+                    Err(e) => e62rs_warn!("Task failed: {}", e),
                 }
             }
         }
@@ -171,7 +191,7 @@ impl E6Client {
             now.day()
         );
 
-        info!("{}", url);
+        e62rs_info!("{}", url);
 
         let response = self.client.get(&url).send().await?;
         if !response.status().clone().is_success() {
@@ -194,7 +214,7 @@ impl E6Client {
         };
 
         if update_needed {
-            info!("Updating local tags snapshot...");
+            e62rs_info!("Updating local tags snapshot...");
 
             let mut gz = GzDecoder::new(&remote_bytes[..]);
             let mut decompressed_data = Vec::new();
@@ -207,9 +227,9 @@ impl E6Client {
             let mut hash_file = fs::File::create(local_hash_file).await?;
             hash_file.write_all(remote_hash_hex.as_bytes()).await?;
 
-            info!("Updated local tags snapshot at {}", local_file);
+            e62rs_info!("Updated local tags snapshot at {}", local_file);
         } else {
-            info!("Local snapshot of `tags.csv` is up to date, continuing");
+            e62rs_info!("Local snapshot of `tags.csv` is up to date, continuing");
         }
 
         Ok(())

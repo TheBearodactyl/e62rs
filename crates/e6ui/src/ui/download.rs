@@ -2,7 +2,7 @@ use {
     crate::{progress::ProgressManager, ui::E6Ui},
     anyhow::{Context, Result},
     e6cfg::E62Rs,
-    e6core::models::E6Post,
+    e6core::{check_e62rs_logging, e62rs_warn as warn, models::E6Post},
     futures_util::StreamExt,
     indicatif::ProgressBar,
     std::{
@@ -77,8 +77,8 @@ impl PostDownloader {
         for (i, result) in results.into_iter().enumerate() {
             match result {
                 Ok(Ok(_)) => {}
-                Ok(Err(e)) => log::warn!("Download {} failed: {}", i, e),
-                Err(e) => log::warn!("Task {} failed: {}", i, e),
+                Ok(Err(e)) => warn!("Download {} failed: {}", i, e),
+                Err(e) => warn!("Task {} failed: {}", i, e),
             }
         }
 

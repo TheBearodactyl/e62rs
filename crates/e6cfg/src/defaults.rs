@@ -121,6 +121,7 @@ impl Default for UiConfig {
             auto_clear_progress: Some(true),
             pagination_size: Some(20),
             colored_output: Some(true),
+            logging: Some(true),
         }
     }
 }

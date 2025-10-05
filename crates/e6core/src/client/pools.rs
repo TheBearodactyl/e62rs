@@ -1,15 +1,15 @@
-use std::{io::Read, path::Path};
-
 use anyhow::{Context, Result, bail};
 use chrono::{Datelike, Local};
 use e6cfg::E62Rs;
 use flate2::read::GzDecoder;
-use log::{debug, info};
 use sha2::{Digest, Sha256};
+use std::{io::Read, path::Path};
 use tokio::{fs, io::AsyncWriteExt};
 
 use crate::{
+    check_e62rs_logging,
     client::{DEFAULT_LIMIT, E6Client},
+    e62rs_debug as debug, e62rs_info as info,
     models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
 };
 
