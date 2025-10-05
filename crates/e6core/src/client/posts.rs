@@ -21,6 +21,12 @@ impl E6Client {
         let mut posts: E6PostsResponse =
             serde_json::from_slice(&bytes).context("Failed to deserialize posts response")?;
 
+        if !posts.posts.is_empty()
+            && let Err(e) = self.post_cache.insert_batch(&posts.posts).await
+        {
+            warn!("Failed to cache posts: {}", e);
+        }
+
         posts = posts.filter_blacklisted(&[]);
         posts = posts.filter_score();
 
@@ -48,6 +54,12 @@ impl E6Client {
         let mut posts: E6PostsResponse =
             serde_json::from_slice(&bytes).context("Failed to deserialize search response")?;
 
+        if !posts.posts.is_empty()
+            && let Err(e) = self.post_cache.insert_batch(&posts.posts).await
+        {
+            warn!("Failed to cache posts: {}", e);
+        }
+
         posts = posts.filter_blacklisted(&tags);
 
         debug!(
@@ -58,49 +70,83 @@ impl E6Client {
     }
 
     pub async fn get_post_by_id(&self, id: i64) -> Result<E6PostResponse> {
+        if let Ok(Some(cached_post)) = self.post_cache.get(id).await {
+            debug!("Post {} retrieved from persistent cache", id);
+            return Ok(E6PostResponse { post: cached_post });
+        }
+
         let url = format!("{}/posts/{}.json", self.base_url, id);
         let bytes = self.get_cached_or_fetch(&url).await?;
 
         let post: E6PostResponse = serde_json::from_slice(&bytes)
             .with_context(|| format!("Failed to deserialize post {}", id))?;
 
+        if let Err(e) = self.post_cache.insert(&post.post).await {
+            warn!("Failed to cache post {}: {}", id, e);
+        }
+
         Ok(post)
     }
 
     pub async fn get_posts_by_ids(&self, ids: Vec<i64>) -> Result<Vec<E6PostResponse>> {
-        let config = E62Rs::get().unwrap_or_default();
-        let concurrent_limit = config
-            .performance
-            .as_ref()
-            .and_then(|p| p.concurrent_downloads)
-            .unwrap_or(8);
-
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
-        let futures: Vec<_> = ids
-            .into_iter()
-            .map(|id| {
-                let client = self.clone();
-                let semaphore = semaphore.clone();
-
-                tokio::spawn(async move {
-                    let _permit = semaphore.acquire().await.unwrap();
-                    client.get_post_by_id(id).await
-                })
-            })
-            .collect();
-
-        let results = join_all(futures).await;
+        let cached_results = self.post_cache.get_batch(&ids).await?;
         let mut posts = Vec::new();
+        let mut missing_ids = Vec::new();
 
-        for result in results {
-            match result {
-                Ok(Ok(post)) => {
-                    if !post.post.is_blacklisted() {
-                        posts.push(post)
+        for (i, cached_post) in cached_results.into_iter().enumerate() {
+            match cached_post {
+                Some(post) => {
+                    if !post.is_blacklisted() {
+                        posts.push(E6PostResponse { post });
                     }
                 }
-                Ok(Err(e)) => warn!("Failed to fetch post: {}", e),
-                Err(e) => warn!("Task failed: {}", e),
+                None => {
+                    missing_ids.push(ids[i]);
+                }
+            }
+        }
+
+        info!(
+            "Retrieved {}/{} posts from cache, fetching {} from network",
+            posts.len(),
+            ids.len(),
+            missing_ids.len()
+        );
+
+        if !missing_ids.is_empty() {
+            let config = E62Rs::get().unwrap_or_default();
+            let concurrent_limit = config
+                .performance
+                .as_ref()
+                .and_then(|p| p.concurrent_downloads)
+                .unwrap_or(8);
+
+            let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
+            let futures: Vec<_> = missing_ids
+                .into_iter()
+                .map(|id| {
+                    let client = self.clone();
+                    let semaphore = semaphore.clone();
+
+                    tokio::spawn(async move {
+                        let _permit = semaphore.acquire().await.unwrap();
+                        client.get_post_by_id(id).await
+                    })
+                })
+                .collect();
+
+            let results = join_all(futures).await;
+
+            for result in results {
+                match result {
+                    Ok(Ok(post)) => {
+                        if !post.post.is_blacklisted() {
+                            posts.push(post)
+                        }
+                    }
+                    Ok(Err(e)) => warn!("Failed to fetch post: {}", e),
+                    Err(e) => warn!("Task failed: {}", e),
+                }
             }
         }
 
@@ -167,5 +213,18 @@ impl E6Client {
         }
 
         Ok(())
+    }
+
+    pub async fn get_post_cache_stats(&self) -> Result<String> {
+        let stats = self.post_cache.get_stats().await?;
+        Ok(format!(
+            "Post Cache: {} entries, {:.2} MB",
+            stats.entry_count,
+            stats.file_size_mb()
+        ))
+    }
+
+    pub async fn clear_post_cache(&self) -> Result<()> {
+        self.post_cache.clear().await
     }
 }

@@ -106,4 +106,26 @@ impl E6Client {
         let total_bytes: u64 = cache.values().map(|entry| entry.data.len() as u64).sum();
         (size, total_bytes)
     }
+
+    pub async fn clear_all_caches(&self) -> Result<()> {
+        self.clear_cache().await;
+        self.clear_post_cache().await?;
+        info!("All caches cleared");
+        Ok(())
+    }
+
+    pub async fn get_all_cache_stats(&self) -> String {
+        let (http_size, http_bytes) = self.get_cache_stats().await;
+        let post_stats = self
+            .get_post_cache_stats()
+            .await
+            .unwrap_or_else(|_| "Post Cache: unavailable".to_string());
+
+        format!(
+            "HTTP Cache: {} entries, {:.2} MB\n{}",
+            http_size,
+            http_bytes as f64 / (1024.0 * 1024.0),
+            post_stats
+        )
+    }
 }

@@ -8,7 +8,10 @@ use tokio::sync::RwLock;
 
 pub mod cache;
 pub mod pools;
+pub mod post_cache;
 pub mod posts;
+
+use post_cache::PostCache;
 
 const DEFAULT_LIMIT: u64 = 20;
 
@@ -19,6 +22,7 @@ pub struct E6Client {
     cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
     cache_config: CacheConfig,
     _disk_cache_path: Option<std::path::PathBuf>,
+    post_cache: Arc<PostCache>,
 }
 
 impl Default for E6Client {
@@ -46,6 +50,8 @@ impl E6Client {
             None
         };
 
+        let post_cache = PostCache::new(cache_config.cache_dir.as_deref().unwrap_or(".cache"))?;
+
         info!(
             "Initialized HTTP client with {} max connections",
             http_config.max_connections.unwrap_or(2)
@@ -57,6 +63,7 @@ impl E6Client {
             cache: Arc::new(RwLock::new(HashMap::new())),
             cache_config,
             _disk_cache_path: disk_cache_path,
+            post_cache: Arc::new(post_cache),
         })
     }
 
