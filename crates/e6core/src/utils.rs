@@ -1,4 +1,8 @@
-use std::{fs::OpenOptions, io::Write, path::Path};
+use std::{
+    fs::OpenOptions,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use base64::{Engine, engine::general_purpose};
 use e6cfg::LoginCfg;
@@ -83,31 +87,18 @@ pub fn write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> anyhow::Resu
     Ok(())
 }
 
-pub trait AndOr {
-    fn and<T>(self, f: T)
-    where
-        T: FnOnce();
-    fn or<T>(self, f: T)
-    where
-        T: FnOnce();
-}
-
-impl AndOr for bool {
-    fn and<T>(self, f: T)
-    where
-        T: FnOnce(),
-    {
-        if self {
-            f();
-        }
-    }
-
-    fn or<T>(self, f: T)
-    where
-        T: FnOnce(),
-    {
-        if !self {
-            f();
-        }
-    }
+pub fn shorten_path(path: &str, max_len: usize) -> String {
+    Path::new(path)
+        .components()
+        .map(|component| {
+            let s = component.as_os_str().to_string_lossy();
+            if s.len() > max_len {
+                s[..max_len].to_string()
+            } else {
+                s.to_string()
+            }
+        })
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .to_string()
 }

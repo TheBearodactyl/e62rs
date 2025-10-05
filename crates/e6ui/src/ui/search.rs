@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::ui::{
     E6Ui,
@@ -396,18 +396,17 @@ impl E6Ui {
                 let concurrent_limit = search_cfg.fetch_threads.unwrap_or(8).max(1);
                 let post_ids: Vec<i64> = selected_posts.iter().map(|post| post.id).collect();
                 let total_count = post_ids.len();
-
                 let pb = ProgressBar::new(total_count as u64);
                 pb.set_style(
-                    ProgressStyle::with_template(
-                        "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({percent}%) {msg}"
-                    )?
-                    .with_key("eta", |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
-                        write!(w, "{:.1}s", state.eta().as_secs_f64()).expect("Failed")
-                    })
-                    .progress_chars("#>-")
+                    ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({percent}%) {msg}")?
+                        .with_key("eta", |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
+                            write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap_or(())
+                        }
+                    )
+                    .progress_chars("█▓░")
                 );
                 pb.set_message("Fetching posts...");
+                pb.enable_steady_tick(Duration::from_millis(100));
 
                 let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
                 let pb_arc = Arc::new(pb);
@@ -434,7 +433,7 @@ impl E6Ui {
 
                         let pos = pb.position();
                         let len = pb.length().unwrap_or(0);
-                        if pos.is_multiple_of(25) || pos == len {
+                        if pos.is_multiple_of(10) || pos == len {
                             pb.set_message(format!("Fetching posts... ({}/{})", pos, len));
                         }
 

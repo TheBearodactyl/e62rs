@@ -117,7 +117,14 @@ impl PostDownloader {
         let pb_key = format!("download_{}", index);
         let pb = self
             .progress_manager
-            .create_bar(&pb_key, 0, &format!("Downloading {}", filename))
+            .create_bar(
+                &pb_key,
+                0,
+                &format!(
+                    "Downloading {}",
+                    e6core::utils::shorten_path(filename.as_str(), 30)
+                ),
+            )
             .await
             .unwrap();
 
@@ -179,6 +186,8 @@ impl PostDownloader {
 
         let mut stream = response.bytes_stream();
         let mut downloaded = 0u64;
+        let mut last_update = 0u64;
+        const UPDATE_THRESHOLD: u64 = 8192;
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.context("Error reading chunk from response")?;
@@ -188,7 +197,10 @@ impl PostDownloader {
                 .await
                 .with_context(|| format!("Error writing to file '{}'", filepath.display()))?;
 
-            pb.set_position(downloaded);
+            if downloaded - last_update >= UPDATE_THRESHOLD {
+                pb.set_position(downloaded);
+                last_update = downloaded;
+            }
         }
 
         file.flush().await.context("Failed to flush file to disk")?;

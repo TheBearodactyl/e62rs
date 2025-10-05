@@ -411,7 +411,7 @@ impl E6Ui {
             if let Some(ref pb) = pb {
                 pb.inc(1);
                 let pos = pb.position();
-                if pos % 50 == 0 || pos == total_files as u64 {
+                if pos.is_multiple_of(25) || pos == total_files as u64 {
                     pb.set_message(format!(
                         "Scanning files for metadata ({}/{})",
                         pos, total_files
