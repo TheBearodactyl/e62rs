@@ -205,7 +205,10 @@ impl FileReorganizer {
         let tags_re = regex::Regex::new(r"\$tags\[(\d+)\]").unwrap();
         let artists_re = regex::Regex::new(r"\$artists\[(\d+)\]").unwrap();
         let characters_re = regex::Regex::new(r"\$characters\[(\d+)\]").unwrap();
+        let species_re = regex::Regex::new(r"\$species\[(\d+)\]").unwrap();
+        let copyright_re = regex::Regex::new(r"\$copyright\[(\d+)\]").unwrap();
         let sources_re = regex::Regex::new(r"\$sources\[(\d+)\]").unwrap();
+
         let mut formatted = out_fmt.to_string();
 
         for cap in tags_re.captures_iter(out_fmt) {
@@ -220,7 +223,6 @@ impl FileReorganizer {
                     .cloned()
                     .collect::<Vec<String>>()
                     .join(", ");
-
                 formatted = formatted.replace(&cap[0], &tags);
             }
         }
@@ -229,7 +231,7 @@ impl FileReorganizer {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_artists) = num_match.as_str().parse::<usize>()
             {
-                let tags = post
+                let artists = post
                     .tags
                     .artist
                     .iter()
@@ -237,8 +239,7 @@ impl FileReorganizer {
                     .cloned()
                     .collect::<Vec<String>>()
                     .join(", ");
-
-                formatted = formatted.replace(&cap[0], &tags);
+                formatted = formatted.replace(&cap[0], &artists);
             }
         }
 
@@ -246,7 +247,7 @@ impl FileReorganizer {
             if let Some(num_match) = cap.get(1)
                 && let Ok(num_chars) = num_match.as_str().parse::<usize>()
             {
-                let sources = post
+                let characters = post
                     .tags
                     .character
                     .iter()
@@ -254,8 +255,39 @@ impl FileReorganizer {
                     .cloned()
                     .collect::<Vec<String>>()
                     .join(", ");
+                formatted = formatted.replace(&cap[0], &characters);
+            }
+        }
 
-                formatted = formatted.replace(&cap[0], &sources);
+        for cap in species_re.captures_iter(out_fmt) {
+            if let Some(num_match) = cap.get(1)
+                && let Ok(num_species) = num_match.as_str().parse::<usize>()
+            {
+                let species = post
+                    .tags
+                    .species
+                    .iter()
+                    .take(num_species)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                formatted = formatted.replace(&cap[0], &species);
+            }
+        }
+
+        for cap in copyright_re.captures_iter(out_fmt) {
+            if let Some(num_match) = cap.get(1)
+                && let Ok(num_copyright) = num_match.as_str().parse::<usize>()
+            {
+                let copyright = post
+                    .tags
+                    .copyright
+                    .iter()
+                    .take(num_copyright)
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                formatted = formatted.replace(&cap[0], &copyright);
             }
         }
 
@@ -267,13 +299,75 @@ impl FileReorganizer {
                     .sources
                     .iter()
                     .take(num_sources)
-                    .map(|source| Url::parse(source).unwrap().domain().unwrap().to_string())
+                    .map(|source| {
+                        Url::parse(source)
+                            .ok()
+                            .and_then(|u| u.domain().map(String::from))
+                            .unwrap_or_else(|| "unknown".to_string())
+                    })
                     .collect::<Vec<String>>()
                     .join(", ");
-
                 formatted = formatted.replace(&cap[0], &sources);
             }
         }
+
+        let aspect_ratio = if post.file.height > 0 {
+            post.file.width as f64 / post.file.height as f64
+        } else {
+            0.0
+        };
+
+        let orientation = if post.file.width > post.file.height {
+            "landscape"
+        } else if post.file.width < post.file.height {
+            "portrait"
+        } else {
+            "square"
+        };
+
+        let megapixels = (post.file.width * post.file.height) as f64 / 1_000_000.0;
+
+        let resolution = match (post.file.width, post.file.height) {
+            (w, h) if w >= 7680 || h >= 4320 => "8K",
+            (w, h) if w >= 3840 || h >= 2160 => "4K",
+            (w, h) if w >= 2560 || h >= 1440 => "QHD",
+            (w, h) if w >= 1920 || h >= 1080 => "FHD",
+            (w, h) if w >= 1280 || h >= 720 => "HD",
+            _ => "SD",
+        };
+
+        let size_mb = post.file.size as f64 / (1024.0 * 1024.0);
+        let size_kb = post.file.size as f64 / 1024.0;
+
+        let file_type = match post.file.ext.as_str() {
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" => "image",
+            "mp4" | "webm" | "mov" | "avi" | "mkv" => "video",
+            "swf" => "flash",
+            _ => "unknown",
+        };
+
+        let duration_formatted = if let Some(duration) = post.duration {
+            let total_seconds = duration as i64;
+            let hours = total_seconds / 3600;
+            let minutes = (total_seconds % 3600) / 60;
+            let seconds = total_seconds % 60;
+
+            if hours > 0 {
+                format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+            } else {
+                format!("{:02}:{:02}", minutes, seconds)
+            }
+        } else {
+            "N/A".to_string()
+        };
+
+        let tag_count = post.tags.general.len()
+            + post.tags.artist.len()
+            + post.tags.character.len()
+            + post.tags.species.len()
+            + post.tags.copyright.len()
+            + post.tags.meta.len()
+            + post.tags.lore.len();
 
         let now = chrono::Local::now();
         let rating_first = post
@@ -284,7 +378,7 @@ impl FileReorganizer {
             .to_lowercase()
             .to_string();
 
-        let (year, month, day, hour, minute, second) =
+        let (year, month, day, hour, minute, second, timestamp) =
             if let Ok(created_date) = chrono::DateTime::parse_from_rfc3339(&post.created_at) {
                 (
                     created_date.format("%Y").to_string(),
@@ -293,6 +387,7 @@ impl FileReorganizer {
                     created_date.format("%H").to_string(),
                     created_date.format("%M").to_string(),
                     created_date.format("%S").to_string(),
+                    created_date.timestamp().to_string(),
                 )
             } else {
                 (
@@ -302,7 +397,19 @@ impl FileReorganizer {
                     now.format("%H").to_string(),
                     now.format("%M").to_string(),
                     now.format("%S").to_string(),
+                    now.timestamp().to_string(),
                 )
+            };
+
+        let (year_updated, month_updated, day_updated) =
+            if let Ok(updated_date) = chrono::DateTime::parse_from_rfc3339(&post.updated_at) {
+                (
+                    updated_date.format("%Y").to_string(),
+                    updated_date.format("%m").to_string(),
+                    updated_date.format("%d").to_string(),
+                )
+            } else {
+                (year.clone(), month.clone(), day.clone())
             };
 
         let rating_full = match post.rating.as_str() {
@@ -312,21 +419,71 @@ impl FileReorganizer {
             _ => "unknown",
         };
 
+        let pool_ids = post
+            .pools
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let approver_id = post
+            .approver_id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "none".to_string());
+
         let formatted = formatted
             .replace("$id", &post.id.to_string())
             .replace("$rating", rating_full)
             .replace("$rating_first", &rating_first)
             .replace("$score", &post.score.total.to_string())
+            .replace("$score_up", &post.score.up.to_string())
+            .replace("$score_down", &post.score.down.to_string())
             .replace("$fav_count", &post.fav_count.to_string())
             .replace("$comment_count", &post.comment_count.to_string())
             .replace("$md5", &post.file.md5)
             .replace("$ext", &post.file.ext)
             .replace("$width", &post.file.width.to_string())
             .replace("$height", &post.file.height.to_string())
+            .replace("$aspect_ratio", &format!("{:.2}", aspect_ratio))
+            .replace("$orientation", orientation)
+            .replace("$resolution", resolution)
+            .replace("$megapixels", &format!("{:.1}", megapixels))
             .replace("$size", &post.file.size.to_string())
+            .replace("$size_mb", &format!("{:.2}", size_mb))
+            .replace("$size_kb", &format!("{:.2}", size_kb))
             .replace("$artist", artist)
+            .replace("$artist_count", &post.tags.artist.len().to_string())
+            .replace("$tag_count", &tag_count.to_string())
+            .replace("$tag_count_general", &post.tags.general.len().to_string())
+            .replace(
+                "$tag_count_character",
+                &post.tags.character.len().to_string(),
+            )
+            .replace("$tag_count_species", &post.tags.species.len().to_string())
+            .replace(
+                "$tag_count_copyright",
+                &post.tags.copyright.len().to_string(),
+            )
+            .replace("$pool_ids", &pool_ids)
+            .replace("$pool_count", &post.pools.len().to_string())
             .replace("$uploader", &post.uploader_name)
             .replace("$uploader_id", &post.uploader_id.to_string())
+            .replace("$approver_id", &approver_id)
+            .replace(
+                "$has_children",
+                if post.relationships.has_children {
+                    "yes"
+                } else {
+                    "no"
+                },
+            )
+            .replace(
+                "$parent_id",
+                &post
+                    .relationships
+                    .parent_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            )
             .replace("$year", &year)
             .replace("$month", &month)
             .replace("$day", &day)
@@ -339,6 +496,14 @@ impl FileReorganizer {
                 "$datetime",
                 &format!("{}-{}-{} {}-{}-{}", year, month, day, hour, minute, second),
             )
+            .replace("$timestamp", &timestamp)
+            .replace("$year_updated", &year_updated)
+            .replace("$month_updated", &month_updated)
+            .replace("$day_updated", &day_updated)
+            .replace(
+                "$date_updated",
+                &format!("{}-{}-{}", year_updated, month_updated, day_updated),
+            )
             .replace("$now_year", &now.format("%Y").to_string())
             .replace("$now_month", &now.format("%m").to_string())
             .replace("$now_day", &now.format("%d").to_string())
@@ -350,7 +515,21 @@ impl FileReorganizer {
             .replace(
                 "$now_datetime",
                 &now.format("%Y-%m-%d %H-%M-%S").to_string(),
-            );
+            )
+            .replace("$now_timestamp", &now.timestamp().to_string())
+            .replace("$is_pending", if post.flags.pending { "yes" } else { "no" })
+            .replace("$is_flagged", if post.flags.flagged { "yes" } else { "no" })
+            .replace("$is_deleted", if post.flags.deleted { "yes" } else { "no" })
+            .replace("$has_notes", if post.has_notes { "yes" } else { "no" })
+            .replace(
+                "$duration",
+                &post
+                    .duration
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| "0".to_string()),
+            )
+            .replace("$duration_formatted", &duration_formatted)
+            .replace("$file_type", file_type);
 
         Ok(formatted)
     }

@@ -304,21 +304,43 @@ pub struct DownloadCfg {
     /// - `$artists[N]`: The first N artists
     /// - `$tags[N]`: The first N general tags
     /// - `$characters[N]`: The first N character tags
+    /// - `$species[N]`: The first N species tags
+    /// - `$copyright[N]`: The first N copyright tags
     /// - `$sources[N]`: The first N sources (domain names)
     /// - `$id`: The ID of the post
     /// - `$rating`: The full content rating of the post (safe, questionable, explicit)
     /// - `$rating_first`: The first letter of the posts content rating (s, q, e)
     /// - `$score`: The total score of the post
+    /// - `$score_up`: The upvote score of the post
+    /// - `$score_down`: The downvote score of the post
     /// - `$fav_count`: The amount of people who favorited the post
     /// - `$comment_count`: The amount of comments on the post
     /// - `$md5`: The MD5 hash of the post file
     /// - `$ext`: The file extension of the post
     /// - `$width`: The original width of the post media in pixels
     /// - `$height`: The original height of the post media in pixels
-    /// - `$size`: The file size of the post media
+    /// - `$aspect_ratio`: The aspect ratio (width/height)
+    /// - `$orientation`: Portrait, landscape, or square
+    /// - `$resolution`: Resolution category (SD, HD, FHD, QHD, 4K, 8K)
+    /// - `$megapixels`: Megapixel count (rounded to 1 decimal)
+    /// - `$size`: The file size of the post media in bytes
+    /// - `$size_mb`: The file size in megabytes (rounded to 2 decimals)
+    /// - `$size_kb`: The file size in kilobytes (rounded to 2 decimals)
     /// - `$artist`: The first listed artist of the post
+    /// - `$artist_count`: Number of artists tagged
+    /// - `$tag_count`: Total number of tags
+    /// - `$tag_count_general`: Number of general tags
+    /// - `$tag_count_character`: Number of character tags
+    /// - `$tag_count_species`: Number of species tags
+    /// - `$tag_count_copyright`: Number of copyright tags
+    /// - `$pool_ids`: Comma-separated pool IDs
+    /// - `$pool_count`: Number of pools the post is in
     /// - `$uploader`: The name of the person who uploaded the post
     /// - `$uploader_id`: The user ID of the person who uploaded the post
+    /// - `$approver`: The name of the approver (if approved)
+    /// - `$approver_id`: The ID of the approver (if approved)
+    /// - `$has_children`: "yes" if post has children, "no" otherwise
+    /// - `$parent_id`: The parent post ID (if exists)
     /// - `$year`: The year when the post was uploaded
     /// - `$month`: The month when the post was uploaded
     /// - `$day`: The day when the post was uploaded
@@ -328,6 +350,11 @@ pub struct DownloadCfg {
     /// - `$date`: Shorthand for "$year-$month-$day"
     /// - `$time`: Shorthand for "$hour-$minute-$second"
     /// - `$datetime`: Shorthand for "$year-$month-$day $hour-$minute-$second"
+    /// - `$timestamp`: Unix timestamp of upload
+    /// - `$year_updated`: The year when the post was last updated
+    /// - `$month_updated`: The month when the post was last updated
+    /// - `$day_updated`: The day when the post was last updated
+    /// - `$date_updated`: Shorthand for "$year_updated-$month_updated-$day_updated"
     /// - `$now_year`: The year at the time of downloading the post
     /// - `$now_month`: The month at the time of downloading the post
     /// - `$now_day`: The day at the time of downloading the post
@@ -337,6 +364,14 @@ pub struct DownloadCfg {
     /// - `$now_date`: Shorthand for "$now_year-$now_month-$now_day"
     /// - `$now_time`: Shorthand for "$now_hour-$now_minute-$now_second"
     /// - `$now_datetime`: Shorthand for "$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second"
+    /// - `$now_timestamp`: Unix timestamp at download time
+    /// - `$is_pending`: "yes" if pending approval, "no" otherwise
+    /// - `$is_flagged`: "yes" if flagged, "no" otherwise
+    /// - `$is_deleted`: "yes" if deleted, "no" otherwise
+    /// - `$has_notes`: "yes" if has notes, "no" otherwise
+    /// - `$duration`: Video duration in seconds (if applicable)
+    /// - `$duration_formatted`: Video duration as MM:SS or HH:MM:SS
+    /// - `$file_type`: Media type (image, video, flash, etc.)
     pub output_format: Option<String>,
 }
 
