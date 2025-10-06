@@ -313,6 +313,51 @@ pub struct PoolEntry {
 }
 
 impl E6Post {
+    pub fn parse_blacklist_rule(rule: &str) -> (Vec<String>, Vec<String>) {
+        let mut includes = Vec::new();
+        let mut excludes = Vec::new();
+
+        for part in rule.split_whitespace() {
+            if let Some(tag) = part.strip_prefix('-') {
+                if !tag.is_empty() {
+                    excludes.push(tag.to_string());
+                }
+            } else if !part.is_empty() {
+                includes.push(part.to_string());
+            }
+        }
+
+        (includes, excludes)
+    }
+
+    pub fn matches_blacklist_rule(&self, rule: &str) -> bool {
+        let (include_tags, exclude_tags) = Self::parse_blacklist_rule(rule);
+
+        let all_tags: std::collections::HashSet<&String> = self
+            .tags
+            .general
+            .iter()
+            .chain(self.tags.artist.iter())
+            .chain(self.tags.contributor.iter())
+            .chain(self.tags.copyright.iter())
+            .chain(self.tags.character.iter())
+            .chain(self.tags.species.iter())
+            .chain(self.tags.meta.iter())
+            .chain(self.tags.lore.iter())
+            .collect();
+
+        let includes_matched =
+            include_tags.is_empty() || include_tags.iter().all(|tag| all_tags.contains(tag));
+
+        let excludes_matched = exclude_tags.iter().any(|tag| all_tags.contains(tag));
+
+        if include_tags.is_empty() && !exclude_tags.is_empty() {
+            !excludes_matched
+        } else {
+            includes_matched && !excludes_matched
+        }
+    }
+
     pub fn is_blacklisted(&self) -> bool {
         if let Ok(config) = E62Rs::get()
             && let Some(blacklist) = config.blacklist
@@ -321,20 +366,11 @@ impl E6Post {
                 return false;
             }
 
-            let all_tags: Vec<&String> = self
-                .tags
-                .general
-                .iter()
-                .chain(self.tags.artist.iter())
-                .chain(self.tags.contributor.iter())
-                .chain(self.tags.copyright.iter())
-                .chain(self.tags.character.iter())
-                .chain(self.tags.species.iter())
-                .chain(self.tags.meta.iter())
-                .chain(self.tags.lore.iter())
-                .collect();
-
-            return all_tags.iter().any(|tag| blacklist.contains(tag));
+            for rule in &blacklist {
+                if self.matches_blacklist_rule(rule) {
+                    return true;
+                }
+            }
         }
 
         false
@@ -344,7 +380,17 @@ impl E6Post {
         if let Ok(config) = E62Rs::get()
             && let Some(blacklist) = config.blacklist
         {
-            return search_tags.iter().any(|tag| blacklist.contains(tag));
+            for search_tag in search_tags {
+                for rule in &blacklist {
+                    let (include_tags, exclude_tags) = Self::parse_blacklist_rule(rule);
+                    if include_tags.len() == 1
+                        && exclude_tags.is_empty()
+                        && include_tags[0] == *search_tag
+                    {
+                        return true;
+                    }
+                }
+            }
         }
 
         false
