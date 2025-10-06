@@ -21,10 +21,10 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 ## Bugs/Problems
 
 - [ ] Fix menu flow bugs (e.g. pressing back doesn't actually go back)
-- [ ] Finish the on-disk cache implementation (it's currently in-memory only)
+- [x] Finish the on-disk cache implementation
 
 ## Features
 
 - [ ] Add GIF support for viewing downloaded images in-terminal (will require a really janky setup)
 - [ ] Add more filters to post and pool searching
-- [ ] Add more configuration options (at least 10 per UI view)
+- [x] Add more configuration options
