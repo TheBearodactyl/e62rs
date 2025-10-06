@@ -6,6 +6,7 @@ use crate::{
     e62rs_warn as warn,
 };
 use anyhow::{Context, Result};
+use bincode::config::standard;
 use e6cfg::E62Rs;
 use redb::{Database, ReadableDatabase, ReadableTableMetadata, TableDefinition};
 use tokio::sync::RwLock;
@@ -55,8 +56,8 @@ impl PostCache {
         match table.get(post_id) {
             Ok(Some(data)) => {
                 let bytes = data.value();
-                match bincode::deserialize::<E6Post>(bytes) {
-                    Ok(post) => {
+                match bincode::serde::decode_from_slice::<E6Post, _>(bytes, standard()) {
+                    Ok((post, _)) => {
                         debug!("Cache hit for post {}", post_id);
                         Ok(Some(post))
                     }
@@ -84,7 +85,8 @@ impl PostCache {
             None => anyhow::bail!("Database not initialized"),
         };
 
-        let serialized = bincode::serialize(post).context("Failed to serialize post")?;
+        let serialized =
+            bincode::serde::encode_to_vec(post, standard()).context("Failed to serialize post")?;
 
         let write_txn = db
             .begin_write()
@@ -127,7 +129,8 @@ impl PostCache {
                 .context("Failed to open posts table")?;
 
             for post in posts {
-                let serialized = bincode::serialize(post).context("Failed to serialize post")?;
+                let serialized = bincode::serde::encode_to_vec(post, standard())
+                    .context("Failed to serialize post")?;
 
                 table
                     .insert(post.id, serialized.as_slice())
@@ -165,8 +168,8 @@ impl PostCache {
             let post = match table.get(post_id) {
                 Ok(Some(data)) => {
                     let bytes = data.value();
-                    match bincode::deserialize::<E6Post>(bytes) {
-                        Ok(post) => Some(post),
+                    match bincode::serde::decode_from_slice::<E6Post, _>(bytes, standard()) {
+                        Ok((post, _)) => Some(post),
                         Err(e) => {
                             warn!("Failed to deserialize cached post {}: {}", post_id, e);
                             None
