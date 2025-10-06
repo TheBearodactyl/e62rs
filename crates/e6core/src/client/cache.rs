@@ -1,5 +1,8 @@
 use crate::client::E6Client;
-use crate::{check_e62rs_logging, e62rs_debug as debug, e62rs_info as info, e62rs_warn as warn};
+use crate::{
+    check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_info as info,
+    e62rs_warn as warn,
+};
 use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use serde::{Deserialize, Serialize};

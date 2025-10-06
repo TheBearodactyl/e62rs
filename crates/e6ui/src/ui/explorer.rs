@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use e6core::models::E6Post;
-use e6core::{check_e62rs_logging, e62rs_warn as warn};
+use e6core::{check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_warn as warn};
 use inquire::{Confirm, Select, Text};
 use std::{
     collections::HashMap,

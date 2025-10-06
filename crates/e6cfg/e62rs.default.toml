@@ -1,12 +1,7 @@
 progress_format = "MegaBytes"
 post_count = 320
 base_url = "https://e621.net"
-blacklist = [
-    "young",
-    "rape",
-    "feral",
-    "bestiality",
-]
+blacklist = ["young", "rape", "feral", "bestiality"]
 
 [display]
 width = 800
@@ -45,6 +40,7 @@ auto_clear_progress = true
 pagination_size = 20
 colored_output = true
 logging = true
+verbose_output = false
 
 [search]
 min_posts_on_tag = 2
@@ -84,4 +80,3 @@ default_sort = "date_newest"
 posts_per_page = 20
 cache_metadata = true
 auto_display_image = false
-

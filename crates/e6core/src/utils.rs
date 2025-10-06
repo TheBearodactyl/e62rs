@@ -104,7 +104,7 @@ pub fn shorten_path(path: &str, max_len: usize) -> String {
 }
 
 #[macro_export]
-macro_rules! check_e62rs_logging {
+macro_rules! check_e62rs_logging_enabled {
     () => {
         E62Rs::get()
             .unwrap_or_default()
@@ -116,9 +116,21 @@ macro_rules! check_e62rs_logging {
 }
 
 #[macro_export]
+macro_rules! check_e62rs_verbose {
+    () => {
+        E62Rs::get()
+            .unwrap_or_default()
+            .ui
+            .unwrap_or_default()
+            .verbose_output
+            .unwrap_or(false)
+    };
+}
+
+#[macro_export]
 macro_rules! e62rs_error {
     ($($arg:tt)+) => {
-        if check_e62rs_logging!() {
+        if check_e62rs_logging_enabled!() {
             log::error!($($arg)+);
         }
     };
@@ -127,7 +139,7 @@ macro_rules! e62rs_error {
 #[macro_export]
 macro_rules! e62rs_warn {
     ($($arg:tt)+) => {
-        if check_e62rs_logging!() {
+        if check_e62rs_logging_enabled!() && check_e62rs_verbose!() {
             log::warn!($($arg)+);
         }
     };
@@ -136,7 +148,7 @@ macro_rules! e62rs_warn {
 #[macro_export]
 macro_rules! e62rs_info {
     ($($arg:tt)+) => {
-        if check_e62rs_logging!() {
+        if check_e62rs_logging_enabled!() {
             log::info!($($arg)+);
         }
     };
@@ -145,7 +157,7 @@ macro_rules! e62rs_info {
 #[macro_export]
 macro_rules! e62rs_debug {
     ($($arg:tt)+) => {
-        if check_e62rs_logging!() {
+        if check_e62rs_logging_enabled!() && check_e62rs_verbose!() {
             log::debug!($($arg)+);
         }
     };
@@ -154,7 +166,7 @@ macro_rules! e62rs_debug {
 #[macro_export]
 macro_rules! e62rs_trace {
     ($($arg:tt)+) => {
-        if check_e62rs_logging!() {
+        if check_e62rs_logging_enabled!() {
             log::trace!($($arg)+);
         }
     };

@@ -1,4 +1,6 @@
-use crate::{check_e62rs_logging, e62rs_debug as debug, e62rs_info as info};
+use crate::{
+    check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_info as info,
+};
 use crate::{client::cache::CacheEntry, utils::create_auth_header};
 use anyhow::{Context, Result};
 use e6cfg::{CacheConfig, E62Rs, HttpConfig};

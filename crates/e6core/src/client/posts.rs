@@ -1,5 +1,5 @@
 use crate::{
-    check_e62rs_logging,
+    check_e62rs_logging_enabled, check_e62rs_verbose,
     client::{DEFAULT_LIMIT, E6Client},
     e62rs_debug, e62rs_info, e62rs_warn,
     models::{E6PostResponse, E6PostsResponse},

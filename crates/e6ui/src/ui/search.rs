@@ -1,9 +1,6 @@
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
-use crate::ui::{
-    E6Ui,
-    menus::{AdvPoolSearch, BatchAction, InteractionMenu, PoolInteractionMenu},
-};
+use crate::ui::{E6Ui, menus::AdvPoolSearch};
 use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use e6core::{
@@ -222,60 +219,6 @@ impl E6Ui {
         println!("{}", "=".repeat(70));
     }
 
-    pub async fn pool_interaction_menu(&self, pool: E6Pool) -> Result<PoolInteractionMenu> {
-        let choice = PoolInteractionMenu::select("What would you like to do with this pool?")
-            .prompt()
-            .context("Failed to get pool interaction choice")?;
-
-        match choice {
-            PoolInteractionMenu::ViewPosts => {
-                let posts = self.client.get_pool_posts(pool.id).await?;
-                if posts.posts.is_empty() {
-                    println!("No posts found in this pool.");
-                } else {
-                    self.display_posts(&posts.posts);
-
-                    let interact = Confirm::new("Would you like to interact with these posts?")
-                        .with_default(false)
-                        .prompt()?;
-
-                    if interact {
-                        let selected_posts = self.select_multiple_posts(&posts.posts)?;
-                        if !selected_posts.is_empty() {
-                            let mut fetched_posts = Vec::new();
-                            for post in &selected_posts {
-                                let fetched = self.client.get_post_by_id(post.id).await?;
-                                fetched_posts.push(fetched.post);
-                            }
-                            self.batch_interaction_menu(fetched_posts).await?;
-                        }
-                    }
-                }
-            }
-            PoolInteractionMenu::DownloadPool => {
-                let posts = self.client.get_pool_posts(pool.id).await?;
-                if posts.posts.is_empty() {
-                    println!("No posts found in this pool.");
-                } else {
-                    println!(
-                        "Downloading {} posts from pool '{}'...",
-                        posts.posts.len(),
-                        pool.name
-                    );
-                    self.download_posts(posts.posts).await?;
-                }
-            }
-            PoolInteractionMenu::OpenInBrowser => {
-                let url = format!("https://e621.net/pools/{}", pool.id);
-                open::that(&url).context("Failed to open pool in browser")?;
-                println!("Opened pool in browser: {}", url);
-            }
-            PoolInteractionMenu::Back => {}
-        }
-
-        Ok(choice)
-    }
-
     pub async fn search_posts(&self) -> Result<()> {
         loop {
             match self.perform_search().await {
@@ -353,12 +296,11 @@ impl E6Ui {
 
         if let Some(pool) = selected_pool {
             self.display_pool(pool);
-            match self.pool_interaction_menu(pool.clone()).await? {
-                PoolInteractionMenu::Back => Ok(true),
-                _ => Ok(self.ask_retry()?),
-            }
+            self.pool_interaction_menu(pool.clone()).await?;
+
+            Ok(true)
         } else {
-            Ok(false)
+            Ok(true)
         }
     }
 
@@ -474,30 +416,24 @@ impl E6Ui {
                 let fetched_posts = self.fetch_selected_posts(selected_posts).await?;
 
                 if !fetched_posts.is_empty() {
-                    match self.batch_interaction_menu(fetched_posts).await? {
-                        BatchAction::Back => Ok(true),
-                        _ => Ok(self.ask_retry()?),
-                    }
+                    self.batch_interaction_menu(fetched_posts).await?;
                 } else {
                     eprintln!("Failed to fetch any posts");
-                    Ok(self.ask_retry()?)
                 }
-            } else {
-                Ok(self.ask_retry()?)
             }
+
+            self.ask_retry()
         } else {
             let selected_post = self.select_post(&posts)?;
 
             if let Some(post) = selected_post {
                 let fetched_post = self.client.get_post_by_id(post.id).await?;
                 self.display_post(&fetched_post.post);
+                self.interaction_menu(fetched_post.post).await?;
 
-                match self.interaction_menu(fetched_post.post).await? {
-                    InteractionMenu::Back => Ok(true),
-                    _ => Ok(self.ask_retry()?),
-                }
+                self.ask_retry()
             } else {
-                Ok(false)
+                Ok(true)
             }
         }
     }

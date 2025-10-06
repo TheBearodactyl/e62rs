@@ -645,6 +645,11 @@
           "type": ["boolean", "null"],
           "default": true
         },
+        "verbose_output": {
+          "description": "Enable logging at the `warn` and `debug` levels",
+          "type": ["boolean", "null"],
+          "default": false
+        },
         "pagination_size": {
           "description": "Pagination size for post listings",
           "type": ["integer", "null"],

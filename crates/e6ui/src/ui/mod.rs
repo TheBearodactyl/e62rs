@@ -1,6 +1,6 @@
 use crate::ui::{
     download::PostDownloader,
-    menus::{BatchAction, InteractionMenu},
+    menus::{BatchAction, InteractionMenu, PoolInteractionMenu},
     view::*,
 };
 use anyhow::{Context, Result};
@@ -9,7 +9,7 @@ use e6core::{
     client::E6Client,
     data::{pools::PoolDatabase, tags::TagDatabase},
     image::fetch_and_display_images_as_sixel,
-    models::E6Post,
+    models::{E6Pool, E6Post},
 };
 use inquire::{Confirm, Editor, MultiSelect, Select};
 use serde::{Deserialize, Serialize};
@@ -89,7 +89,9 @@ impl E6Ui {
                 self.download_posts(posts).await?;
                 self.open_posts_in_browser(&posts_clone)?;
             }
-            BatchAction::Back => {}
+            BatchAction::Back => {
+                return Ok(BatchAction::Back);
+            }
             BatchAction::ViewAll => {
                 let posts_clone = posts.clone();
                 fetch_and_display_images_as_sixel(
@@ -102,6 +104,62 @@ impl E6Ui {
                         .collect::<Vec<&str>>(),
                 )
                 .await?;
+            }
+        }
+
+        Ok(choice)
+    }
+
+    pub async fn pool_interaction_menu(&self, pool: E6Pool) -> Result<PoolInteractionMenu> {
+        let choice = PoolInteractionMenu::select("What would you like to do with this pool?")
+            .prompt()
+            .context("Failed to get pool interaction choice")?;
+
+        match choice {
+            PoolInteractionMenu::ViewPosts => {
+                let posts = self.client.get_pool_posts(pool.id).await?;
+                if posts.posts.is_empty() {
+                    println!("No posts found in this pool.");
+                } else {
+                    self.display_posts(&posts.posts);
+
+                    let interact = Confirm::new("Would you like to interact with these posts?")
+                        .with_default(false)
+                        .prompt()?;
+
+                    if interact {
+                        let selected_posts = self.select_multiple_posts(&posts.posts)?;
+                        if !selected_posts.is_empty() {
+                            let mut fetched_posts = Vec::new();
+                            for post in &selected_posts {
+                                let fetched = self.client.get_post_by_id(post.id).await?;
+                                fetched_posts.push(fetched.post);
+                            }
+                            self.batch_interaction_menu(fetched_posts).await?;
+                        }
+                    }
+                }
+            }
+            PoolInteractionMenu::DownloadPool => {
+                let posts = self.client.get_pool_posts(pool.id).await?;
+                if posts.posts.is_empty() {
+                    println!("No posts found in this pool.");
+                } else {
+                    println!(
+                        "Downloading {} posts from pool '{}'...",
+                        posts.posts.len(),
+                        pool.name
+                    );
+                    self.download_posts(posts.posts).await?;
+                }
+            }
+            PoolInteractionMenu::OpenInBrowser => {
+                let url = format!("https://e621.net/pools/{}", pool.id);
+                open::that(&url).context("Failed to open pool in browser")?;
+                println!("Opened pool in browser: {}", url);
+            }
+            PoolInteractionMenu::Back => {
+                return Ok(PoolInteractionMenu::Back);
             }
         }
 
@@ -265,7 +323,9 @@ impl E6Ui {
             InteractionMenu::Download => {
                 self.download_post(post).await?;
             }
-            InteractionMenu::Back => {}
+            InteractionMenu::Back => {
+                return Ok(InteractionMenu::Back);
+            }
             InteractionMenu::View => {
                 print_post_to_terminal(post)
                     .await

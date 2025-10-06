@@ -2,7 +2,10 @@ use {
     crate::{progress::ProgressManager, ui::E6Ui},
     anyhow::{Context, Result},
     e6cfg::E62Rs,
-    e6core::{check_e62rs_logging, e62rs_debug as debug, e62rs_warn as warn, models::E6Post},
+    e6core::{
+        check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_warn as warn,
+        models::E6Post,
+    },
     std::{
         fs,
         io::Read,

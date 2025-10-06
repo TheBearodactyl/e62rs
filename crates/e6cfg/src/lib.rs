@@ -152,8 +152,11 @@ pub struct UiConfig {
     /// Enable colored output
     pub colored_output: Option<bool>,
 
-    /// Enable logging (HIGHLY RECCOMEND TO KEEP ON)
+    /// Enable logging (HIGHLY RECCOMMEND TO KEEP ON)
     pub logging: Option<bool>,
+
+    /// Enable logging at the `warn` and `debug` levels
+    pub verbose_output: Option<bool>,
 }
 
 /// Configuration options for displaying images

@@ -3,7 +3,7 @@ use {
     clap::Parser,
     e6cfg::E62Rs,
     e6core::{
-        check_e62rs_logging,
+        check_e62rs_logging_enabled,
         client::E6Client,
         data::{pools::PoolDatabase, tags::TagDatabase},
         e62rs_error as error, e62rs_info as info,

@@ -122,6 +122,7 @@ impl Default for UiConfig {
             pagination_size: Some(20),
             colored_output: Some(true),
             logging: Some(true),
+            verbose_output: Some(false),
         }
     }
 }
