@@ -722,7 +722,6 @@ dependencies = [
  "e6core",
  "e6ui",
  "env_logger",
- "log",
  "tokio",
 ]
 
@@ -773,17 +772,14 @@ name = "e6ui"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "cc",
  "chrono",
  "e6cfg",
  "e6core",
- "futures",
  "futures-util",
  "indicatif",
  "inquire",
  "inquire-derive",
  "lazy_static",
- "log",
  "open",
  "regex",
  "reqwest",
