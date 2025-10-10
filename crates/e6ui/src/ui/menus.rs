@@ -78,6 +78,8 @@ pub enum MainMenu {
     ViewLatest,
     /// View downloaded files
     ExploreDownloads,
+    /// Open your downloads with your browser
+    OpenDownloadsInBrowser,
     /// Manage your blacklist
     ManageBlacklist,
     /// Reorganize already downloaded files

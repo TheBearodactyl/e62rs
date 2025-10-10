@@ -689,20 +689,7 @@ impl FileReorganizer {
             pb.set_message(format!("Processing {}", file_path.display()));
 
             match self.process_file(&file_path, base_path, output_format, &options) {
-                Ok(new_path) => {
-                    if options.dry_run {
-                        println!(
-                            "[DRY RUN] Would move:\n  {} ->\n  {}",
-                            file_path.display(),
-                            new_path.display()
-                        );
-                    } else {
-                        println!(
-                            "Moved:\n  {} ->\n  {}",
-                            file_path.display(),
-                            new_path.display()
-                        );
-                    }
+                Ok(_) => {
                     result.successful += 1;
                 }
                 Err(e) => {
@@ -712,7 +699,7 @@ impl FileReorganizer {
                     } else {
                         result.failed += 1;
                         result.errors.push((file_path.clone(), e.to_string()));
-                        warn!("Failed to process {}: {}", file_path.display(), e);
+                        log::warn!("Failed to process {}: {}", file_path.display(), e);
                     }
                 }
             }

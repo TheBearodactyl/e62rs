@@ -6,11 +6,11 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 
 # Features
 
-- 55+ available [configuration options](https://github.com/TheBearodactyl/e62rs/wiki/Configuration), and counting
+- 70+ available [configuration options](https://github.com/TheBearodactyl/e62rs/wiki/Configuration), and counting
 - A fully in-terminal image viewer with no quality loss (via [icy_sixel](https://github.com/mkrueger/icy_sixel/))
 - A completely offline downloads re-organizer
-- A downloads browser (also completely offline)
-- A batch post downloader
+- A downloads browser, available in both CLI and Web flavors (also completely offline)
+- A really fucking fast batch post downloader
 - Automatic metadata storing (saves to `<imgpath>.json` on Unix like systems, and `<imgpath>:metadata` on Windows systems)
 - Full support for [DText](https://e621.net/help/dtext.html) when viewing post info
 
@@ -26,5 +26,11 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 ## Features
 
 - [ ] Add GIF support for viewing downloaded images in-terminal (will require a really janky setup)
-- [ ] Add more filters to post and pool searching
+- [x] Add more filters to post and pool searching
 - [x] Add more configuration options
+
+## Code Stuff
+
+- [ ] Refactor the whole thing into something that isn't held together with duct tape and a dream
+- [ ] Add unit tests for like... everything
+- [ ] Add doc comments to everything exposed to outside of the crate

@@ -1,4 +1,3 @@
-// progress.rs
 use anyhow::Result;
 use e6cfg::E62Rs;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};

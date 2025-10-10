@@ -1,5 +1,3 @@
-use std::{path::PathBuf, sync::Arc};
-
 use crate::models::E6Post;
 use crate::{
     check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_info as info,
@@ -7,8 +5,10 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use bincode::config::standard;
-use e6cfg::E62Rs;
+use e6cfg::{CacheConfig, E62Rs};
+use redb::ReadableTable;
 use redb::{Database, ReadableDatabase, ReadableTableMetadata, TableDefinition};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 
 const POSTS_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("posts");
@@ -17,23 +17,62 @@ const POSTS_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("posts");
 pub struct PostCache {
     db: Arc<RwLock<Option<Database>>>,
     cache_path: PathBuf,
+    max_posts: usize,
+    auto_compact: bool,
+    compact_threshold: u8,
 }
 
 impl PostCache {
-    pub fn new(cache_dir: &str) -> Result<Self> {
+    pub fn new(cache_dir: &str, cache_config: &CacheConfig) -> Result<Self> {
+        let post_cache_config = cache_config.post_cache.as_ref();
+
+        if let Some(pc_config) = post_cache_config
+            && !pc_config.enabled.unwrap_or_default()
+        {
+            info!("Post cache disabled by configuration");
+            return Ok(Self {
+                db: Arc::new(RwLock::new(None)),
+                cache_path: PathBuf::from(cache_dir).join("posts.redb"),
+                max_posts: 0,
+                auto_compact: false,
+                compact_threshold: 0,
+            });
+        }
+
         let cache_path = PathBuf::from(cache_dir).join("posts.redb");
 
         std::fs::create_dir_all(cache_dir)
             .with_context(|| format!("Failed to create cache directory: {}", cache_dir))?;
 
-        let db = Database::create(&cache_path)
+        let cache_size_mb = cache_config.max_size_mb.unwrap_or_default();
+        let cache_size_bytes = ((cache_size_mb / 4) * 1024 * 1024) as usize;
+
+        let db = Database::builder()
+            .set_cache_size(cache_size_bytes)
+            .create(&cache_path)
             .with_context(|| format!("Failed to create post cache database at {:?}", cache_path))?;
 
-        info!("Initialized post cache at {:?}", cache_path);
+        let max_posts = post_cache_config
+            .and_then(|c| c.max_posts)
+            .unwrap_or_default();
+        let auto_compact = post_cache_config
+            .and_then(|c| c.auto_compact)
+            .unwrap_or_default();
+        let compact_threshold = post_cache_config
+            .and_then(|c| c.compact_threshold_percent)
+            .unwrap_or_default();
+
+        info!(
+            "Initialized post cache at {:?} (max: {} posts, cache: {} MB)",
+            cache_path, max_posts, cache_size_mb
+        );
 
         Ok(Self {
             db: Arc::new(RwLock::new(Some(db))),
             cache_path,
+            max_posts,
+            auto_compact,
+            compact_threshold,
         })
     }
 
@@ -58,7 +97,7 @@ impl PostCache {
                 let bytes = data.value();
                 match bincode::serde::decode_from_slice::<E6Post, _>(bytes, standard()) {
                     Ok((post, _)) => {
-                        debug!("Cache hit for post {}", post_id);
+                        debug!("Post cache hit for {}", post_id);
                         Ok(Some(post))
                     }
                     Err(e) => {
@@ -68,7 +107,7 @@ impl PostCache {
                 }
             }
             Ok(None) => {
-                debug!("Cache miss for post {}", post_id);
+                debug!("Post cache miss for {}", post_id);
                 Ok(None)
             }
             Err(e) => {
@@ -105,6 +144,10 @@ impl PostCache {
         write_txn.commit().context("Failed to commit transaction")?;
 
         debug!("Cached post {}", post.id);
+
+        self.maybe_evict_old_entries().await?;
+        self.maybe_compact().await?;
+
         Ok(())
     }
 
@@ -143,6 +186,122 @@ impl PostCache {
             .context("Failed to commit batch transaction")?;
 
         info!("Cached {} posts", posts.len());
+
+        self.maybe_evict_old_entries().await?;
+        self.maybe_compact().await?;
+
+        Ok(())
+    }
+
+    async fn maybe_evict_old_entries(&self) -> Result<()> {
+        if self.max_posts == 0 {
+            return Ok(());
+        }
+
+        let stats = self.get_stats().await?;
+        if stats.entry_count > self.max_posts {
+            let to_remove = stats.entry_count - (self.max_posts * 9 / 10);
+            self.evict_oldest_entries(to_remove).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn evict_oldest_entries(&self, count: usize) -> Result<()> {
+        let db_guard = self.db.read().await;
+        let db = match db_guard.as_ref() {
+            Some(db) => db,
+            None => return Ok(()),
+        };
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(POSTS_TABLE)?;
+
+        let mut entries: Vec<i64> = table
+            .iter()?
+            .filter_map(|result| result.ok())
+            .map(|(id, _)| id.value())
+            .collect();
+
+        entries.sort_unstable();
+        let keys_to_remove: Vec<i64> = entries.into_iter().take(count).collect();
+
+        drop(table);
+        drop(read_txn);
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(POSTS_TABLE)?;
+            for key in &keys_to_remove {
+                table.remove(*key)?;
+            }
+        }
+        write_txn.commit()?;
+
+        info!("Evicted {} old post cache entries", keys_to_remove.len());
+        Ok(())
+    }
+
+    async fn maybe_compact(&self) -> Result<()> {
+        if !self.auto_compact {
+            return Ok(());
+        }
+
+        let metadata = std::fs::metadata(&self.cache_path)?;
+        let file_size = metadata.len();
+
+        let stats = self.get_stats().await?;
+        let avg_entry_size = if stats.entry_count > 0 {
+            file_size / stats.entry_count as u64
+        } else {
+            return Ok(());
+        };
+
+        let expected_size = avg_entry_size * stats.entry_count as u64;
+        let wasted_space_percent = if file_size > expected_size {
+            ((file_size - expected_size) as f64 / file_size as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        if wasted_space_percent > self.compact_threshold as f64 {
+            info!(
+                "Compacting post cache ({:.1}% wasted space)",
+                wasted_space_percent
+            );
+            self.compact().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn compact(&self) -> Result<()> {
+        let db_guard = self.db.read().await;
+        let db = match db_guard.as_ref() {
+            Some(db) => db,
+            None => return Ok(()),
+        };
+
+        let read_txn = db.begin_read()?;
+        let table = read_txn.open_table(POSTS_TABLE)?;
+        let entries: Vec<(i64, Vec<u8>)> = table
+            .iter()?
+            .filter_map(|result| result.ok())
+            .map(|(id, data)| (id.value(), data.value().to_vec()))
+            .collect();
+
+        drop(table);
+        drop(read_txn);
+
+        let write_txn = db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(POSTS_TABLE)?;
+            for (id, data) in entries {
+                table.insert(id, data.as_slice())?;
+            }
+        }
+        write_txn.commit()?;
+
+        info!("Post cache compaction completed");
         Ok(())
     }
 
@@ -238,7 +397,58 @@ impl PostCache {
         Ok(PostCacheStats {
             entry_count: count,
             file_size_bytes: file_size,
+            max_entries: self.max_posts,
+            auto_compact_enabled: self.auto_compact,
         })
+    }
+
+    pub async fn remove(&self, post_id: i64) -> Result<bool> {
+        let db_guard = self.db.read().await;
+        let db = match db_guard.as_ref() {
+            Some(db) => db,
+            None => return Ok(false),
+        };
+
+        let write_txn = db.begin_write()?;
+        let removed = {
+            let mut table = write_txn.open_table(POSTS_TABLE)?;
+            table.remove(post_id)?.is_some()
+        };
+        write_txn.commit()?;
+
+        if removed {
+            debug!("Removed post {} from cache", post_id);
+        }
+
+        Ok(removed)
+    }
+
+    pub async fn remove_batch(&self, post_ids: &[i64]) -> Result<usize> {
+        let db_guard = self.db.read().await;
+        let db = match db_guard.as_ref() {
+            Some(db) => db,
+            None => return Ok(0),
+        };
+
+        let write_txn = db.begin_write()?;
+        let mut removed_count = 0;
+
+        {
+            let mut table = write_txn.open_table(POSTS_TABLE)?;
+            for &post_id in post_ids {
+                if table.remove(post_id)?.is_some() {
+                    removed_count += 1;
+                }
+            }
+        }
+
+        write_txn.commit()?;
+
+        if removed_count > 0 {
+            info!("Removed {} posts from cache", removed_count);
+        }
+
+        Ok(removed_count)
     }
 }
 
@@ -246,10 +456,51 @@ impl PostCache {
 pub struct PostCacheStats {
     pub entry_count: usize,
     pub file_size_bytes: u64,
+    pub max_entries: usize,
+    pub auto_compact_enabled: bool,
 }
 
 impl PostCacheStats {
     pub fn file_size_mb(&self) -> f64 {
         self.file_size_bytes as f64 / (1024.0 * 1024.0)
+    }
+
+    pub fn usage_percent(&self) -> f64 {
+        if self.max_entries == 0 {
+            0.0
+        } else {
+            (self.entry_count as f64 / self.max_entries as f64) * 100.0
+        }
+    }
+
+    pub fn avg_entry_size_kb(&self) -> f64 {
+        if self.entry_count == 0 {
+            0.0
+        } else {
+            (self.file_size_bytes as f64 / self.entry_count as f64) / 1024.0
+        }
+    }
+}
+
+impl std::fmt::Display for PostCacheStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Post Cache Statistics:\n\
+             - Entries: {} / {} ({:.1}% full)\n\
+             - File Size: {:.2} MB\n\
+             - Avg Entry Size: {:.2} KB\n\
+             - Auto-Compact: {}",
+            self.entry_count,
+            self.max_entries,
+            self.usage_percent(),
+            self.file_size_mb(),
+            self.avg_entry_size_kb(),
+            if self.auto_compact_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        )
     }
 }

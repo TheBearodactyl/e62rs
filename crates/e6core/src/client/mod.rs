@@ -1,5 +1,6 @@
 use crate::{
     check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_info as info,
+    e62rs_warn as warn,
 };
 use crate::{client::cache::CacheEntry, utils::create_auth_header};
 use anyhow::{Context, Result};
@@ -13,6 +14,7 @@ pub mod pools;
 pub mod post_cache;
 pub mod posts;
 
+use cache::CacheStats;
 use post_cache::PostCache;
 
 const DEFAULT_LIMIT: u64 = 20;
@@ -23,6 +25,7 @@ pub struct E6Client {
     base_url: String,
     cache: Arc<RwLock<HashMap<String, CacheEntry>>>,
     cache_config: CacheConfig,
+    cache_stats: Arc<CacheStats>,
     _disk_cache_path: Option<std::path::PathBuf>,
     post_cache: Arc<PostCache>,
 }
@@ -52,21 +55,41 @@ impl E6Client {
             None
         };
 
-        let post_cache = PostCache::new(cache_config.cache_dir.as_deref().unwrap_or(".cache"))?;
+        let post_cache = PostCache::new(
+            cache_config.cache_dir.as_deref().unwrap_or(".cache"),
+            &cache_config,
+        )?;
 
         info!(
             "Initialized HTTP client with {} max connections",
             http_config.max_connections.unwrap_or(2)
         );
 
-        Ok(Self {
+        let client = Self {
             client,
             base_url: base_url.to_string(),
             cache: Arc::new(RwLock::new(HashMap::new())),
-            cache_config,
+            cache_config: cache_config.clone(),
+            cache_stats: Arc::new(CacheStats::default()),
             _disk_cache_path: disk_cache_path,
             post_cache: Arc::new(post_cache),
-        })
+        };
+
+        if cache_config.enabled.unwrap_or(true) {
+            let cleanup_interval = cache_config.cleanup_interval_secs.unwrap_or(300);
+            let client_clone = client.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(cleanup_interval));
+                loop {
+                    interval.tick().await;
+                    if let Err(e) = client_clone.cleanup_expired_entries().await {
+                        warn!("Cache cleanup failed: {}", e);
+                    }
+                }
+            });
+        }
+
+        Ok(client)
     }
 
     fn build_http_client(http_config: &HttpConfig) -> Result<Client> {

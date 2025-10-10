@@ -24,7 +24,9 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    Builder::from_env(Env::default().default_filter_or("info")).init();
+    Builder::from_env(Env::default().default_filter_or("info"))
+        .format_timestamp(None)
+        .init();
 
     if let Err(e) = run().await {
         error!("Application error: {:#}", e);
@@ -97,6 +99,10 @@ async fn run() -> Result<()> {
             }
             MainMenu::ManageBlacklist => {
                 ui.manage_blacklist().await?;
+                continue;
+            }
+            MainMenu::OpenDownloadsInBrowser => {
+                ui.serve_downloads().await?;
                 continue;
             }
             MainMenu::ReorganizeDownloads => {

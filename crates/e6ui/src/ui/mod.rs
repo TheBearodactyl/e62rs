@@ -11,9 +11,10 @@ use e6core::{
     image::fetch_and_display_images_as_sixel,
     models::{E6Pool, E6Post},
 };
+use e6srv::{MediaServer, ServerConfig};
 use inquire::{Confirm, Editor, MultiSelect, Select};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 use tokio::fs;
 
 pub mod blacklist;
@@ -334,5 +335,40 @@ impl E6Ui {
         }
 
         Ok(choice)
+    }
+
+    pub async fn serve_downloads(&self) -> Result<()> {
+        let cfg = E62Rs::get().unwrap_or_default();
+        let downloads_dir = cfg
+            .download
+            .unwrap_or_default()
+            .download_dir
+            .unwrap_or_default();
+
+        let gallery_cfg = cfg.gallery.unwrap_or_default();
+        let port = gallery_cfg.port.unwrap_or(23794);
+        let enable_metadata = gallery_cfg.enable_metadata_filtering.unwrap_or(true);
+        let cache_metadata = gallery_cfg.cache_metadata.unwrap_or(true);
+
+        let srv_cfg = ServerConfig::builder()
+            .media_directory(PathBuf::from_str(&downloads_dir)?)
+            .bind_address(format!("127.0.0.1:{}", port).parse()?)
+            .max_file_size(100 * 1024 * 1024)
+            .enable_metadata_filtering(enable_metadata)
+            .cache_metadata(cache_metadata)
+            .build()
+            .expect("Failed to build server config");
+
+        let srv = MediaServer::new(srv_cfg);
+
+        if gallery_cfg.auto_open_browser.unwrap_or(false) {
+            let url = format!("http://localhost:{}", port);
+            let _ = open::that(&url);
+            println!("Opening browser at {}", url);
+        }
+
+        srv.serve().await.expect("Failed to serve");
+
+        Ok(())
     }
 }

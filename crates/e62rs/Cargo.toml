@@ -1,6 +1,6 @@
 [package]
 name = "e62rs"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2024"
 license = "MIT"
 description = "A highly configurable CLI e926/e621 browser"
