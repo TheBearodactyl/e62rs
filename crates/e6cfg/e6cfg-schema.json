@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "E62Rs",
   "description": "E62RS configuration options",
   "type": "object",
@@ -45,9 +45,24 @@
       ],
       "default": {
         "cache_dir": ".cache",
+        "cleanup_interval_secs": 300,
+        "compression_level": 6,
+        "enable_compression": false,
+        "enable_stats": true,
         "enabled": true,
+        "max_entries": 10000,
         "max_size_mb": 500,
-        "ttl_secs": 3600
+        "post_cache": {
+          "auto_compact": true,
+          "compact_threshold_percent": 25,
+          "enable_wal": true,
+          "enabled": true,
+          "max_posts": 50000000,
+          "page_size_kb": 4
+        },
+        "tti_secs": 1800,
+        "ttl_secs": 3600,
+        "use_lru_policy": false
       }
     },
     "completion": {
@@ -97,7 +112,6 @@
       "default": {
         "download_dir": "downloads",
         "output_format": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext",
-        "save_download_data": true,
         "save_metadata": true
       }
     },
@@ -112,13 +126,33 @@
         }
       ],
       "default": {
-        "auto_display_image": false,
+        "auto_display_image": true,
         "cache_metadata": true,
         "default_sort": "date_newest",
         "posts_per_page": 20,
         "progress_threshold": 100,
         "recursive_scan": true,
         "show_scan_progress": true
+      }
+    },
+    "gallery": {
+      "description": "Media server settings",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GalleryCfg"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "auto_open_browser": false,
+        "cache_metadata": true,
+        "enable_metadata_filtering": true,
+        "enabled": true,
+        "load_threads": 8,
+        "port": 23794,
+        "theme": "rose-pine"
       }
     },
     "http": {
@@ -139,7 +173,7 @@
         "pool_max_idle_per_host": 32,
         "tcp_keepalive": true,
         "timeout_secs": 30,
-        "user_agent": "e6cfg/v0.2.0 (by bearodactyl on e621)"
+        "user_agent": "e6cfg/v0.4.0 (by bearodactyl on e621)"
       }
     },
     "login": {
@@ -172,7 +206,7 @@
         "max_preload_size_mb": 100,
         "prefetch_batch_size": 10,
         "prefetch_enabled": true,
-        "preload_images": false
+        "preload_images": true
       }
     },
     "post_count": {
@@ -232,7 +266,8 @@
         "detailed_progress": true,
         "logging": true,
         "pagination_size": 20,
-        "progress_refresh_rate": 20
+        "progress_refresh_rate": 20,
+        "verbose_output": false
       }
     }
   },
@@ -263,10 +298,42 @@
           "type": ["string", "null"],
           "default": ".cache"
         },
+        "cleanup_interval_secs": {
+          "description": "Auto-cleanup interval in seconds (for removing expired entries)",
+          "type": ["integer", "null"],
+          "format": "uint64",
+          "default": 300,
+          "minimum": 0
+        },
+        "compression_level": {
+          "description": "Compression level (1-9, where 9 is maximum compression)",
+          "type": ["integer", "null"],
+          "format": "uint8",
+          "default": 6,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "enable_compression": {
+          "description": "Enable compression for cached data (reduces size but adds CPU overhead)",
+          "type": ["boolean", "null"],
+          "default": false
+        },
+        "enable_stats": {
+          "description": "Enable cache statistics tracking",
+          "type": ["boolean", "null"],
+          "default": true
+        },
         "enabled": {
           "description": "Enable response caching",
           "type": ["boolean", "null"],
           "default": true
+        },
+        "max_entries": {
+          "description": "Maximum number of entries in memory cache",
+          "type": ["integer", "null"],
+          "format": "uint",
+          "default": 10000,
+          "minimum": 0
         },
         "max_size_mb": {
           "description": "Max cache size in MB",
@@ -275,12 +342,43 @@
           "default": 500,
           "minimum": 0
         },
+        "post_cache": {
+          "description": "Post cache specific settings",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PostCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "auto_compact": true,
+            "compact_threshold_percent": 25,
+            "enable_wal": true,
+            "enabled": true,
+            "max_posts": 50000000,
+            "page_size_kb": 4
+          }
+        },
+        "tti_secs": {
+          "description": "Cache TTI in seconds",
+          "type": ["integer", "null"],
+          "format": "uint64",
+          "default": 1800,
+          "minimum": 0
+        },
         "ttl_secs": {
           "description": "Cache TTL in seconds",
           "type": ["integer", "null"],
           "format": "uint64",
           "default": 3600,
           "minimum": 0
+        },
+        "use_lru_policy": {
+          "description": "Enable LRU eviction policy (when false, uses TinyLFU for better hit rates)",
+          "type": ["boolean", "null"],
+          "default": false
         }
       }
     },
@@ -304,7 +402,8 @@
           "type": ["string", "null"],
           "default": "data/tags.csv"
         }
-      }
+      },
+      "required": ["tags", "pools"]
     },
     "DownloadCfg": {
       "description": "Settings for post downloading",
@@ -320,13 +419,8 @@
           "type": ["string", "null"],
           "default": "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
         },
-        "save_download_data": {
-          "description": "Save the data of downloaded posts\n\nThis is used in the auto-reorganizer to enable\nfully offline metadata queries\n\nUnix systems: Will save the JSON data to `<imagepath>.json`\n  To read it: Run `cat <imagepath>.json`\n\nWindows systems: Will save the JSON data to `<imagepath>:metadata`\n     To read it: Run `cat <imagepath>:metadata`",
-          "type": ["boolean", "null"],
-          "default": true
-        },
         "save_metadata": {
-          "description": "Save post metadata for later use\n\nWindows: Saves the metadata to `<imagefile>:metadata`\nUnix: Saves the metadata to `<imagefile>.json`",
+          "description": "Save the data of downloaded posts\n\nThis is used in the auto-reorganizer to enable\nfully offline metadata queries\n\nUnix systems: Will save the JSON data to `<imagepath>.json`\n  To read it: Run `cat <imagepath>.json`\n\nWindows systems: Will save the JSON data to `<imagepath>:metadata`\n     To read it: Run `cat <imagepath>:metadata`",
           "type": ["boolean", "null"],
           "default": true
         }
@@ -339,7 +433,7 @@
         "auto_display_image": {
           "description": "Automatically display image when viewing post details",
           "type": ["boolean", "null"],
-          "default": false
+          "default": true
         },
         "cache_metadata": {
           "description": "Cache scanned metadata in memory for faster subsequent access",
@@ -377,6 +471,51 @@
         }
       }
     },
+    "GalleryCfg": {
+      "type": "object",
+      "properties": {
+        "auto_open_browser": {
+          "description": "Automatically open browser when starting server",
+          "type": ["boolean", "null"],
+          "default": false
+        },
+        "cache_metadata": {
+          "description": "Cache metadata in memory for faster filtering",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "enable_metadata_filtering": {
+          "description": "Enable metadata-based filtering (requires saved post metadata)",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "enabled": {
+          "description": "Enable the media gallery server",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "load_threads": {
+          "description": "The number of threads to use for loading your downloads",
+          "type": ["integer", "null"],
+          "format": "uint",
+          "default": 8,
+          "minimum": 0
+        },
+        "port": {
+          "description": "Port to run the gallery server on",
+          "type": ["integer", "null"],
+          "format": "uint16",
+          "default": 23794,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "theme": {
+          "description": "The colorscheme to use for the gallery\n\nPossible values:\n- rose-pine (default)\n- rose-pine-moon\n- rose-pine-dawn\n- catppuccin-latte\n- catppuccin-frappe\n- catppuccin-macchiato\n- catppuccin-mocha",
+          "type": ["string", "null"],
+          "default": "rose-pine"
+        }
+      }
+    },
     "HttpConfig": {
       "description": "Configuration options for making HTTP requests",
       "type": "object",
@@ -385,19 +524,16 @@
           "description": "Connection timeout in seconds",
           "type": ["integer", "null"],
           "format": "uint64",
-          "default": 10,
           "minimum": 0
         },
         "http2_prior_knowledge": {
           "description": "Enable HTTP/2",
-          "type": ["boolean", "null"],
-          "default": true
+          "type": ["boolean", "null"]
         },
         "max_connections": {
           "description": "Max concurrent connections",
           "type": ["integer", "null"],
           "format": "uint",
-          "default": 15,
           "maximum": 15,
           "minimum": 1
         },
@@ -405,32 +541,27 @@
           "description": "Connection pool idle timeout in seconds",
           "type": ["integer", "null"],
           "format": "uint64",
-          "default": 90,
           "minimum": 0
         },
         "pool_max_idle_per_host": {
           "description": "Connection pool size per host",
           "type": ["integer", "null"],
           "format": "uint",
-          "default": 32,
           "minimum": 0
         },
         "tcp_keepalive": {
           "description": "Enable keep-alive",
-          "type": ["boolean", "null"],
-          "default": true
+          "type": ["boolean", "null"]
         },
         "timeout_secs": {
           "description": "Request timeout in seconds",
           "type": ["integer", "null"],
           "format": "uint64",
-          "default": 30,
           "minimum": 0
         },
         "user_agent": {
           "description": "User agent string in the format:\n`<project name>/<project version> (by <valid e6 username> on <e621/e926>)`\n\nSome examples of valid User Agents:\n- `my-project/1.2.3 (by username123 on e621)`\n- `another/2.0.0-beta.1 (by user7890 on e926)`\n- `test-proj/0.1.0+build.123 (by myuser12345 on e621)`",
-          "type": ["string", "null"],
-          "default": "e6cfg/v0.2.0 (by bearodactyl on e621)"
+          "type": ["string", "null"]
         }
       }
     },
@@ -523,7 +654,50 @@
         "preload_images": {
           "description": "Enable image preloading",
           "type": ["boolean", "null"],
-          "default": false
+          "default": true
+        }
+      }
+    },
+    "PostCacheConfig": {
+      "description": "Configuration options for post-specific caching",
+      "type": "object",
+      "properties": {
+        "auto_compact": {
+          "description": "Enable automatic compaction to reclaim space",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "compact_threshold_percent": {
+          "description": "Compaction threshold (compact when wasted space exceeds this percentage)",
+          "type": ["integer", "null"],
+          "format": "uint8",
+          "default": 25,
+          "maximum": 255,
+          "minimum": 0
+        },
+        "enable_wal": {
+          "description": "Enable write-ahead logging for better crash recovery",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "enabled": {
+          "description": "Enable post cache",
+          "type": ["boolean", "null"],
+          "default": true
+        },
+        "max_posts": {
+          "description": "Maximum number of posts to cache",
+          "type": ["integer", "null"],
+          "format": "uint",
+          "default": 50000000,
+          "minimum": 0
+        },
+        "page_size_kb": {
+          "description": "Database page size in bytes (affects performance and size)",
+          "type": ["integer", "null"],
+          "format": "uint",
+          "default": 4,
+          "minimum": 0
         }
       }
     },
@@ -641,14 +815,9 @@
           "default": true
         },
         "logging": {
-          "description": "Enable logging (HIGHLY RECCOMEND TO KEEP ON)",
+          "description": "Enable logging (HIGHLY RECCOMMEND TO KEEP ON)",
           "type": ["boolean", "null"],
           "default": true
-        },
-        "verbose_output": {
-          "description": "Enable logging at the `warn` and `debug` levels",
-          "type": ["boolean", "null"],
-          "default": false
         },
         "pagination_size": {
           "description": "Pagination size for post listings",
@@ -663,6 +832,11 @@
           "format": "uint64",
           "default": 20,
           "minimum": 0
+        },
+        "verbose_output": {
+          "description": "Enable logging at the `warn` and `debug` levels",
+          "type": ["boolean", "null"],
+          "default": false
         }
       }
     }
