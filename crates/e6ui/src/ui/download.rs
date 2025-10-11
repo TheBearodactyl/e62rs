@@ -36,21 +36,9 @@ fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
                 '>' => '＞',
                 ':' => '：',
                 '"' => '＂',
-                '/' => '／',
-                '\\' => '＼',
                 '|' => '｜',
                 '?' => '？',
                 '*' => '＊',
-                _ => ch,
-            });
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        for ch in s.chars() {
-            sanitized.push(match ch {
-                '/' => '／',
                 _ => ch,
             });
         }
