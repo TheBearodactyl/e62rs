@@ -1,13 +1,10 @@
-use crate::{
-    check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_info as info,
-    e62rs_warn as warn,
-};
 use crate::{client::cache::CacheEntry, utils::create_auth_header};
 use anyhow::{Context, Result};
 use e6cfg::{CacheConfig, E62Rs, HttpConfig};
 use reqwest::Client;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
+use tracing::*;
 
 pub mod cache;
 pub mod pools;

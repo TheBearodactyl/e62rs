@@ -8,6 +8,7 @@ use {
         fs::{self},
         path::Path,
     },
+    tracing::*,
 };
 
 pub mod blacklist;
@@ -239,7 +240,7 @@ pub struct UiConfig {
     #[default(Some(true))]
     pub logging: Option<bool>,
 
-    /// Enable logging at the `warn` and `debug` levels
+    /// Enable logging at the `debug` and `trace` levels
     #[default(Some(false))]
     pub verbose_output: Option<bool>,
 }
@@ -700,12 +701,12 @@ impl E62Rs {
         }
 
         if !Path::new(&global_config_path).exists() && find_local_config_file().is_none() {
-            log::info!(
+            info!(
                 "Creating default configuration file at {}",
                 global_config_path
             );
             if let Err(e) = cfg.save_to_file(&global_config_path) {
-                log::warn!("Failed to create default config file: {}", e);
+                warn!("Failed to create default config file: {}", e);
             }
         }
 

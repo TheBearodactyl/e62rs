@@ -2,16 +2,14 @@ use {
     crate::{progress::ProgressManager, ui::E6Ui},
     anyhow::{Context, Result},
     e6cfg::E62Rs,
-    e6core::{
-        check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_debug as debug, e62rs_warn as warn,
-        models::E6Post,
-    },
+    e6core::models::E6Post,
     std::{
         fs,
         io::Read,
         path::{Path, PathBuf},
         sync::Arc,
     },
+    tracing::*,
     url::Url,
 };
 
@@ -699,7 +697,7 @@ impl FileReorganizer {
                     } else {
                         result.failed += 1;
                         result.errors.push((file_path.clone(), e.to_string()));
-                        log::warn!("Failed to process {}: {}", file_path.display(), e);
+                        warn!("Failed to process {}: {}", file_path.display(), e);
                     }
                 }
             }

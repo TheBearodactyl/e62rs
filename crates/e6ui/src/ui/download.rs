@@ -2,9 +2,7 @@ use {
     crate::{progress::ProgressManager, ui::E6Ui},
     anyhow::{Context, Result},
     e6cfg::E62Rs,
-    e6core::{
-        check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_warn as warn, models::E6Post,
-    },
+    e6core::models::E6Post,
     futures_util::StreamExt,
     indicatif::ProgressBar,
     std::{
@@ -14,6 +12,7 @@ use {
         sync::Arc,
     },
     tokio::{fs::File, io::AsyncWriteExt},
+    tracing::*,
     url::Url,
 };
 
@@ -23,6 +22,41 @@ pub struct PostDownloader {
     download_dir: Option<PathBuf>,
     output_format: Option<String>,
     progress_manager: Arc<ProgressManager>,
+}
+
+fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
+    let s = input.as_ref();
+    let mut sanitized = String::with_capacity(s.len());
+
+    #[cfg(target_os = "windows")]
+    {
+        for ch in s.chars() {
+            sanitized.push(match ch {
+                '<' => '＜',
+                '>' => '＞',
+                ':' => '：',
+                '"' => '＂',
+                '/' => '／',
+                '\\' => '＼',
+                '|' => '｜',
+                '?' => '？',
+                '*' => '＊',
+                _ => ch,
+            });
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        for ch in s.chars() {
+            sanitized.push(match ch {
+                '/' => '／',
+                _ => ch,
+            });
+        }
+    }
+
+    PathBuf::from(sanitized)
 }
 
 impl PostDownloader {
@@ -552,12 +586,12 @@ impl PostDownloader {
     }
 
     pub fn get_filepath(&self, filename: &str) -> Result<PathBuf> {
-        let filename = filename.replace(":", "_");
+        let filename = sanitize_path(filename);
 
         let path = if let Some(ref dir) = self.download_dir {
             dir.join(filename)
         } else {
-            PathBuf::from(filename)
+            filename
         };
 
         if let Some(parent) = path.parent()

@@ -8,7 +8,6 @@ use crate::{
 use anyhow::{Context, Result};
 use e6cfg::E62Rs;
 use e6core::models::E6Post;
-use e6core::{check_e62rs_logging_enabled, check_e62rs_verbose, e62rs_warn as warn};
 use inquire::{Confirm, Select, Text};
 use std::{
     collections::HashMap,
@@ -16,6 +15,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
+use tracing::*;
 
 lazy_static::lazy_static! {
     static ref METADATA_CACHE: Arc<Mutex<HashMap<PathBuf, E6Post>>> = Arc::new(Mutex::new(HashMap::new()));

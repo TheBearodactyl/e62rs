@@ -3,17 +3,16 @@ use {
     clap::Parser,
     e6cfg::E62Rs,
     e6core::{
-        check_e62rs_logging_enabled,
         client::E6Client,
         data::{pools::PoolDatabase, tags::TagDatabase},
-        e62rs_error as error, e62rs_info as info,
     },
     e6ui::ui::{
         E6Ui,
         menus::{MainMenu, PoolSearchModeMenu},
     },
-    env_logger::{Builder, Env},
     std::{process, sync::Arc},
+    tracing::*,
+    tracing_subscriber::FmtSubscriber,
 };
 
 #[derive(Parser)]
@@ -24,9 +23,20 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    Builder::from_env(Env::default().default_filter_or("info"))
-        .format_timestamp(None)
-        .init();
+    let max_level = if E62Rs::get()?
+        .ui
+        .unwrap_or_default()
+        .verbose_output
+        .unwrap_or_default()
+    {
+        Level::WARN
+    } else {
+        Level::TRACE
+    };
+
+    let subscriber = FmtSubscriber::builder().with_max_level(max_level).finish();
+
+    tracing::subscriber::set_global_default(subscriber)?;
 
     if let Err(e) = run().await {
         error!("Application error: {:#}", e);
@@ -34,6 +44,7 @@ async fn main() -> Result<()> {
     }
 
     info!("Application finished successfully");
+
     Ok(())
 }
 

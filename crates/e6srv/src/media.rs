@@ -4,6 +4,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use tracing::info;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -533,7 +534,7 @@ impl MediaScanner for FileSystemScanner {
                     if load_meta && let Some(metadata) = Self::read_metadata_static(path.as_path())
                     {
                         item = item.with_metadata(metadata);
-                        log::info!("Found item: {}", item.name);
+                        info!("Found item: {}", item.name);
                     }
 
                     Some(item)

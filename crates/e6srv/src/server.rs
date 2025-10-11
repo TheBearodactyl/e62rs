@@ -6,6 +6,7 @@ use anyhow::Result;
 use axum::{Router, routing::get};
 use std::sync::Arc;
 use tower_http::services::ServeDir;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct MediaServer {
@@ -36,12 +37,12 @@ impl MediaServer {
 
         let listener = tokio::net::TcpListener::bind(self.config.bind_address).await?;
 
-        log::info!("e6srv running at http://{}", self.config.bind_address);
-        log::info!(
+        info!("e6srv running at http://{}", self.config.bind_address);
+        info!(
             "Serving media from: {}",
             self.config.media_directory.display()
         );
-        log::info!(
+        info!(
             "Metadata filtering: {}",
             if self.config.enable_metadata_filtering {
                 "enabled"

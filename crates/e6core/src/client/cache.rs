@@ -1,16 +1,13 @@
 use {
-    crate::{
-        check_e62rs_logging_enabled, check_e62rs_verbose, client::E6Client, e62rs_debug as debug,
-        e62rs_info as info, e62rs_warn as warn,
-    },
+    crate::client::E6Client,
     anyhow::{Context, Result},
-    e6cfg::E62Rs,
     serde::{Deserialize, Serialize},
     std::{
         collections::HashMap,
         sync::atomic::{AtomicU64, Ordering},
         time::{Instant, SystemTime, UNIX_EPOCH},
     },
+    tracing::*,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
