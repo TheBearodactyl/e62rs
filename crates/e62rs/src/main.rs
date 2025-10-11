@@ -23,18 +23,11 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let max_level = if E62Rs::get()?
-        .ui
-        .unwrap_or_default()
-        .verbose_output
-        .unwrap_or_default()
-    {
-        Level::WARN
-    } else {
-        Level::TRACE
-    };
-
-    let subscriber = FmtSubscriber::builder().with_max_level(max_level).finish();
+    let subscriber = FmtSubscriber::builder()
+        .pretty()
+        .without_time()
+        .with_max_level(Level::INFO)
+        .finish();
 
     tracing::subscriber::set_global_default(subscriber)?;
 

@@ -73,7 +73,6 @@ impl PostCache {
         })
     }
 
-    #[tracing::instrument]
     pub async fn get(&self, post_id: i64) -> Result<Option<E6Post>> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -115,7 +114,6 @@ impl PostCache {
         }
     }
 
-    #[tracing::instrument]
     pub async fn insert(&self, post: &E6Post) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -150,7 +148,6 @@ impl PostCache {
         Ok(())
     }
 
-    #[tracing::instrument]
     pub async fn insert_batch(&self, posts: &[E6Post]) -> Result<()> {
         if posts.is_empty() {
             return Ok(());
@@ -193,7 +190,6 @@ impl PostCache {
         Ok(())
     }
 
-    #[tracing::instrument]
     async fn maybe_evict_old_entries(&self) -> Result<()> {
         if self.max_posts == 0 {
             return Ok(());
@@ -208,7 +204,6 @@ impl PostCache {
         Ok(())
     }
 
-    #[tracing::instrument]
     async fn evict_oldest_entries(&self, count: usize) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -307,7 +302,6 @@ impl PostCache {
         Ok(())
     }
 
-    #[tracing::instrument]
     pub async fn get_batch(&self, post_ids: &[i64]) -> Result<Vec<Option<E6Post>>> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -360,7 +354,6 @@ impl PostCache {
             .unwrap_or(false)
     }
 
-    #[tracing::instrument]
     pub async fn clear(&self) -> Result<()> {
         let mut db_guard = self.db.write().await;
         *db_guard = None;
@@ -406,7 +399,6 @@ impl PostCache {
         })
     }
 
-    #[tracing::instrument]
     pub async fn remove(&self, post_id: i64) -> Result<bool> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -428,7 +420,6 @@ impl PostCache {
         Ok(removed)
     }
 
-    #[tracing::instrument]
     pub async fn remove_batch(&self, post_ids: &[i64]) -> Result<usize> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
