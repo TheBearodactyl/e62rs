@@ -27,13 +27,7 @@ impl PoolDatabase {
         let cfg = E62Rs::get().unwrap_or_default();
 
         Ok(Self {
-            pools: Database::from_csv(
-                cfg.completion
-                    .unwrap_or_default()
-                    .pools
-                    .unwrap_or("data/pools.csv".to_owned())
-                    .as_str(),
-            )?,
+            pools: Database::from_csv(cfg.completion.pools.as_str())?,
         })
     }
 
@@ -44,16 +38,14 @@ impl PoolDatabase {
     /// # Safety
     #[inline(always)]
     pub unsafe fn iter_pools(&self) -> impl Iterator<Item = &PoolEntry> {
-        let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
+        let search_cfg = E62Rs::get_unsafe().search;
         let mut pools = unsafe {
             self.pools
                 .buffer
                 .iter()
+                .filter(|pool| pool.post_ids.len() > search_cfg.min_posts_on_pool as usize)
                 .filter(|pool| {
-                    pool.post_ids.len() > search_cfg.min_posts_on_pool.unwrap_or_default() as usize
-                })
-                .filter(|pool| {
-                    if search_cfg.show_inactive_pools.unwrap_or_default() {
+                    if search_cfg.show_inactive_pools {
                         true
                     } else {
                         pool.is_active
@@ -62,7 +54,7 @@ impl PoolDatabase {
                 .collect::<Vec<&PoolEntry>>()
         };
 
-        if search_cfg.sort_pools_by_post_count.unwrap_or_default() {
+        if search_cfg.sort_pools_by_post_count {
             pools.sort_by(|a, b| b.post_ids.len().cmp(&a.post_ids.len()));
         }
 

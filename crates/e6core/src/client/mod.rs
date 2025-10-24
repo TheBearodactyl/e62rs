@@ -1,18 +1,19 @@
-use crate::{client::cache::CacheEntry, utils::create_auth_header};
-use anyhow::{Context, Result};
-use e6cfg::{CacheConfig, E62Rs, HttpConfig};
-use reqwest::Client;
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::sync::RwLock;
-use tracing::*;
+use {
+    crate::{client::cache::CacheEntry, utils::create_auth_header},
+    anyhow::{Context, Result},
+    e6cfg::{CacheConfig, E62Rs, HttpConfig},
+    reqwest::Client,
+    std::{collections::HashMap, sync::Arc, time::Duration},
+    tokio::sync::RwLock,
+    tracing::*,
+};
 
 pub mod cache;
 pub mod pools;
 pub mod post_cache;
 pub mod posts;
 
-use cache::CacheStats;
-use post_cache::PostCache;
+use {cache::CacheStats, post_cache::PostCache};
 
 const DEFAULT_LIMIT: u64 = 20;
 
@@ -30,18 +31,18 @@ pub struct E6Client {
 impl Default for E6Client {
     fn default() -> Self {
         let cfg = E62Rs::get().unwrap_or_default();
-        Self::new(&cfg.base_url.unwrap_or_default()).expect("Failed to create default E6Client")
+        Self::new(&cfg.base_url).expect("Failed to create default E6Client")
     }
 }
 
 impl E6Client {
     pub fn new(base_url: &str) -> Result<Self> {
-        let cfg = E62Rs::get().unwrap_or_default();
-        let http_config = cfg.http.unwrap_or_default();
-        let cache_config = cfg.cache.unwrap_or_default();
+        let cfg = E62Rs::get()?;
+        let http_config = cfg.http;
+        let cache_config = cfg.cache;
         let client = Self::build_http_client(&http_config)?;
-        let disk_cache_path = if cache_config.enabled.unwrap_or(true) {
-            let cache_dir = cache_config.cache_dir.as_deref().unwrap_or(".cache");
+        let disk_cache_path = if cache_config.enabled {
+            let cache_dir = &cache_config.cache_dir;
             let path = std::path::PathBuf::from(cache_dir);
 
             std::fs::create_dir_all(&path)
@@ -52,14 +53,11 @@ impl E6Client {
             None
         };
 
-        let post_cache = PostCache::new(
-            cache_config.cache_dir.as_deref().unwrap_or(".cache"),
-            &cache_config,
-        )?;
+        let post_cache = PostCache::new(cache_config.cache_dir.as_str(), &cache_config)?;
 
         info!(
             "Initialized HTTP client with {} max connections",
-            http_config.max_connections.unwrap_or(2)
+            http_config.max_connections
         );
 
         let client = Self {
@@ -72,8 +70,8 @@ impl E6Client {
             post_cache: Arc::new(post_cache),
         };
 
-        if cache_config.enabled.unwrap_or(true) {
-            let cleanup_interval = cache_config.cleanup_interval_secs.unwrap_or(300);
+        if cache_config.enabled {
+            let cleanup_interval = cache_config.cleanup_interval_secs;
             let client_clone = client.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(cleanup_interval));
@@ -92,30 +90,19 @@ impl E6Client {
     fn build_http_client(http_config: &HttpConfig) -> Result<Client> {
         let login_cfg = E62Rs::get().unwrap_or_default().login;
         let mut client_builder = Client::builder()
-            .user_agent(
-                http_config
-                    .user_agent
-                    .as_deref()
-                    .unwrap_or(crate::USER_AGENT),
-            )
-            .timeout(Duration::from_secs(http_config.timeout_secs.unwrap_or(30)))
-            .connect_timeout(Duration::from_secs(
-                http_config.connect_timeout_secs.unwrap_or(10),
-            ))
-            .pool_max_idle_per_host(http_config.pool_max_idle_per_host.unwrap_or(32))
-            .pool_idle_timeout(Duration::from_secs(
-                http_config.pool_idle_timeout_secs.unwrap_or(90),
-            ));
+            .user_agent(http_config.clone().user_agent)
+            .timeout(Duration::from_secs(http_config.timeout_secs))
+            .connect_timeout(Duration::from_secs(http_config.connect_timeout_secs))
+            .pool_max_idle_per_host(http_config.pool_max_idle_per_host)
+            .pool_idle_timeout(Duration::from_secs(http_config.pool_idle_timeout_secs));
 
-        if http_config.http2_prior_knowledge.unwrap_or(true) {
+        if http_config.http2_prior_knowledge {
             client_builder = client_builder.http2_prior_knowledge();
         }
 
-        if let Some(login_creds) = login_cfg {
-            client_builder = client_builder.default_headers(create_auth_header(&login_creds)?);
-        }
+        client_builder = client_builder.default_headers(create_auth_header(&login_cfg)?);
 
-        if http_config.tcp_keepalive.unwrap_or(true) {
+        if http_config.tcp_keepalive {
             client_builder = client_builder.tcp_keepalive(Duration::from_secs(60));
         }
 

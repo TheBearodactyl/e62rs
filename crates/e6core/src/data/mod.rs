@@ -1,10 +1,12 @@
 pub mod pools;
 pub mod tags;
 
-use anyhow::Result;
-use e6cfg::E62Rs;
-use rapidfuzz::fuzz;
-use std::{fs::File, slice, sync::Arc};
+use {
+    anyhow::Result,
+    e6cfg::E62Rs,
+    rapidfuzz::fuzz,
+    std::{fs::File, slice, sync::Arc},
+};
 
 pub trait Entry: Clone + Send + Sync + for<'de> serde::Deserialize<'de> {
     fn name(&self) -> &str;
@@ -142,10 +144,7 @@ impl<T: Entry> Database<T> {
 
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
         let query_lower = query.to_lowercase();
-        let completion_cfg = E62Rs::get()
-            .unwrap_or_default()
-            .completion
-            .unwrap_or_default();
+        let completion_cfg = E62Rs::get_unsafe().completion;
         let mut results = Vec::new();
 
         unsafe {
@@ -153,7 +152,7 @@ impl<T: Entry> Database<T> {
                 let name_lower = entry.name().to_lowercase();
                 let name_similarity = fuzz::ratio(name_lower.chars(), query_lower.chars());
 
-                if name_similarity > completion_cfg.tag_similarity_threshold.unwrap_or_default() {
+                if name_similarity > completion_cfg.tag_similarity_threshold {
                     results.push(entry.name().to_string());
                     if results.len() >= limit {
                         break;

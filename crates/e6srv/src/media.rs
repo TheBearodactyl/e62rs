@@ -1,10 +1,14 @@
-use e6cfg::E62Rs;
-use jwalk::WalkDir;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use tracing::info;
+use {
+    e6cfg::E62Rs,
+    jwalk::WalkDir,
+    rayon::iter::{IntoParallelRefIterator, ParallelIterator},
+    serde::{Deserialize, Serialize},
+    std::{
+        collections::HashMap,
+        path::{Path, PathBuf},
+    },
+    tracing::info,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -272,8 +276,7 @@ impl FileSystemScanner {
 
     #[cfg(target_os = "windows")]
     fn read_metadata_static(file_path: &Path) -> Option<PostMetadata> {
-        use std::fs::OpenOptions;
-        use std::io::Read;
+        use std::{fs::OpenOptions, io::Read};
 
         let ads_path = format!("{}:metadata", file_path.display());
         let mut file = OpenOptions::new().read(true).open(&ads_path).ok()?;
@@ -383,8 +386,7 @@ impl FileSystemScanner {
 
     #[cfg(target_os = "windows")]
     fn read_metadata(&self, file_path: &Path) -> Option<PostMetadata> {
-        use std::fs::OpenOptions;
-        use std::io::Read;
+        use std::{fs::OpenOptions, io::Read};
 
         let ads_path = format!("{}:metadata", file_path.display());
         let mut file = OpenOptions::new().read(true).open(&ads_path).ok()?;
@@ -534,7 +536,6 @@ impl MediaScanner for FileSystemScanner {
                     if load_meta && let Some(metadata) = Self::read_metadata_static(path.as_path())
                     {
                         item = item.with_metadata(metadata);
-                        info!("Found item: {}", item.name);
                     }
 
                     Some(item)
@@ -556,12 +557,12 @@ pub struct MediaGallery {
 
 impl MediaGallery {
     pub fn new(directory: PathBuf, load_metadata: bool) -> Self {
-        let gallery_cfg = E62Rs::get().unwrap_or_default().gallery.unwrap_or_default();
+        let gallery_cfg = E62Rs::get_unsafe().gallery;
 
         Self {
             scanner: Box::new(FileSystemScanner::with_threads(
                 load_metadata,
-                gallery_cfg.load_threads.unwrap_or_default(),
+                gallery_cfg.load_threads,
             )),
             directory,
             cached_items: None,

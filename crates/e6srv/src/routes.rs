@@ -1,13 +1,17 @@
-use crate::media::{MediaFilter, MediaGallery};
-use crate::theme::{RosePine, ThemeRegistry};
-use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::{Html, IntoResponse, Response},
+use {
+    crate::{
+        media::{MediaFilter, MediaGallery},
+        theme::{RosePine, ThemeRegistry},
+    },
+    axum::{
+        extract::{Query, State},
+        http::StatusCode,
+        response::{Html, IntoResponse, Response},
+    },
+    e6cfg::E62Rs,
+    std::sync::Arc,
+    tokio::sync::RwLock,
 };
-use e6cfg::E62Rs;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 pub struct AppState {
     pub gallery: Arc<RwLock<MediaGallery>>,
@@ -22,13 +26,7 @@ impl AppState {
 }
 
 pub async fn index_handler(State(state): State<Arc<AppState>>) -> Html<String> {
-    let configured_theme = E62Rs::get()
-        .unwrap_or_default()
-        .gallery
-        .unwrap_or_default()
-        .theme
-        .unwrap_or_default();
-
+    let configured_theme = E62Rs::get_unsafe().gallery.theme;
     let registry = ThemeRegistry::new();
     let css_vars = registry.get_theme_css_vars(&configured_theme).unwrap();
     let html = HTML_TEMPLATE.replace("{{THEME_CSS_VARS}}", &css_vars);

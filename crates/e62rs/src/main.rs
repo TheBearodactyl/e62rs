@@ -43,19 +43,19 @@ async fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     let argv = Cli::parse();
-    let cfg = E62Rs::get().unwrap_or_default();
-    let autoup = cfg.clone().autoupdate.unwrap_or_default();
+    let cfg = E62Rs::get()?;
+    let autoup = cfg.clone().autoupdate;
     let client = Arc::new(E6Client::default());
 
     if argv.init {
         cfg.save_to_file("./e62rs.toml")?;
     }
 
-    if autoup.tags.unwrap_or_default() {
+    if autoup.tags {
         client.update_tags().await?;
     }
 
-    if autoup.pools.unwrap_or_default() {
+    if autoup.pools {
         client.update_pools().await?;
     }
 
@@ -73,7 +73,7 @@ async fn run() -> Result<()> {
         "Starting {} v{} using {}",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
-        cfg.base_url.unwrap_or_default()
+        cfg.base_url
     );
 
     let selection = MainMenu::select("What would you like to do?").prompt()?;

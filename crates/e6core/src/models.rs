@@ -1,7 +1,9 @@
-use crate::utils::*;
-use e6cfg::*;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use {
+    crate::utils::*,
+    e6cfg::*,
+    serde::{Deserialize, Serialize},
+    std::collections::HashMap,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct E6PostsResponse {
@@ -359,9 +361,8 @@ impl E6Post {
     }
 
     pub fn is_blacklisted(&self) -> bool {
-        if let Ok(config) = E62Rs::get()
-            && let Some(blacklist) = config.blacklist
-        {
+        if let Ok(config) = E62Rs::get() {
+            let blacklist = config.blacklist;
             if blacklist.is_empty() {
                 return false;
             }
@@ -377,9 +378,8 @@ impl E6Post {
     }
 
     pub fn search_includes_blacklisted(search_tags: &[String]) -> bool {
-        if let Ok(config) = E62Rs::get()
-            && let Some(blacklist) = config.blacklist
-        {
+        if let Ok(config) = E62Rs::get() {
+            let blacklist = config.blacklist;
             for search_tag in search_tags {
                 for rule in &blacklist {
                     let (include_tags, exclude_tags) = Self::parse_blacklist_rule(rule);
@@ -397,9 +397,9 @@ impl E6Post {
     }
 
     pub fn meets_score_requirements(&self) -> bool {
-        let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
-        let min_score = search_cfg.min_post_score.unwrap_or_default();
-        let max_score = search_cfg.max_post_score.unwrap_or_default();
+        let search_cfg = E62Rs::get_unsafe().search;
+        let min_score = search_cfg.min_post_score;
+        let max_score = search_cfg.max_post_score;
 
         self.score.total >= min_score && self.score.total <= max_score
     }

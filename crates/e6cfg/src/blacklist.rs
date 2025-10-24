@@ -1,14 +1,12 @@
-use crate::E62Rs;
-use anyhow::Result;
+use {crate::E62Rs, anyhow::Result};
 
 impl E62Rs {
     pub fn add_to_blacklist(&mut self, tag: String) -> Result<()> {
-        let blacklist = self.blacklist.get_or_insert_with(Vec::new);
+        let blacklist = &mut self.blacklist;
 
         if !blacklist.contains(&tag) {
             blacklist.push(tag);
             blacklist.sort();
-
             self.save_to_file("e62rs.toml")?;
         }
 
@@ -16,9 +14,8 @@ impl E62Rs {
     }
 
     pub fn remove_from_blacklist(&mut self, tag: &str) -> Result<bool> {
-        if let Some(blacklist) = &mut self.blacklist
-            && let Some(pos) = blacklist.iter().position(|x| x == tag)
-        {
+        let blacklist = &mut self.blacklist;
+        if let Some(pos) = blacklist.iter().position(|x| x == tag) {
             blacklist.remove(pos);
             self.save_to_file("e62rs.toml")?;
             return Ok(true);
@@ -28,11 +25,9 @@ impl E62Rs {
     }
 
     pub fn clear_blacklist(&mut self) -> Result<()> {
-        if let Some(blacklist) = &mut self.blacklist {
-            blacklist.clear();
-            self.save_to_file("e62rs.toml")?;
-        }
-
+        let blacklist = &mut self.blacklist;
+        blacklist.clear();
+        self.save_to_file("e62rs.toml")?;
         Ok(())
     }
 }

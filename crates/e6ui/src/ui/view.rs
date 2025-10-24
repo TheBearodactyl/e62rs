@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
-use e6core::formatting::format_text;
-use e6core::image::*;
-use e6core::models::E6Post;
+use {
+    anyhow::{Context, Result},
+    e6core::{formatting::format_text, image::*, models::E6Post},
+};
 
 use crate::ui::E6Ui;
 

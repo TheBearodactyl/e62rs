@@ -1,24 +1,27 @@
-use crate::ui::{E6Ui, menus::BlacklistManager};
-use anyhow::Result;
-use e6cfg::E62Rs;
-use inquire::{Confirm, MultiSelect, Select, Text};
+use {
+    crate::ui::{E6Ui, menus::BlacklistManager},
+    anyhow::Result,
+    e6cfg::E62Rs,
+    inquire::{Confirm, MultiSelect, Select, Text},
+};
 
 impl E6Ui {
     pub fn show_blacklist_info(&self) -> Result<()> {
-        let config = E62Rs::get().unwrap_or_default();
-        if let Some(blacklist) = config.blacklist {
-            if blacklist.is_empty() {
-                println!("Blacklist is empty.");
-            } else {
-                println!("Current blacklisted tags ({} total):", blacklist.len());
-                for (i, tag) in blacklist.iter().enumerate() {
-                    println!("  {}. {}", i + 1, tag);
-                }
-                println!(
-                    "\nNote: Posts with these tags will be filtered out unless explicitly searched for."
-                );
+        let config = E62Rs::get()?;
+        let blacklist = config.blacklist;
+
+        if blacklist.is_empty() {
+            println!("Blacklist is empty.");
+        } else {
+            println!("Current blacklisted tags ({} total):", blacklist.len());
+            for (i, tag) in blacklist.iter().enumerate() {
+                println!("  {}. {}", i + 1, tag);
             }
+            println!(
+                "\nNote: Posts with these tags will be filtered out unless explicitly searched for."
+            );
         }
+
         Ok(())
     }
 
@@ -98,10 +101,9 @@ impl E6Ui {
 
     async fn add_validated_tag_to_blacklist(&self, tag: String) -> Result<()> {
         let mut config = E62Rs::get().unwrap_or_default();
+        let blacklist = &config.blacklist;
 
-        if let Some(blacklist) = &config.blacklist
-            && blacklist.contains(&tag)
-        {
+        if blacklist.contains(&tag) {
             println!("Tag '{}' is already in the blacklist.", tag);
             return Ok(());
         }
@@ -123,13 +125,7 @@ impl E6Ui {
 
     async fn remove_tag_from_blacklist(&self) -> Result<()> {
         let config = E62Rs::get().unwrap_or_default();
-        let blacklist = match &config.blacklist {
-            Some(bl) if !bl.is_empty() => bl,
-            _ => {
-                println!("Blacklist is empty.");
-                return Ok(());
-            }
-        };
+        let blacklist = &config.blacklist;
 
         let tag_to_remove = Select::new("Select tag to remove from blacklist:", blacklist.clone())
             .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
@@ -163,8 +159,8 @@ impl E6Ui {
     }
 
     async fn clear_blacklist(&self) -> Result<()> {
-        let config = E62Rs::get().unwrap_or_default();
-        let blacklist_count = config.blacklist.as_ref().map(|bl| bl.len()).unwrap_or(0);
+        let config = E62Rs::get()?;
+        let blacklist_count = config.blacklist.len();
 
         if blacklist_count == 0 {
             println!("Blacklist is already empty.");
@@ -194,6 +190,7 @@ impl E6Ui {
     }
 
     async fn import_tags_to_blacklist(&self) -> Result<()> {
+        let blacklist = E62Rs::get()?.blacklist;
         println!("This will allow you to search for posts and add their tags to the blacklist.");
 
         let (include_tags, exclude_tags) = self.collect_tags()?;
@@ -268,9 +265,7 @@ impl E6Ui {
             let mut already_exists = 0;
 
             for tag in selected_tags {
-                if let Some(blacklist) = &config.blacklist
-                    && blacklist.contains(&tag)
-                {
+                if blacklist.contains(&tag) {
                     already_exists += 1;
                     continue;
                 }

@@ -1,21 +1,23 @@
-use crate::ui::{
-    download::PostDownloader,
-    menus::{BatchAction, InteractionMenu, PoolInteractionMenu},
-    view::*,
+use {
+    crate::ui::{
+        download::PostDownloader,
+        menus::{BatchAction, InteractionMenu, PoolInteractionMenu},
+        view::*,
+    },
+    anyhow::{Context, Result},
+    e6cfg::E62Rs,
+    e6core::{
+        client::E6Client,
+        data::{pools::PoolDatabase, tags::TagDatabase},
+        image::fetch_and_display_images_as_sixel,
+        models::{E6Pool, E6Post},
+    },
+    e6srv::{MediaServer, ServerConfig},
+    inquire::{Confirm, Editor, MultiSelect, Select},
+    serde::{Deserialize, Serialize},
+    std::{path::PathBuf, str::FromStr, sync::Arc},
+    tokio::fs,
 };
-use anyhow::{Context, Result};
-use e6cfg::E62Rs;
-use e6core::{
-    client::E6Client,
-    data::{pools::PoolDatabase, tags::TagDatabase},
-    image::fetch_and_display_images_as_sixel,
-    models::{E6Pool, E6Post},
-};
-use e6srv::{MediaServer, ServerConfig};
-use inquire::{Confirm, Editor, MultiSelect, Select};
-use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, str::FromStr, sync::Arc};
-use tokio::fs;
 
 pub mod blacklist;
 pub mod download;
@@ -50,15 +52,15 @@ impl E6Ui {
         tag_db: Arc<TagDatabase>,
         pool_db: Arc<PoolDatabase>,
     ) -> Self {
-        let settings = E62Rs::get().unwrap_or_default();
-        let dl_cfg = settings.download.unwrap_or_default();
+        let settings = E62Rs::get_unsafe();
+        let dl_cfg = settings.download;
         let downloader = Arc::new(PostDownloader::with_download_dir_and_format(
-            dl_cfg.download_dir.clone().unwrap(),
-            dl_cfg.output_format.clone(),
+            dl_cfg.download_dir.clone(),
+            Some(dl_cfg.output_format.clone()),
         ));
 
-        if std::fs::exists(dl_cfg.download_dir.clone().unwrap_or("output".to_string())).is_err() {
-            std::fs::create_dir_all(dl_cfg.download_dir.clone().unwrap_or("output".to_string()))
+        if std::fs::exists(dl_cfg.download_dir.clone()).is_err() {
+            std::fs::create_dir_all(dl_cfg.download_dir.clone())
                 .expect("Failed to create output directory");
         }
 
@@ -338,17 +340,13 @@ impl E6Ui {
     }
 
     pub async fn serve_downloads(&self) -> Result<()> {
-        let cfg = E62Rs::get().unwrap_or_default();
-        let downloads_dir = cfg
-            .download
-            .unwrap_or_default()
-            .download_dir
-            .unwrap_or_default();
+        let cfg = E62Rs::get()?;
+        let downloads_dir = cfg.download.download_dir;
 
-        let gallery_cfg = cfg.gallery.unwrap_or_default();
-        let port = gallery_cfg.port.unwrap_or(23794);
-        let enable_metadata = gallery_cfg.enable_metadata_filtering.unwrap_or(true);
-        let cache_metadata = gallery_cfg.cache_metadata.unwrap_or(true);
+        let gallery_cfg = cfg.gallery;
+        let port = gallery_cfg.port;
+        let enable_metadata = gallery_cfg.enable_metadata_filtering;
+        let cache_metadata = gallery_cfg.cache_metadata;
 
         let srv_cfg = ServerConfig::builder()
             .media_directory(PathBuf::from_str(&downloads_dir)?)
@@ -361,7 +359,7 @@ impl E6Ui {
 
         let srv = MediaServer::new(srv_cfg);
 
-        if gallery_cfg.auto_open_browser.unwrap_or(false) {
+        if gallery_cfg.auto_open_browser {
             let url = format!("http://localhost:{}", port);
             let _ = open::that(&url);
             println!("Opening browser at {}", url);

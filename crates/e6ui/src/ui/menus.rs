@@ -113,6 +113,8 @@ pub enum ExplorerMenu {
     ViewStatistics,
     /// Clear all filters
     ClearFilters,
+    /// Watch a slideshow
+    Slideshow,
     /// Go back to main menu
     Back,
 }

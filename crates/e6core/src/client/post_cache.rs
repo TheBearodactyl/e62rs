@@ -1,12 +1,13 @@
-use crate::models::E6Post;
-use anyhow::{Context, Result};
-use bincode::config::standard;
-use e6cfg::CacheConfig;
-use redb::ReadableTable;
-use redb::{Database, ReadableDatabase, ReadableTableMetadata, TableDefinition};
-use std::{path::PathBuf, sync::Arc};
-use tokio::sync::RwLock;
-use tracing::*;
+use {
+    crate::models::E6Post,
+    anyhow::{Context, Result},
+    bincode::config::standard,
+    e6cfg::CacheConfig,
+    redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition},
+    std::{path::PathBuf, sync::Arc},
+    tokio::sync::RwLock,
+    tracing::*,
+};
 
 const POSTS_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("posts");
 
@@ -21,11 +22,9 @@ pub struct PostCache {
 
 impl PostCache {
     pub fn new(cache_dir: &str, cache_config: &CacheConfig) -> Result<Self> {
-        let post_cache_config = cache_config.post_cache.as_ref();
+        let post_cache_config = cache_config.clone().post_cache;
 
-        if let Some(pc_config) = post_cache_config
-            && !pc_config.enabled.unwrap_or_default()
-        {
+        if !post_cache_config.enabled {
             info!("Post cache disabled by configuration");
             return Ok(Self {
                 db: Arc::new(RwLock::new(None)),
@@ -41,7 +40,7 @@ impl PostCache {
         std::fs::create_dir_all(cache_dir)
             .with_context(|| format!("Failed to create cache directory: {}", cache_dir))?;
 
-        let cache_size_mb = cache_config.max_size_mb.unwrap_or_default();
+        let cache_size_mb = cache_config.max_size_mb;
         let cache_size_bytes = ((cache_size_mb / 4) * 1024 * 1024) as usize;
 
         let db = Database::builder()
@@ -49,15 +48,9 @@ impl PostCache {
             .create(&cache_path)
             .with_context(|| format!("Failed to create post cache database at {:?}", cache_path))?;
 
-        let max_posts = post_cache_config
-            .and_then(|c| c.max_posts)
-            .unwrap_or_default();
-        let auto_compact = post_cache_config
-            .and_then(|c| c.auto_compact)
-            .unwrap_or_default();
-        let compact_threshold = post_cache_config
-            .and_then(|c| c.compact_threshold_percent)
-            .unwrap_or_default();
+        let max_posts = post_cache_config.max_posts;
+        let auto_compact = post_cache_config.auto_compact;
+        let compact_threshold = post_cache_config.compact_threshold_percent;
 
         info!(
             "Initialized post cache at {:?} (max: {} posts, cache: {} MB)",

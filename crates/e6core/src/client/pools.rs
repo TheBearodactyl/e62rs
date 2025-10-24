@@ -1,24 +1,22 @@
-use crate::{
-    client::{DEFAULT_LIMIT, E6Client},
-    models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
+use {
+    crate::{
+        client::{DEFAULT_LIMIT, E6Client},
+        models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
+    },
+    anyhow::{Context, Result, bail},
+    chrono::{Datelike, Local},
+    e6cfg::E62Rs,
+    flate2::read::GzDecoder,
+    sha2::{Digest, Sha256},
+    std::{io::Read, path::Path},
+    tokio::{fs, io::AsyncWriteExt},
+    tracing::*,
 };
-use anyhow::{Context, Result, bail};
-use chrono::{Datelike, Local};
-use e6cfg::E62Rs;
-use flate2::read::GzDecoder;
-use sha2::{Digest, Sha256};
-use std::{io::Read, path::Path};
-use tokio::{fs, io::AsyncWriteExt};
-use tracing::*;
 
 impl E6Client {
     pub async fn update_pools(&self) -> Result<()> {
         let cfg = E62Rs::get().unwrap_or_default();
-        let local_file_cfg = cfg
-            .completion
-            .unwrap_or_default()
-            .pools
-            .unwrap_or("data/pools.csv".to_owned());
+        let local_file_cfg = cfg.completion.pools;
         let local_file = local_file_cfg.as_str();
         let local_hash_file: &str = &format!("{}.hash", local_file);
 

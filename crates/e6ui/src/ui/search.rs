@@ -1,14 +1,16 @@
 use std::{collections::HashSet, sync::Arc, time::Duration};
 
-use crate::ui::{E6Ui, menus::AdvPoolSearch};
-use anyhow::{Context, Result};
-use e6cfg::E62Rs;
-use e6core::{
-    formatting::format_text,
-    models::{E6Pool, E6Post, PoolEntry},
+use {
+    crate::ui::{E6Ui, menus::AdvPoolSearch},
+    anyhow::{Context, Result},
+    e6cfg::E62Rs,
+    e6core::{
+        formatting::format_text,
+        models::{E6Pool, E6Post, PoolEntry},
+    },
+    indicatif::{ProgressBar, ProgressStyle},
+    inquire::{Confirm, Select, Text},
 };
-use indicatif::{ProgressBar, ProgressStyle};
-use inquire::{Confirm, Select, Text};
 
 impl E6Ui {
     pub async fn search_pools_adv(&self) -> Result<()> {
@@ -142,8 +144,8 @@ impl E6Ui {
     }
 
     pub fn get_pool_limit(&self) -> Result<u64> {
-        let settings = E62Rs::get().unwrap_or_default();
-        let default_limit = settings.post_count.unwrap_or(32);
+        let settings = E62Rs::get()?;
+        let default_limit = settings.post_count;
 
         let prompt = inquire::CustomType::<u64>::new("How many pools to return?")
             .with_default(default_limit)
@@ -439,8 +441,8 @@ impl E6Ui {
     }
 
     async fn fetch_selected_posts(&self, selected_posts: Vec<&E6Post>) -> Result<Vec<E6Post>> {
-        let search_cfg = E62Rs::get().unwrap_or_default().search.unwrap_or_default();
-        let concurrent_limit = search_cfg.fetch_threads.unwrap_or(8).max(1);
+        let search_cfg = E62Rs::get()?.search;
+        let concurrent_limit = search_cfg.fetch_threads;
         let post_ids: Vec<i64> = selected_posts.iter().map(|post| post.id).collect();
         let total_count = post_ids.len();
 
@@ -514,9 +516,9 @@ impl E6Ui {
     }
 
     fn get_post_limit(&self) -> Result<u64> {
-        let settings = E62Rs::get().unwrap_or_default();
+        let settings = E62Rs::get()?;
 
-        if settings.post_count.unwrap_or(32).eq(&32) {
+        if settings.post_count.eq(&32) {
             let prompt = inquire::CustomType::<u64>::new("How many posts to return?")
                 .with_default(32)
                 .with_error_message("Please enter a valid number")
@@ -525,7 +527,7 @@ impl E6Ui {
 
             Ok(prompt.unwrap_or(32))
         } else {
-            Ok(settings.post_count.unwrap_or(32))
+            Ok(settings.post_count)
         }
     }
 

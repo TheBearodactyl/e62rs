@@ -63,11 +63,7 @@ impl PostDownloader {
 
     pub async fn download_posts(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
         let cfg = E62Rs::get().unwrap_or_default();
-        let concurrent_limit = cfg
-            .performance
-            .as_ref()
-            .and_then(|p| p.concurrent_downloads)
-            .unwrap_or(8);
+        let concurrent_limit = cfg.performance.concurrent_downloads;
 
         let total_pb = self
             .progress_manager
@@ -182,15 +178,15 @@ impl PostDownloader {
         pb: ProgressBar,
         post: &E6Post,
     ) -> Result<()> {
-        let cfg = E62Rs::get().unwrap_or_default();
-        let dl_cfg = cfg.download.unwrap_or_default();
+        let cfg = E62Rs::get()?;
+        let dl_cfg = cfg.download;
         let mut file = File::create(filepath)
             .await
             .with_context(|| format!("Failed to create file '{}'", filepath.display()))?;
 
         #[cfg(target_os = "windows")]
         {
-            if dl_cfg.save_metadata.unwrap_or_default() {
+            if dl_cfg.save_metadata {
                 e6core::utils::write_to_ads(
                     filepath,
                     "metadata",

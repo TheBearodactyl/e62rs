@@ -1,16 +1,18 @@
-use crate::{
-    client::{DEFAULT_LIMIT, E6Client},
-    models::{E6PostResponse, E6PostsResponse},
+use {
+    crate::{
+        client::{DEFAULT_LIMIT, E6Client},
+        models::{E6PostResponse, E6PostsResponse},
+    },
+    anyhow::{Context, Result, bail},
+    chrono::{Datelike, Local},
+    e6cfg::E62Rs,
+    flate2::read::GzDecoder,
+    futures::future::join_all,
+    sha2::{Digest, Sha256},
+    std::{io::Read, path::Path, sync::Arc},
+    tokio::{fs, io::AsyncWriteExt},
+    tracing::*,
 };
-use anyhow::{Context, Result, bail};
-use chrono::{Datelike, Local};
-use e6cfg::E62Rs;
-use flate2::read::GzDecoder;
-use futures::future::join_all;
-use sha2::{Digest, Sha256};
-use std::{io::Read, path::Path, sync::Arc};
-use tokio::{fs, io::AsyncWriteExt};
-use tracing::*;
 
 impl E6Client {
     pub async fn get_latest_posts(&self) -> Result<E6PostsResponse> {
@@ -27,7 +29,7 @@ impl E6Client {
         }
 
         let cfg = E62Rs::get().unwrap_or_default();
-        let apply_blacklist = !cfg.blacklist.unwrap_or_default().is_empty();
+        let apply_blacklist = !cfg.blacklist.is_empty();
 
         if apply_blacklist {
             posts = posts.filter_blacklisted(&[]);
@@ -134,11 +136,7 @@ impl E6Client {
 
         if !missing_ids.is_empty() {
             let config = E62Rs::get().unwrap_or_default();
-            let concurrent_limit = config
-                .performance
-                .as_ref()
-                .and_then(|p| p.concurrent_downloads)
-                .unwrap_or(8);
+            let concurrent_limit = config.performance.concurrent_downloads;
 
             let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
             let futures: Vec<_> = missing_ids
@@ -174,11 +172,7 @@ impl E6Client {
 
     pub async fn update_tags(&self) -> Result<()> {
         let cfg = E62Rs::get().unwrap_or_default();
-        let local_file_cfg = cfg
-            .completion
-            .unwrap_or_default()
-            .tags
-            .unwrap_or("data/tags.csv".to_owned());
+        let local_file_cfg = cfg.completion.tags;
         let local_file = local_file_cfg.as_str();
         let local_hash_file: &str = &format!("{}.hash", local_file);
 

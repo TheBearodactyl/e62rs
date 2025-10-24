@@ -1,8 +1,10 @@
-use anyhow::{Context, Result};
-use e6cfg::E62Rs;
-use icy_sixel::{DiffusionMethod, MethodForLargest, PixelFormat, Quality, sixel_string};
-use image::{GenericImageView, ImageReader, imageops::FilterType};
-use std::{io::Cursor, path::Path};
+use {
+    anyhow::{Context, Result},
+    e6cfg::E62Rs,
+    icy_sixel::{DiffusionMethod, MethodForLargest, PixelFormat, Quality, sixel_string},
+    image::{GenericImageView, ImageReader, imageops::FilterType},
+    std::{io::Cursor, path::Path},
+};
 
 pub async fn fetch_remote_file_as_bytes(url: &str) -> Result<Vec<u8>> {
     let response = reqwest::get(url)
@@ -28,16 +30,10 @@ pub struct ImageDimensions {
 
 impl From<&E62Rs> for ImageDimensions {
     fn from(cfg: &E62Rs) -> Self {
-        if let Some(display) = &cfg.display {
-            ImageDimensions {
-                width: display.width.map(|w| w as u32),
-                height: display.height.map(|h| h as u32),
-            }
-        } else {
-            ImageDimensions {
-                width: None,
-                height: None,
-            }
+        let display = &cfg.display;
+        ImageDimensions {
+            width: Some(display.width as u32),
+            height: Some(display.height as u32),
         }
     }
 }

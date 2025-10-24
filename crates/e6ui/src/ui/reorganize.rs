@@ -72,9 +72,7 @@ impl FileReorganizer {
 
     #[cfg(target_os = "windows")]
     fn read_metadata_from_ads(&self, file_path: &Path) -> Result<E6Post> {
-        use std::fs::OpenOptions;
-
-        use anyhow::Context;
+        use {anyhow::Context, std::fs::OpenOptions};
 
         let ads_path = format!("{}:metadata", file_path.display());
 
@@ -657,17 +655,10 @@ impl FileReorganizer {
 
         println!("Found {} files with metadata", files.len());
 
-        let cfg = E62Rs::get().unwrap_or_default();
-        let dl_cfg = cfg.download.unwrap_or_default();
-        let output_format = options
-            .output_format
-            .as_deref()
-            .or(dl_cfg.output_format.as_deref())
-            .unwrap_or("$id.$ext");
-
-        let download_dir = dl_cfg
-            .download_dir
-            .unwrap_or_else(|| "downloads".to_string());
+        let cfg = E62Rs::get()?;
+        let dl_cfg = cfg.download;
+        let output_format = options.clone().output_format;
+        let download_dir = dl_cfg.download_dir;
         let base_path = Path::new(&download_dir);
 
         let pb = self
@@ -686,7 +677,15 @@ impl FileReorganizer {
         for file_path in files {
             pb.set_message(format!("Processing {}", file_path.display()));
 
-            match self.process_file(&file_path, base_path, output_format, &options) {
+            match self.process_file(
+                &file_path,
+                base_path,
+                output_format
+                    .clone()
+                    .unwrap_or("$id.$ext".to_owned())
+                    .as_str(),
+                &options,
+            ) {
                 Ok(_) => {
                     result.successful += 1;
                 }
@@ -744,11 +743,9 @@ impl E6Ui {
         println!("This will reorganize your downloaded files based on the current output format.");
         println!("Files will be moved to match the format specified in your config.\n");
 
-        let cfg = E62Rs::get().unwrap_or_default();
-        let dl_cfg = cfg.download.unwrap_or_default();
-        let download_dir = dl_cfg
-            .download_dir
-            .unwrap_or_else(|| "downloads".to_string());
+        let cfg = E62Rs::get()?;
+        let dl_cfg = cfg.download;
+        let download_dir = dl_cfg.download_dir;
 
         let directory = Text::new("Enter directory to reorganize:")
             .with_default(&download_dir)
@@ -770,7 +767,7 @@ impl E6Ui {
         let output_format = if !use_current_format {
             Some(
                 Text::new("Enter output format:")
-                    .with_default(dl_cfg.output_format.as_deref().unwrap_or("$id.$ext"))
+                    .with_default(dl_cfg.output_format.as_str())
                     .prompt()?,
             )
         } else {

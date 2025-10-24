@@ -1,21 +1,25 @@
-use crate::{
-    progress::ProgressManager,
-    ui::{
-        E6Ui,
-        menus::{ExplorerMenu, ExplorerSortBy},
+use {
+    crate::{
+        progress::ProgressManager,
+        ui::{
+            E6Ui,
+            menus::{ExplorerMenu, ExplorerSortBy},
+        },
     },
+    anyhow::{Context, Result},
+    e6cfg::E62Rs,
+    e6core::{image::display_image_from_path_as_sixel, models::E6Post},
+    inquire::{Confirm, Select, Text},
+    std::{
+        collections::HashMap,
+        io::Read,
+        path::{Path, PathBuf},
+        sync::{Arc, Mutex},
+        thread::sleep,
+        time::Duration,
+    },
+    tracing::*,
 };
-use anyhow::{Context, Result};
-use e6cfg::E62Rs;
-use e6core::models::E6Post;
-use inquire::{Confirm, Select, Text};
-use std::{
-    collections::HashMap,
-    io::Read,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
-};
-use tracing::*;
 
 lazy_static::lazy_static! {
     static ref METADATA_CACHE: Arc<Mutex<HashMap<PathBuf, E6Post>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -31,6 +35,12 @@ impl LocalPost {
     pub fn from_file(file_path: PathBuf) -> Result<Self> {
         let post = Self::read_metadata(&file_path)?;
         Ok(Self { post, file_path })
+    }
+
+    pub fn view(&self) -> Result<()> {
+        display_image_from_path_as_sixel(self.file_path.as_path())?;
+
+        Ok(())
     }
 
     #[cfg(target_os = "windows")]
@@ -251,13 +261,11 @@ impl E6Ui {
     pub async fn explore_downloads(&self) -> Result<()> {
         println!("\n=== Downloads Explorer ===\n");
 
-        let cfg = E62Rs::get().unwrap_or_default();
-        let dl_cfg = cfg.download.unwrap_or_default();
-        let explorer_cfg = cfg.explorer.unwrap_or_default();
+        let cfg = E62Rs::get()?;
+        let dl_cfg = cfg.download;
+        let explorer_cfg = cfg.explorer;
 
-        let download_dir = dl_cfg
-            .download_dir
-            .unwrap_or_else(|| "downloads".to_string());
+        let download_dir = dl_cfg.download_dir;
 
         let directory = Path::new(&download_dir);
         if !directory.exists() {
@@ -277,11 +285,7 @@ impl E6Ui {
 
         let mut state = ExplorerState::new(local_posts);
 
-        let default_sort = match explorer_cfg
-            .default_sort
-            .as_deref()
-            .unwrap_or("date_newest")
-        {
+        let default_sort = match explorer_cfg.default_sort.as_str() {
             "date_newest" => ExplorerSortBy::DateNewest,
             "date_oldest" => ExplorerSortBy::DateOldest,
             "score_highest" => ExplorerSortBy::ScoreHighest,
@@ -333,6 +337,7 @@ impl E6Ui {
                         state.filtered_posts.len()
                     );
                 }
+                ExplorerMenu::Slideshow => self.slideshow(&state.filtered_posts).await?,
                 ExplorerMenu::Back => break,
             }
 
@@ -356,10 +361,10 @@ impl E6Ui {
 
         let mut local_posts = Vec::new();
         let mut skipped_count = 0;
-        let recursive = explorer_cfg.recursive_scan.unwrap_or(true);
-        let show_progress = explorer_cfg.show_scan_progress.unwrap_or(true);
-        let progress_threshold = explorer_cfg.progress_threshold.unwrap_or(100);
-        let cache_enabled = explorer_cfg.cache_metadata.unwrap_or(true);
+        let recursive = explorer_cfg.recursive_scan;
+        let show_progress = explorer_cfg.show_scan_progress;
+        let progress_threshold = explorer_cfg.progress_threshold;
+        let cache_enabled = explorer_cfg.cache_metadata;
 
         let walker = if recursive {
             WalkDir::new(directory).follow_links(false)
@@ -490,12 +495,23 @@ impl E6Ui {
         Ok(local_posts)
     }
 
+    async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
+        let sleep_time = E62Rs::get()?.explorer.slideshow_wait_seconds;
+
+        for post in posts {
+            post.view().ok();
+            sleep(Duration::from_secs(sleep_time));
+        }
+
+        Ok(())
+    }
+
     async fn browse_local_posts(
         &self,
         posts: &[LocalPost],
         explorer_cfg: &e6cfg::ExplorerCfg,
     ) -> Result<()> {
-        let posts_per_page = explorer_cfg.posts_per_page.unwrap_or(20);
+        let posts_per_page = explorer_cfg.posts_per_page;
         let mut current_page = 0;
         let total_pages = posts.len().div_ceil(posts_per_page);
 
@@ -578,7 +594,7 @@ impl E6Ui {
     ) -> Result<()> {
         self.display_post(&local_post.post);
 
-        if explorer_cfg.auto_display_image.unwrap_or(false) {
+        if explorer_cfg.auto_display_image {
             use e6core::image::display_image_from_path_as_sixel;
             if let Err(e) = display_image_from_path_as_sixel(&local_post.file_path) {
                 warn!("Failed to auto-display image: {}", e);

@@ -1,8 +1,10 @@
-use anyhow::Result;
-use e6cfg::E62Rs;
-use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
-use std::{collections::HashMap, fmt::Write, sync::Arc, time::Duration};
-use tokio::sync::RwLock;
+use {
+    anyhow::Result,
+    e6cfg::E62Rs,
+    indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle},
+    std::{collections::HashMap, fmt::Write, sync::Arc, time::Duration},
+    tokio::sync::RwLock,
+};
 
 #[derive(Default, Debug)]
 pub struct ProgressManager {
@@ -12,12 +14,8 @@ pub struct ProgressManager {
 
 impl ProgressManager {
     pub fn new() -> Self {
-        let config = E62Rs::get().unwrap_or_default();
-        let refresh_rate = config
-            .ui
-            .as_ref()
-            .and_then(|ui| ui.progress_refresh_rate)
-            .unwrap_or(20);
+        let config = E62Rs::get_unsafe();
+        let refresh_rate = config.ui.progress_refresh_rate;
 
         let multi = MultiProgress::new();
 
@@ -32,13 +30,9 @@ impl ProgressManager {
     }
 
     pub async fn create_bar(&self, key: &str, len: u64, message: &str) -> Result<ProgressBar> {
-        let config = E62Rs::get().unwrap_or_default();
-        let size_format = config.progress_format.unwrap_or_default();
-        let detailed = config
-            .ui
-            .as_ref()
-            .and_then(|ui| ui.detailed_progress)
-            .unwrap_or(true);
+        let config = E62Rs::get()?;
+        let size_format = config.progress_format;
+        let detailed = config.ui.detailed_progress;
 
         let template = if detailed {
             "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos_size:>10}/{len_size:>10} ({percent}%) {msg}"
