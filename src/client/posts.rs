@@ -37,6 +37,7 @@ impl E6Client {
         debug!("Successfully fetched {} posts", posts.posts.len());
         Ok(posts)
     }
+
     pub async fn search_posts(
         &self,
         tags: Vec<String>,

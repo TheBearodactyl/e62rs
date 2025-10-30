@@ -1,5 +1,6 @@
 use {
     crate::{
+        cli::cli,
         client::E6Client,
         config::options::{E62Rs, LoggingFormat},
         data::{pools::PoolDatabase, tags::TagDatabase},
@@ -17,9 +18,7 @@ use {
 };
 
 pub async fn run() -> Result<()> {
-    tokio::task::spawn(async move {
-        run_api().await.expect("Failed to run API");
-    });
+    cli().await?;
     let cfg = E62Rs::get()?;
     let autoup = cfg.clone().autoupdate;
     let client = Arc::new(E6Client::default());

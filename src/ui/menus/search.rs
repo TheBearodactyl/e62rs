@@ -5,7 +5,7 @@ use {
         models::*,
         ui::{E6Ui, menus::AdvPoolSearch},
     },
-    color_eyre::eyre::{Context, Result},
+    color_eyre::eyre::{Context, Error, Result},
     indicatif::{ProgressBar, ProgressStyle},
     inquire::{Confirm, Select, Text},
     std::{collections::HashSet, fmt::Display, sync::Arc, time::Duration},
@@ -327,11 +327,18 @@ impl E6Ui {
                 all_fetched_posts.len()
             ));
 
-            let results = self
+            let results = match self
                 .client
                 .search_posts(all_tags.clone(), Some(current_limit), before_id)
                 .await
-                .context("Failed to search posts")?;
+                .context("Failed to search posts")
+            {
+                Ok(response) => response,
+                Err(e) => {
+                    eprintln!("{}", e.to_string());
+                    return Err(e);
+                }
+            };
 
             let batch_size_before_filtering = results.posts.len();
 

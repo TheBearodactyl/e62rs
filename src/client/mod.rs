@@ -118,6 +118,7 @@ impl E6Client {
         }
 
         client_builder
+            .http1_only()
             .build()
             .context("Failed to build HTTP client")
     }
