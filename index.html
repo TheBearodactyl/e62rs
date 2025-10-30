@@ -1,0 +1,1823 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>e6srv</title>
+    <style>
+      :root {
+        {{THEME_CSS_VARS}}
+        --highlight-low: #21202e;
+        --highlight-med: #403d52;
+        --highlight-high: #524f67;
+
+        --accent: hsl(340, 82%, 52%);
+        --surface-elevated: hsl(230, 20%, 20%);
+        --card-shadow:
+          0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        --card-shadow-hover:
+          0 20px 25px -5px rgba(0, 0, 0, 0.3),
+          0 10px 10px -5px rgba(0, 0, 0, 0.2);
+
+        --space-1: 0.25rem;
+        --space-2: 0.5rem;
+        --space-3: 0.75rem;
+        --space-4: 1rem;
+        --space-5: 1.25rem;
+        --space-6: 1.5rem;
+        --space-8: 2rem;
+        --space-10: 2.5rem;
+        --space-12: 3rem;
+
+        --radius-sm: 4px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+
+        --transition-fast: 150ms ease;
+        --transition-normal: 250ms ease;
+        --transition-slow: 350ms ease;
+
+        --z-dropdown: 100;
+        --z-sticky: 200;
+        --z-modal: 1000;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      ::selection {
+        background-color: var(--accent);
+        color: var(--base);
+      }
+
+      html {
+        scrollbar-width: thin;
+        scrollbar-color: var(--highlight-med) var(--surface);
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, "Fira Sans", "Droid Sans", sans-serif;
+        background-color: var(--base);
+        color: var(--text);
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      body::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      body::-webkit-scrollbar-track {
+        background: var(--surface);
+      }
+
+      body::-webkit-scrollbar-thumb {
+        background-color: var(--highlight-med);
+        border-radius: var(--radius-md);
+      }
+
+      body::-webkit-scrollbar-thumb:hover {
+        background-color: var(--highlight-high);
+      }
+
+      .main-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 var(--space-6);
+      }
+
+      header {
+        background-color: rgba(var(--surface, 31, 29, 46), 0.85);
+        backdrop-filter: blur(10px);
+        padding: var(--space-4) var(--space-6);
+        border-bottom: 2px solid var(--overlay);
+        position: sticky;
+        top: 0;
+        z-index: var(--z-sticky);
+        box-shadow: var(--card-shadow);
+      }
+
+      .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-4);
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        color: var(--accent);
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+      }
+
+      .keyboard-hint {
+        color: var(--muted);
+        font-size: 0.85rem;
+        padding: var(--space-1) var(--space-2);
+        background-color: var(--overlay);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--highlight-med);
+      }
+
+      .input-base,
+      .btn {
+        height: 44px;
+        padding: var(--space-2) var(--space-4);
+        border-radius: var(--radius-lg);
+        border: 2px solid var(--overlay);
+        background-color: var(--surface);
+        color: var(--text);
+        font-size: 1rem;
+        transition: all var(--transition-normal);
+      }
+
+      .input-base:focus,
+      .btn:focus-visible {
+        outline: none;
+        border-color: var(--iris);
+        box-shadow: 0 0 0 3px rgba(82, 182, 154, 0.2);
+      }
+
+      .btn {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        background-color: var(--overlay);
+        border-color: var(--highlight-med);
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .btn:hover {
+        background-color: var(--highlight-med);
+        border-color: var(--iris);
+        transform: translateY(-2px);
+        box-shadow: var(--card-shadow);
+      }
+
+      .btn.active {
+        background-color: var(--iris);
+        border-color: var(--iris);
+        color: var(--base);
+        box-shadow: 0 0 0 3px rgba(82, 182, 154, 0.3);
+      }
+
+      .controls {
+        padding: var(--space-8) 0;
+        display: flex;
+        gap: var(--space-4);
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .search-container {
+        flex: 1 1 300px;
+        position: relative;
+      }
+
+      .search-box {
+        width: 100%;
+        padding-right: 2.5rem;
+      }
+
+      .search-clear {
+        position: absolute;
+        right: var(--space-2);
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        padding: var(--space-2);
+        font-size: 1.2rem;
+        display: none;
+      }
+
+      .search-clear.active {
+        display: block;
+      }
+      .search-clear:hover {
+        color: var(--text);
+      }
+
+      .controls-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-2);
+      }
+
+      .view-options {
+        display: flex;
+        gap: var(--space-2);
+        background-color: var(--overlay);
+        padding: var(--space-1);
+        border-radius: var(--radius-lg);
+        border: 2px solid var(--highlight-med);
+      }
+
+      .view-btn {
+        background-color: transparent;
+        border: none;
+        border-radius: var(--radius-md);
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+      }
+      .view-btn:hover {
+        background-color: var(--highlight-med);
+      }
+      .view-btn.active {
+        background-color: var(--iris);
+        color: var(--base);
+      }
+
+      .advanced-filters {
+        display: none;
+        padding: var(--space-6);
+        background-color: var(--surface);
+        border: 2px solid var(--overlay);
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--space-8);
+        animation: slideDown 0.3s ease;
+        box-shadow: var(--card-shadow);
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .advanced-filters.active {
+        display: block;
+      }
+
+      .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-4);
+      }
+
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+
+      .filter-group label {
+        color: var(--subtle);
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+
+      .filter-group select,
+      .filter-group input {
+        height: 40px;
+        padding: var(--space-2);
+        background-color: var(--overlay);
+        border: 2px solid var(--highlight-med);
+        border-radius: var(--radius-md);
+        color: var(--text);
+        font-size: 0.95rem;
+        transition: all var(--transition-normal);
+      }
+
+      .filter-group select:focus,
+      .filter-group input:focus {
+        outline: none;
+        border-color: var(--iris);
+        box-shadow: 0 0 0 3px rgba(82, 182, 154, 0.2);
+      }
+
+      .stats {
+        padding: var(--space-4);
+        background-color: var(--surface);
+        color: var(--subtle);
+        font-size: 0.95rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: var(--space-4);
+        box-shadow: var(--card-shadow);
+        border-radius: var(--radius-lg);
+      }
+
+      .stats-info {
+        display: flex;
+        gap: var(--space-8);
+        flex-wrap: wrap;
+      }
+      .stat-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .stat-item strong {
+        color: var(--text);
+      }
+      .items-per-page {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .items-per-page select {
+        padding: var(--space-1) var(--space-2);
+        background-color: var(--overlay);
+        border: 1px solid var(--highlight-med);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+      }
+
+      .gallery {
+        display: grid;
+        gap: var(--space-6);
+        padding: var(--space-8) 0;
+      }
+      .gallery.grid-view {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+      .gallery.list-view {
+        grid-template-columns: 1fr;
+      }
+      .gallery.compact-view {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: var(--space-4);
+      }
+
+      .media-card {
+        background-color: var(--surface);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        cursor: pointer;
+        transition: all var(--transition-normal);
+        border: 2px solid var(--overlay);
+        position: relative;
+        box-shadow: var(--card-shadow);
+      }
+      .media-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--card-shadow-hover);
+        border-color: var(--iris);
+      }
+      .media-card.selected {
+        border-color: var(--foam);
+        box-shadow: 0 0 0 3px rgba(156, 207, 216, 0.3);
+      }
+
+      .list-view .media-card {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: var(--space-4);
+      }
+      .compact-view .media-card .media-info {
+        padding: var(--space-2);
+      }
+      .compact-view .media-metadata {
+        display: none;
+      }
+
+      .media-preview-container {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+      }
+      .media-preview {
+        width: 100%;
+        height: auto;
+        object-fit: cover;
+        background-color: var(--overlay);
+        transition: transform var(--transition-slow);
+      }
+      .media-card:hover .media-preview {
+        transform: scale(1.02);
+      }
+      .grid-view .media-preview,
+      .compact-view .media-preview {
+        height: 280px;
+      }
+      .list-view .media-preview {
+        height: 100%;
+        min-height: 200px;
+      }
+
+      .media-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: var(--space-2);
+        background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        opacity: 0;
+        transition: opacity var(--transition-normal);
+      }
+      .media-card:hover .media-overlay {
+        opacity: 1;
+      }
+
+      .quick-actions {
+        display: flex;
+        gap: var(--space-1);
+      }
+      .quick-action {
+        padding: var(--space-1) var(--space-2);
+        background-color: rgba(0, 0, 0, 0.8);
+        border: 1px solid var(--overlay);
+        border-radius: var(--radius-sm);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 0.75rem;
+        transition: all var(--transition-normal);
+        backdrop-filter: blur(4px);
+      }
+      .quick-action:hover {
+        background-color: var(--iris);
+        border-color: var(--iris);
+        transform: translateY(-2px);
+      }
+
+      .media-info {
+        padding: var(--space-4);
+      }
+      .list-view .media-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .media-name {
+        color: var(--foam);
+        font-weight: 600;
+        margin-bottom: var(--space-2);
+        word-break: break-word;
+        font-size: 1.1rem;
+      }
+      .media-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-bottom: var(--space-2);
+      }
+      .media-type {
+        background-color: var(--pine);
+        color: var(--text);
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .media-type.video {
+        background-color: var(--love);
+      }
+      .media-metadata {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-1);
+        margin-top: var(--space-2);
+        padding-top: var(--space-2);
+        border-top: 1px solid var(--overlay);
+      }
+      .metadata-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+      }
+      .metadata-label {
+        color: var(--muted);
+      }
+      .metadata-value {
+        color: var(--text);
+        font-weight: 500;
+      }
+
+      .rating-badge {
+        padding: 0.2rem var(--space-2);
+        border-radius: var(--radius-sm);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+      .rating-s {
+        background-color: var(--foam);
+        color: var(--base);
+      }
+      .rating-q {
+        background-color: var(--gold);
+        color: var(--base);
+      }
+      .rating-e {
+        background-color: var(--love);
+        color: var(--text);
+      }
+
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--space-1);
+        margin-top: var(--space-2);
+      }
+      .tag {
+        background-color: var(--overlay);
+        color: var(--subtle);
+        padding: 0.2rem var(--space-2);
+        border-radius: var(--radius-sm);
+        font-size: 0.7rem;
+        cursor: pointer;
+        transition: all var(--transition-normal);
+        border: 1px solid transparent;
+      }
+      .tag:hover {
+        background-color: var(--highlight-med);
+        color: var(--text);
+        border-color: var(--iris);
+      }
+      .tag.artist {
+        background-color: var(--rose);
+        color: var(--base);
+      }
+
+      #pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: var(--space-2);
+        padding-bottom: var(--space-8);
+        flex-wrap: wrap;
+      }
+      .page-button {
+        min-width: 44px;
+        height: 44px;
+      }
+      .page-ellipsis {
+        color: var(--muted);
+        padding: var(--space-2);
+      }
+      .page-jump {
+        display: flex;
+        gap: var(--space-2);
+        align-items: center;
+      }
+      .page-jump input {
+        width: 60px;
+        text-align: center;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        z-index: var(--z-modal);
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(5px);
+      }
+      .modal.active {
+        display: flex;
+      }
+
+      .modal-content {
+        width: 95%;
+        height: 95%;
+        max-width: 100%;
+        max-height: 100%;
+        position: relative;
+        background-color: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--card-shadow-hover);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-2) var(--space-4);
+        background-color: rgba(0, 0, 0, 0.2);
+        flex-shrink: 0;
+      }
+
+      .modal-counter {
+        font-weight: 500;
+      }
+      .modal-header-actions {
+        display: flex;
+        gap: var(--space-2);
+      }
+      .modal-btn {
+        height: 40px;
+        padding: var(--space-2) var(--space-4);
+      }
+      .modal-close {
+        background-color: var(--love);
+        border-color: var(--love);
+      }
+      .modal-close:hover {
+        background-color: var(--rose);
+      }
+
+      .modal-body {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .modal-media {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+
+      .modal-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(var(--surface), 0.5);
+        color: var(--text);
+        border: 2px solid var(--highlight-med);
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        cursor: pointer;
+        font-size: 1.5rem;
+        transition: all var(--transition-normal);
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--card-shadow);
+        backdrop-filter: blur(4px);
+      }
+      .modal-nav:hover {
+        background-color: var(--iris);
+        border-color: var(--iris);
+        transform: translateY(-50%) scale(1.1);
+      }
+      .modal-nav.prev {
+        left: 20px;
+      }
+      .modal-nav.next {
+        right: 20px;
+      }
+
+      .modal-info {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: rgba(31, 29, 46, 0.9);
+        padding: var(--space-4);
+        max-height: 35%;
+        overflow-y: auto;
+        transition: opacity var(--transition-normal);
+        backdrop-filter: blur(5px);
+        opacity: 0;
+      }
+      .modal-body:hover .modal-info {
+        opacity: 1;
+      }
+      .modal-info h3 {
+        color: var(--rose);
+        margin-bottom: var(--space-2);
+      }
+
+      .loading {
+        text-align: center;
+        color: var(--subtle);
+        font-size: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 100;
+        background-color: rgba(0, 0, 0, 0.7);
+        border-radius: var(--radius-lg);
+        padding: var(--space-8);
+        backdrop-filter: blur(5px);
+        min-width: 200px;
+        box-shadow: var(--card-shadow-hover);
+      }
+      .loading::before {
+        content: "";
+        width: 40px;
+        height: 40px;
+        border: 4px solid var(--overlay);
+        border-top: 4px solid var(--iris);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: var(--space-4);
+      }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .loading::after {
+        content: "Loading your downloads...";
+      }
+
+      .empty {
+        text-align: center;
+        padding: var(--space-12) var(--space-8);
+        color: var(--muted);
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      .empty h2 {
+        color: var(--love);
+        margin-bottom: var(--space-4);
+      }
+
+      .bulk-actions {
+        display: none;
+        position: fixed;
+        bottom: var(--space-8);
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: var(--surface);
+        border: 2px solid var(--iris);
+        border-radius: var(--radius-xl);
+        padding: var(--space-4) var(--space-8);
+        box-shadow: var(--card-shadow-hover);
+        z-index: 500;
+        gap: var(--space-4);
+        align-items: center;
+        backdrop-filter: blur(10px);
+      }
+      .bulk-actions.active {
+        display: flex;
+      }
+
+      .scroll-top {
+        position: fixed;
+        bottom: var(--space-8);
+        right: var(--space-8);
+        background-color: var(--iris);
+        color: var(--base);
+        border: none;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 1.5rem;
+        box-shadow: var(--card-shadow);
+        opacity: 0;
+        transition: all var(--transition-normal);
+        z-index: 500;
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .scroll-top.visible {
+        opacity: 1;
+      }
+      .scroll-top:hover {
+        background-color: var(--rose);
+        transform: translateY(-4px);
+        box-shadow: var(--card-shadow-hover);
+      }
+
+      @media (max-width: 768px) {
+        .main-container,
+        header {
+          padding: 0 var(--space-4);
+        }
+        .controls {
+          padding: var(--space-4) 0;
+        }
+        .gallery {
+          grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+          gap: var(--space-4);
+          padding: var(--space-4) 0;
+        }
+        .list-view .media-card {
+          grid-template-columns: 1fr;
+        }
+        h1 {
+          font-size: 1.5rem;
+        }
+        .filter-grid {
+          grid-template-columns: 1fr;
+        }
+        .modal-nav {
+          padding: var(--space-2);
+          font-size: 1rem;
+          width: 40px;
+          height: 40px;
+        }
+        .modal-header {
+          padding: var(--space-2);
+        }
+        .stats {
+          font-size: 0.85rem;
+          padding: var(--space-3) var(--space-4);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-content">
+        <h1>e6srv</h1>
+        <div class="header-actions">
+          <span class="keyboard-hint">N: Next | P: Prev | ESC: Close</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-container">
+      <div class="controls">
+        <div class="search-container">
+          <input
+            type="text"
+            class="search-box input-base"
+            id="searchBox"
+            placeholder="Search by filename, ID, artist, or tags..."
+          />
+          <button class="search-clear" id="searchClear">&times;</button>
+        </div>
+        <div class="controls-group">
+          <select class="sort-select input-base" id="sortBy">
+            <option value="name">Sort: Name</option>
+            <option value="size">Sort: Size</option>
+            <option value="date">Sort: Date</option>
+            <option value="score">Sort: Score</option>
+            <option value="fav_count">Sort: Favorites</option>
+            <option value="random">Sort: Random</option>
+          </select>
+          <button
+            class="btn"
+            id="sortOrder"
+            data-order="asc"
+            title="Toggle sort order"
+            style="width: 44px"
+          >
+            ↑
+          </button>
+        </div>
+        <div class="view-options">
+          <button class="view-btn active" data-view="grid" title="Grid view">
+            ⊞
+          </button>
+          <button class="view-btn" data-view="list" title="List view">
+            ☰
+          </button>
+          <button class="view-btn" data-view="compact" title="Compact view">
+            ⊡
+          </button>
+        </div>
+      </div>
+
+      <div class="controls" style="padding-top: 0">
+        <div class="controls-group">
+          <button class="btn filter-btn active" data-filter="all">All</button>
+          <button class="btn filter-btn" data-filter="image">Images</button>
+          <button class="btn filter-btn" data-filter="video">Videos</button>
+        </div>
+        <div class="controls-group" style="margin-left: auto">
+          <button class="btn" id="advancedFilterToggle">
+            Advanced Filters
+          </button>
+          <button class="btn" id="clearFilters">Clear All</button>
+        </div>
+      </div>
+
+      <div class="advanced-filters" id="advancedFilters">
+        <div class="filter-grid">
+          <div class="filter-group">
+            <label for="ratingFilter">Rating</label>
+            <select id="ratingFilter">
+              <option value="">All Ratings</option>
+              <option value="s">Safe</option>
+              <option value="q">Questionable</option>
+              <option value="e">Explicit</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="artistFilter">Artist</label>
+            <input
+              type="text"
+              id="artistFilter"
+              placeholder="Filter by artist..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="tagFilter">Tag</label>
+            <input type="text" id="tagFilter" placeholder="Filter by tag..." />
+          </div>
+          <div class="filter-group">
+            <label for="extensionFilter">File Type</label>
+            <select id="extensionFilter">
+              <option value="">All Types</option>
+              <option value="jpg">JPG</option>
+              <option value="png">PNG</option>
+              <option value="gif">GIF</option>
+              <option value="webp">WebP</option>
+              <option value="mp4">MP4</option>
+              <option value="webm">WebM</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="minScoreFilter">Min Score</label>
+            <input
+              type="number"
+              id="minScoreFilter"
+              placeholder="Minimum score..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="maxScoreFilter">Max Score</label>
+            <input
+              type="number"
+              id="maxScoreFilter"
+              placeholder="Maximum score..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="minFavFilter">Min Favorites</label>
+            <input
+              type="number"
+              id="minFavFilter"
+              placeholder="Minimum favorites..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="postIdFilter">Post ID</label>
+            <input
+              type="number"
+              id="postIdFilter"
+              placeholder="Search by post ID..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="minWidthFilter">Min Width</label>
+            <input
+              type="number"
+              id="minWidthFilter"
+              placeholder="Min width (px)..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="minHeightFilter">Min Height</label>
+            <input
+              type="number"
+              id="minHeightFilter"
+              placeholder="Min height (px)..."
+            />
+          </div>
+          <div class="filter-group">
+            <label for="aspectRatioFilter">Aspect Ratio</label>
+            <select id="aspectRatioFilter">
+              <option value="">Any</option>
+              <option value="square">Square (1:1)</option>
+              <option value="portrait">Portrait (taller)</option>
+              <option value="landscape">Landscape (wider)</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <button
+              class="btn"
+              id="applyFilters"
+              style="width: 100%; height: 40px"
+            >
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="stats">
+        <div class="stats-info">
+          <div class="stat-item">Loading media...</div>
+        </div>
+        <div class="items-per-page">
+          <label for="itemsPerPage">Items per page:</label>
+          <select id="itemsPerPage">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="gallery grid-view" id="gallery">
+        <div class="loading"></div>
+      </div>
+
+      <div id="pagination"></div>
+    </main>
+
+    <div class="bulk-actions" id="bulkActions">
+      <span id="selectedCount">0 selected</span>
+      <button class="btn">Download Selected</button>
+      <button class="btn">Clear Selection</button>
+    </div>
+
+    <button class="scroll-top" id="scrollTop" title="Scroll to top">↑</button>
+
+    <div class="modal" id="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-counter" id="modalCounter">1 / 1</div>
+          <div class="modal-header-actions">
+            <button class="btn modal-btn" id="modalDownload" title="Download">
+              ⬇
+            </button>
+            <button
+              class="btn modal-btn"
+              id="modalFullscreen"
+              title="Fullscreen"
+            >
+              ⛶
+            </button>
+            <button class="btn modal-btn modal-close" id="modalClose">
+              Close
+            </button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <button class="modal-nav prev" id="modalPrev">‹</button>
+          <img class="modal-media" id="modalMedia" src="" alt="" />
+          <button class="modal-nav next" id="modalNext">›</button>
+          <div class="modal-info" id="modalInfo"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // The JavaScript remains the same as it primarily handles logic
+      // and dynamic content generation, which is compatible with the new styles.
+      let all_media = [];
+      let filtered_media = [];
+      let current_filter = "all";
+      let current_search = "";
+      let current_modal_index = -1;
+      let current_view = "grid";
+      let current_sort = "name";
+      let sort_order = "asc";
+      let advanced_filters = {};
+      let selected_items = new Set();
+
+      async function load_media() {
+        try {
+          const params = new URLSearchParams();
+
+          if (current_search) params.append("search", current_search);
+          if (current_filter !== "all")
+            params.append("media_type", current_filter);
+          if (advanced_filters.rating)
+            params.append("rating", advanced_filters.rating);
+          if (advanced_filters.artist)
+            params.append("artist", advanced_filters.artist);
+          if (advanced_filters.tag) params.append("tag", advanced_filters.tag);
+          if (advanced_filters.extension)
+            params.append("extension", advanced_filters.extension);
+          if (advanced_filters.minScore)
+            params.append("min_score", advanced_filters.minScore);
+          if (advanced_filters.maxScore)
+            params.append("max_score", advanced_filters.maxScore);
+          if (advanced_filters.minFav)
+            params.append("min_fav", advanced_filters.minFav);
+          if (advanced_filters.postId)
+            params.append("post_id", advanced_filters.postId);
+          if (advanced_filters.minWidth)
+            params.append("min_width", advanced_filters.minWidth);
+          if (advanced_filters.minHeight)
+            params.append("min_height", advanced_filters.minHeight);
+          if (advanced_filters.aspectRatio)
+            params.append("aspect_ratio", advanced_filters.aspectRatio);
+
+          const response = await fetch(`/api/media?${params}`);
+          filtered_media = await response.json();
+
+          apply_sorting();
+          render_gallery();
+          update_stats();
+          render_pagination_ctrls();
+        } catch (error) {
+          document.getElementById("gallery").innerHTML = `
+                    <div class="empty">
+                        <h2>Error loading downloads</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+        }
+      }
+
+      function apply_sorting() {
+        if (current_sort === "random") {
+          filtered_media.sort(() => Math.random() - 0.5);
+          return;
+        }
+
+        filtered_media.sort((a, b) => {
+          let aVal, bVal;
+
+          switch (current_sort) {
+            case "name":
+              aVal = a.name.toLowerCase();
+              bVal = b.name.toLowerCase();
+              break;
+            case "size":
+              aVal = a.size;
+              bVal = b.size;
+              break;
+            case "date":
+              aVal = a.metadata?.created_at || 0;
+              bVal = b.metadata?.created_at || 0;
+              break;
+            case "score":
+              aVal = a.metadata?.score || 0;
+              bVal = b.metadata?.score || 0;
+              break;
+            case "fav_count":
+              aVal = a.metadata?.fav_count || 0;
+              bVal = b.metadata?.fav_count || 0;
+              break;
+            default:
+              return 0;
+          }
+
+          if (aVal < bVal) return sort_order === "asc" ? -1 : 1;
+          if (aVal > bVal) return sort_order === "asc" ? 1 : -1;
+          return 0;
+        });
+      }
+
+      const items_per_page_select = document.getElementById("itemsPerPage");
+      let items_per_page = parseInt(items_per_page_select.value);
+      let current_page = 1;
+
+      function render_gallery() {
+        const gallery = document.getElementById("gallery");
+        gallery.className = `gallery ${current_view}-view`;
+
+        if (filtered_media.length === 0) {
+          gallery.innerHTML = `
+                    <div class="empty">
+                        <h2>No downloads found</h2>
+                        <p>Try adjusting your filters or search query.</p>
+                    </div>
+                `;
+          return;
+        }
+
+        const start_idx = (current_page - 1) * items_per_page;
+        const end_index = Math.min(
+          start_idx + items_per_page,
+          filtered_media.length,
+        );
+        const pag_media = filtered_media.slice(start_idx, end_index);
+
+        gallery.innerHTML = pag_media
+          .map((item, index) => {
+            const globalIndex = start_idx + index;
+            const isSelected = selected_items.has(globalIndex);
+
+            let metadataHtml = "";
+            if (item.metadata) {
+              const meta = item.metadata;
+              const ratingClass = `rating-${meta.rating}`;
+              metadataHtml = `
+                        <div class="media-metadata">
+                            <div class="metadata-row">
+                                <span class="metadata-label">ID:</span>
+                                <span class="metadata-value">${meta.id}</span>
+                            </div>
+                            <div class="metadata-row">
+                                <span class="metadata-label">Artist:</span>
+                                <span class="metadata-value">${meta.artists.join(", ") || "Unknown"}</span>
+                            </div>
+                            <div class="metadata-row">
+                                <span class="metadata-label">Rating:</span>
+                                <span class="rating-badge ${ratingClass}">${meta.rating.toUpperCase()}</span>
+                            </div>
+                            <div class="metadata-row">
+                                <span class="metadata-label">Score:</span>
+                                <span class="metadata-value">${meta.score}</span>
+                            </div>
+                            <div class="metadata-row">
+                                <span class="metadata-label">Favs:</span>
+                                <span class="metadata-value">${meta.fav_count}</span>
+                            </div>
+                            ${
+                              meta.artists.length > 0
+                                ? `
+                                <div class="tag-list">
+                                    ${meta.artists
+                                      .slice(0, 3)
+                                      .map(
+                                        (a) =>
+                                          `<span class="tag artist" onclick="filter_by_tag('${a}', 'artist'); event.stopPropagation();">${a}</span>`,
+                                      )
+                                      .join("")}
+                                </div>
+                            `
+                                : ""
+                            }
+                        </div>
+                    `;
+            }
+
+            return `
+                    <div class="media-card ${isSelected ? "selected" : ""}" onclick="open_modal(${globalIndex})" data-index="${globalIndex}">
+                        <div class="media-preview-container">
+                            ${
+                              item.media_type === "video"
+                                ? `<video class="media-preview" src="${item.path}" preload="metadata" loop muted></video>`
+                                : `<img class="media-preview" src="${item.path}" alt="${item.name}" loading="lazy">`
+                            }
+                            <div class="media-overlay">
+                                <div class="quick-actions">
+                                    <button class="quick-action" onclick="toggle_select(${globalIndex}); event.stopPropagation();" title="Select">☑</button>
+                                    <button class="quick-action" onclick="download_media(${globalIndex}); event.stopPropagation();" title="Download">⬇</button>
+                                </div>
+                                <span class="media-type ${item.media_type}">${item.media_type}</span>
+                            </div>
+                        </div>
+                        <div class="media-info">
+                            <div class="media-name">${item.name}</div>
+                            <div class="media-meta">
+                                <span>${format_file_size(item.size)}</span>
+                            </div>
+                            ${metadataHtml}
+                        </div>
+                    </div>
+                `;
+          })
+          .join("");
+
+        if (current_view === "grid" || current_view === "compact") {
+          document.querySelectorAll(".media-card video").forEach((video) => {
+            video.parentElement.parentElement.addEventListener(
+              "mouseenter",
+              () => {
+                video.play().catch(() => {});
+              },
+            );
+            video.parentElement.parentElement.addEventListener(
+              "mouseleave",
+              () => {
+                video.pause();
+                video.currentTime = 0;
+              },
+            );
+          });
+        }
+      }
+
+      function toggle_select(index) {
+        if (selected_items.has(index)) {
+          selected_items.delete(index);
+        } else {
+          selected_items.add(index);
+        }
+
+        const card = document.querySelector(`[data-index="${index}"]`);
+        if (card) {
+          card.classList.toggle("selected");
+        }
+
+        update_bulk_actions();
+      }
+
+      function update_bulk_actions() {
+        const bulkActions = document.getElementById("bulkActions");
+        const selectedCount = document.getElementById("selectedCount");
+
+        selectedCount.textContent = `${selected_items.size} selected`;
+
+        if (selected_items.size > 0) {
+          bulkActions.classList.add("active");
+        } else {
+          bulkActions.classList.remove("active");
+        }
+      }
+
+      function download_media(index) {
+        const item = filtered_media[index];
+        const link = document.createElement("a");
+        link.href = item.path;
+        link.download = item.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      function filter_by_tag(tag, type) {
+        if (type === "artist") {
+          document.getElementById("artistFilter").value = tag;
+        } else {
+          document.getElementById("tagFilter").value = tag;
+        }
+        document.getElementById("advancedFilters").classList.add("active");
+        document.getElementById("applyFilters").click();
+      }
+
+      function update_stats() {
+        const stats = document
+          .getElementById("stats")
+          .querySelector(".stats-info");
+        const images = filtered_media.filter(
+          (m) => m.media_type === "image",
+        ).length;
+        const videos = filtered_media.filter(
+          (m) => m.media_type === "video",
+        ).length;
+
+        let filter_info = [];
+        if (current_search) filter_info.push(`search: "${current_search}"`);
+        if (advanced_filters.rating)
+          filter_info.push(`rating: ${advanced_filters.rating}`);
+        if (advanced_filters.artist)
+          filter_info.push(`artist: ${advanced_filters.artist}`);
+        if (advanced_filters.tag)
+          filter_info.push(`tag: ${advanced_filters.tag}`);
+
+        const filter_txt =
+          filter_info.length > 0 ? ` (${filter_info.join(", ")})` : "";
+
+        const totalSize = filtered_media.reduce(
+          (sum, item) => sum + item.size,
+          0,
+        );
+
+        stats.innerHTML = `
+          <div class="stat-item">
+            <strong>${filtered_media.length}</strong> items
+          </div>
+          <div class="stat-item">
+            <strong>${images}</strong> images
+          </div>
+          <div class="stat-item">
+            <strong>${videos}</strong> videos
+          </div>
+          <div class="stat-item">
+            <strong>${format_file_size(totalSize)}</strong> total
+          </div>
+          ${filter_txt ? `<div class="stat-item" style="color: var(--iris);">${filter_txt}</div>` : ""}
+        `;
+      }
+
+      function format_file_size(bytes) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return (
+          Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+        );
+      }
+
+      function open_modal(index) {
+        current_modal_index = index;
+        show_modal_media();
+        document.getElementById("modal").classList.add("active");
+        document.body.style.overflow = "hidden";
+      }
+
+      function close_modal() {
+        document.getElementById("modal").classList.remove("active");
+        document.body.style.overflow = "";
+      }
+
+      function render_pagination_ctrls() {
+        const total_items = filtered_media.length;
+        const total_pages = Math.ceil(total_items / items_per_page);
+        const pagination_container = document.getElementById("pagination");
+
+        if (total_pages <= 1) {
+          pagination_container.innerHTML = "";
+          return;
+        }
+
+        let pagination_html = "";
+
+        pagination_html += `<button class="btn page-button" onclick="prev_page()" ${current_page === 1 ? "disabled" : ""}>« Prev</button>`;
+
+        const showPages = 5;
+        let startPage = Math.max(1, current_page - Math.floor(showPages / 2));
+        let endPage = Math.min(total_pages, startPage + showPages - 1);
+
+        if (endPage - startPage < showPages - 1) {
+          startPage = Math.max(1, endPage - showPages + 1);
+        }
+
+        if (startPage > 1) {
+          pagination_html += `<button class="btn page-button" onclick="goto_page(1)">1</button>`;
+          if (startPage > 2) {
+            pagination_html += `<span class="page-ellipsis">...</span>`;
+          }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+          pagination_html += `<button class="btn page-button ${i === current_page ? "active" : ""}" onclick="goto_page(${i})">${i}</button>`;
+        }
+
+        if (endPage < total_pages) {
+          if (endPage < total_pages - 1) {
+            pagination_html += `<span class="page-ellipsis">...</span>`;
+          }
+          pagination_html += `<button class="btn page-button" onclick="goto_page(${total_pages})">${total_pages}</button>`;
+        }
+
+        pagination_html += `<button class="btn page-button" onclick="next_page()" ${current_page === total_pages ? "disabled" : ""}>Next »</button>`;
+
+        pagination_html += `
+          <div class="page-jump">
+            <span>Jump to:</span>
+            <input type="number" id="pageJumpInput" class="input-base" min="1" max="${total_pages}" value="${current_page}">
+            <button class="btn page-button" onclick="jump_to_page()">Go</button>
+          </div>
+        `;
+
+        pagination_container.innerHTML = pagination_html;
+      }
+
+      function goto_page(page) {
+        const total_pages = Math.ceil(filtered_media.length / items_per_page);
+        if (page >= 1 && page <= total_pages) {
+          current_page = page;
+          render_gallery();
+          render_pagination_ctrls();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+
+      function next_page() {
+        const total_pages = Math.ceil(filtered_media.length / items_per_page);
+        if (current_page < total_pages) {
+          current_page += 1;
+          render_gallery();
+          render_pagination_ctrls();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+
+      function prev_page() {
+        if (current_page > 1) {
+          current_page -= 1;
+          render_gallery();
+          render_pagination_ctrls();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+
+      function jump_to_page() {
+        const input = document.getElementById("pageJumpInput");
+        const page = parseInt(input.value);
+        if (!isNaN(page)) {
+          goto_page(page);
+        }
+      }
+
+      function show_modal_media() {
+        const item = filtered_media[current_modal_index];
+        const modal_body = document.querySelector(".modal-body");
+        const modal_media_element = document.getElementById("modalMedia");
+        const modal_info = document.getElementById("modalInfo");
+        const modal_counter = document.getElementById("modalCounter");
+
+        modal_counter.textContent = `${current_modal_index + 1} / ${filtered_media.length}`;
+
+        let new_media_element;
+
+        if (item.media_type === "video") {
+          new_media_element = document.createElement("video");
+          new_media_element.src = item.path;
+          new_media_element.controls = true;
+          new_media_element.autoplay = true;
+          new_media_element.loop = true;
+        } else {
+          new_media_element = document.createElement("img");
+          new_media_element.src = item.path;
+          new_media_element.alt = item.name;
+        }
+
+        new_media_element.className = "modal-media";
+        new_media_element.id = "modalMedia";
+
+        modal_media_element.replaceWith(new_media_element);
+
+        if (item.metadata) {
+          const meta = item.metadata;
+          modal_info.innerHTML = `
+                    <h3>${item.name}</h3>
+                    <p><strong>ID:</strong> ${meta.id} | <strong>Rating:</strong> ${meta.rating.toUpperCase()} | <strong>Score:</strong> ${meta.score} | <strong>Favorites:</strong> ${meta.fav_count}</p>
+                    ${meta.artists.length > 0 ? `<p><strong>Artists:</strong> ${meta.artists.join(", ")}</p>` : ""}
+                    ${meta.tags.length > 0 ? `<p><strong>Tags:</strong> ${meta.tags.slice(0, 20).join(", ")}${meta.tags.length > 20 ? "..." : ""}</p>` : ""}
+                    ${meta.character_tags.length > 0 ? `<p><strong>Characters:</strong> ${meta.character_tags.join(", ")}</p>` : ""}
+                    ${meta.species_tags.length > 0 ? `<p><strong>Species:</strong> ${meta.species_tags.join(", ")}</p>` : ""}
+                    <p><strong>Created:</strong> ${new Date(meta.created_at).toLocaleString()}</p>
+                    <p><strong>Size:</strong> ${format_file_size(item.size)}</p>
+                `;
+        } else {
+          modal_info.innerHTML = `
+            <h3>${item.name}</h3>
+            <p><strong>Size:</strong> ${format_file_size(item.size)}</p>
+            <p>No metadata available</p>
+          `;
+        }
+      }
+
+      function next_media() {
+        current_modal_index = (current_modal_index + 1) % filtered_media.length;
+        show_modal_media();
+      }
+
+      function prev_media() {
+        current_modal_index =
+          (current_modal_index - 1 + filtered_media.length) %
+          filtered_media.length;
+        show_modal_media();
+      }
+
+      document
+        .getElementById("modalClose")
+        .addEventListener("click", close_modal);
+      document
+        .getElementById("modalNext")
+        .addEventListener("click", next_media);
+      document
+        .getElementById("modalPrev")
+        .addEventListener("click", prev_media);
+
+      document.getElementById("modalDownload").addEventListener("click", () => {
+        download_media(current_modal_index);
+      });
+
+      document
+        .getElementById("modalFullscreen")
+        .addEventListener("click", () => {
+          const modalContent = document.querySelector(".modal-content");
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            modalContent.requestFullscreen().catch((err) => {
+              console.error("Fullscreen error:", err);
+            });
+          }
+        });
+
+      document.getElementById("modal").addEventListener("click", (e) => {
+        if (e.target.id === "modal") close_modal();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        const modal = document.getElementById("modal");
+        if (modal.classList.contains("active")) {
+          if (e.key === "Escape") close_modal();
+          if (e.key === "ArrowRight") next_media();
+          if (e.key === "ArrowLeft") prev_media();
+          if (e.key === "d" || e.key === "D")
+            download_media(current_modal_index);
+          return;
+        }
+
+        if (
+          document.activeElement.tagName === "INPUT" ||
+          document.activeElement.tagName === "SELECT"
+        ) {
+          return;
+        }
+
+        if (e.key === "n" || e.key === "N") {
+          next_page();
+        } else if (e.key === "p" || e.key === "P") {
+          prev_page();
+        }
+      });
+
+      let search_timeout;
+      const searchBox = document.getElementById("searchBox");
+      const searchClear = document.getElementById("searchClear");
+
+      searchBox.addEventListener("input", (e) => {
+        clearTimeout(search_timeout);
+        searchClear.classList.toggle("active", e.target.value.length > 0);
+        search_timeout = setTimeout(() => {
+          current_search = e.target.value;
+          current_page = 1;
+          load_media();
+        }, 300);
+      });
+
+      searchClear.addEventListener("click", () => {
+        searchBox.value = "";
+        searchClear.classList.remove("active");
+        current_search = "";
+        current_page = 1;
+        load_media();
+      });
+
+      document.querySelectorAll(".filter-btn[data-filter]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll(".filter-btn[data-filter]")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          current_filter = btn.dataset.filter;
+          current_page = 1;
+          load_media();
+        });
+      });
+
+      document.querySelectorAll(".view-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll(".view-btn")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          current_view = btn.dataset.view;
+          render_gallery();
+        });
+      });
+
+      document.getElementById("sortBy").addEventListener("change", (e) => {
+        current_sort = e.target.value;
+        apply_sorting();
+        render_gallery();
+        render_pagination_ctrls();
+      });
+
+      document.getElementById("sortOrder").addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        sort_order = sort_order === "asc" ? "desc" : "asc";
+        btn.textContent = sort_order === "asc" ? "↑" : "↓";
+        btn.dataset.order = sort_order;
+        apply_sorting();
+        render_gallery();
+        render_pagination_ctrls();
+      });
+
+      items_per_page_select.addEventListener("change", (e) => {
+        items_per_page = parseInt(e.target.value);
+        current_page = 1;
+        render_gallery();
+        render_pagination_ctrls();
+      });
+
+      document
+        .getElementById("advancedFilterToggle")
+        .addEventListener("click", () => {
+          document.getElementById("advancedFilters").classList.toggle("active");
+        });
+
+      document.getElementById("applyFilters").addEventListener("click", () => {
+        advanced_filters = {
+          rating: document.getElementById("ratingFilter").value,
+          artist: document.getElementById("artistFilter").value,
+          tag: document.getElementById("tagFilter").value,
+          extension: document.getElementById("extensionFilter").value,
+          minScore: document.getElementById("minScoreFilter").value,
+          maxScore: document.getElementById("maxScoreFilter").value,
+          minFav: document.getElementById("minFavFilter").value,
+          postId: document.getElementById("postIdFilter").value,
+          minWidth: document.getElementById("minWidthFilter").value,
+          minHeight: document.getElementById("minHeightFilter").value,
+          aspectRatio: document.getElementById("aspectRatioFilter").value,
+        };
+        current_page = 1;
+        load_media();
+      });
+
+      document.getElementById("clearFilters").addEventListener("click", () => {
+        current_search = "";
+        current_filter = "all";
+        advanced_filters = {};
+        current_page = 1;
+        selected_items.clear();
+
+        searchBox.value = "";
+        searchClear.classList.remove("active");
+        document.getElementById("ratingFilter").value = "";
+        document.getElementById("artistFilter").value = "";
+        document.getElementById("tagFilter").value = "";
+        document.getElementById("extensionFilter").value = "";
+        document.getElementById("minScoreFilter").value = "";
+        document.getElementById("maxScoreFilter").value = "";
+        document.getElementById("minFavFilter").value = "";
+        document.getElementById("postIdFilter").value = "";
+        document.getElementById("minWidthFilter").value = "";
+        document.getElementById("minHeightFilter").value = "";
+        document.getElementById("aspectRatioFilter").value = "";
+
+        document
+          .querySelectorAll(".filter-btn[data-filter]")
+          .forEach((b) => b.classList.remove("active"));
+        document
+          .querySelector('.filter-btn[data-filter="all"]')
+          .classList.add("active");
+
+        update_bulk_actions();
+        load_media();
+      });
+
+      document
+        .querySelector("#bulkActions button:nth-child(2)")
+        .addEventListener("click", () => {
+          selected_items.forEach((index) => {
+            download_media(index);
+          });
+        });
+
+      document
+        .querySelector("#bulkActions button:nth-child(3)")
+        .addEventListener("click", () => {
+          selected_items.clear();
+          document.querySelectorAll(".media-card.selected").forEach((card) => {
+            card.classList.remove("selected");
+          });
+          update_bulk_actions();
+        });
+
+      const scrollTopBtn = document.getElementById("scrollTop");
+
+      window.addEventListener("scroll", () => {
+        if (window.pageYOffset > 300) {
+          scrollTopBtn.classList.add("visible");
+        } else {
+          scrollTopBtn.classList.remove("visible");
+        }
+      });
+
+      scrollTopBtn.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
+          alert(`Keyboard Shortcuts:
+          
+Gallery View:
+  N - Next page
+  P - Previous page
+  ? - Show this help
+
+Modal View:
+  ESC - Close modal
+  ← → - Navigate between images
+  D - Download current image
+  
+Search:
+  / - Focus search box (when not in modal)`);
+        }
+
+        if (
+          e.key === "/" &&
+          !modal.classList.contains("active") &&
+          document.activeElement.tagName !== "INPUT"
+        ) {
+          e.preventDefault();
+          searchBox.focus();
+        }
+      });
+
+      load_media();
+    </script>
+  </body>
+</html>

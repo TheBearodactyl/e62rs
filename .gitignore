@@ -1,0 +1,8 @@
+/target
+/.cache
+/output
+/downloads
+/e62rs.*
+**/e62rs.*
+!**/e62rs.default.*
+data/**
