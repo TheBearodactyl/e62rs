@@ -13,7 +13,8 @@ pub async fn run_api() -> Result<()> {
             routes![
                 crate::serve::api::handlers::data::list_tags,
                 crate::serve::api::handlers::data::tag_exists,
-                crate::serve::api::handlers::data::list_pools
+                crate::serve::api::handlers::data::list_pools,
+                crate::serve::api::handlers::data::pool_exists,
             ],
         )
         .launch()

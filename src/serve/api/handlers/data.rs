@@ -42,3 +42,9 @@ pub async fn list_pools() -> std::io::Result<Json<Vec<PoolEntry>>> {
 
     Ok(Json(pool_db.list()))
 }
+#[get("/api/v1/pools/exists/<name>")]
+pub async fn pool_exists(name: &str) -> std::io::Result<Json<bool>> {
+    let (_, pool_db) = load_data().expect("Failed to load databases");
+
+    Ok(Json(pool_db.exists(name)))
+}
