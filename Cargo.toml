@@ -2,6 +2,13 @@
 name = "e62rs"
 version = "0.7.0"
 edition = "2024"
+description = "An in-terminal E6 browser."
+license-file = "LICENSE"
+categories = ["command-line-interface"]
+readme = "README.md"
+homepage = "https://github.com/TheBearodactyl/e62rs"
+repository = "https://github.com/TheBearodactyl/e62rs"
+keywords = ["e621", "e926", "tui", "browser"]
 
 [dependencies]
 async-trait = "0.1.89"
