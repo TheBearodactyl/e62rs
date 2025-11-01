@@ -571,7 +571,7 @@ pub struct GalleryCfg {
     /// - catppuccin-frappe
     /// - catppuccin-macchiato
     /// - catppuccin-mocha
-    #[default("rose-pine".to_string())]
+    #[default("catppuccin-frappe".to_string())]
     pub theme: String,
 }
 
