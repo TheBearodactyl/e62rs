@@ -44,13 +44,13 @@ fn compute_target_dimensions(original: (u32, u32), target: ImageDimensions) -> (
     match (target.width, target.height) {
         (Some(width), Some(height)) => (width, height),
         (Some(width), None) => {
-            let aspect_ratio = orig_height as f32 / orig_width as f32;
-            let new_height = (width as f32 * aspect_ratio) as u32;
+            let aspect_ratio = orig_height as f64 / orig_width as f64;
+            let new_height = (width as f64 * aspect_ratio).round() as u32;
             (width, new_height)
         }
         (None, Some(height)) => {
-            let aspect_ratio = orig_width as f32 / orig_height as f32;
-            let new_width = (height as f32 * aspect_ratio) as u32;
+            let aspect_ratio = orig_width as f64 / orig_height as f64;
+            let new_width = (height as f64 * aspect_ratio).round() as u32;
             (new_width, height)
         }
         (None, None) => (orig_width, orig_height),
@@ -73,7 +73,7 @@ fn load_image_from_bytes(
     target_dimensions: ImageDimensions,
 ) -> Result<(Vec<u8>, u32, u32)> {
     let cursor = Cursor::new(image_data);
-    let mut img = ImageReader::new(cursor)
+    let img = ImageReader::new(cursor)
         .with_guessed_format()
         .context("Failed to guess image format")?
         .decode()
@@ -82,15 +82,17 @@ fn load_image_from_bytes(
     let original_dimensions = img.dimensions();
     let target_dimensions = compute_target_dimensions(original_dimensions, target_dimensions);
 
-    if original_dimensions != target_dimensions {
-        img = img.resize_exact(
+    let resized_img = if original_dimensions != target_dimensions {
+        img.resize(
             target_dimensions.0,
             target_dimensions.1,
             FilterType::Lanczos3,
-        );
-    }
+        )
+    } else {
+        img
+    };
 
-    let img_rgb8 = img.to_rgb8();
+    let img_rgb8 = resized_img.to_rgb8();
     let dimensions = img_rgb8.dimensions();
     let img_rgb888 = img_rgb8.into_raw();
 
@@ -161,7 +163,7 @@ pub fn load_image_from_path(
         bail!("File does not exist: {}", path.display());
     }
 
-    let mut img = ImageReader::open(path)
+    let img = ImageReader::open(path)
         .with_context(|| format!("Failed to open image file: {}", path.display()))?
         .decode()
         .with_context(|| format!("Failed to decode image: {}", path.display()))?;
@@ -169,15 +171,17 @@ pub fn load_image_from_path(
     let original_dimensions = img.dimensions();
     let target_dimensions = compute_target_dimensions(original_dimensions, target_dimensions);
 
-    if original_dimensions != target_dimensions {
-        img = img.resize_exact(
+    let resized_img = if original_dimensions != target_dimensions {
+        img.resize(
             target_dimensions.0,
             target_dimensions.1,
             FilterType::Lanczos3,
-        );
-    }
+        )
+    } else {
+        img
+    };
 
-    let img_rgb8 = img.to_rgb8();
+    let img_rgb8 = resized_img.to_rgb8();
     let dimensions = img_rgb8.dimensions();
     let img_rgb888 = img_rgb8.into_raw();
 

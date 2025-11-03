@@ -231,8 +231,6 @@ impl PostCache {
             .commit()
             .context("Failed to commit batch transaction")?;
 
-        info!("Cached {} posts", posts.len());
-
         self.maybe_evict_old_entries().await?;
         self.maybe_compact().await?;
 
