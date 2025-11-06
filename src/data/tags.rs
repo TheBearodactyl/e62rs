@@ -51,13 +51,7 @@ impl TagDatabase {
     }
 
     pub fn list(&self) -> Vec<TagEntry> {
-        unsafe {
-            self.tags
-                .buffer
-                .iter()
-                .map(|tag| tag.clone())
-                .collect::<Vec<TagEntry>>()
-        }
+        unsafe { self.tags.buffer.iter().cloned().collect::<Vec<TagEntry>>() }
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<String> {

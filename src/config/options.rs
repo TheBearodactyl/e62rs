@@ -455,80 +455,148 @@ pub struct DownloadCfg {
     #[default(true)]
     pub save_metadata: bool,
 
-    /// The output format for downloaded files
+    /// ## Filename Formatting
     ///
-    /// Valid placeholders are as follows:
-    /// - `$artists[N]`: The first N artists
-    /// - `$tags[N]`: The first N general tags
-    /// - `$characters[N]`: The first N character tags
-    /// - `$species[N]`: The first N species tags
-    /// - `$copyright[N]`: The first N copyright tags
-    /// - `$sources[N]`: The first N sources (domain names)
-    /// - `$id`: The ID of the post
-    /// - `$rating`: The full content rating of the post (safe, questionable, explicit)
-    /// - `$rating_first`: The first letter of the posts content rating (s, q, e)
-    /// - `$score`: The total score of the post
-    /// - `$score_up`: The upvote score of the post
-    /// - `$score_down`: The downvote score of the post
-    /// - `$fav_count`: The amount of people who favorited the post
-    /// - `$comment_count`: The amount of comments on the post
-    /// - `$md5`: The MD5 hash of the post file
-    /// - `$ext`: The file extension of the post
-    /// - `$width`: The original width of the post media in pixels
-    /// - `$height`: The original height of the post media in pixels
-    /// - `$aspect_ratio`: The aspect ratio (width/height)
-    /// - `$orientation`: Portrait, landscape, or square
-    /// - `$resolution`: Resolution category (SD, HD, FHD, QHD, 4K, 8K)
-    /// - `$megapixels`: Megapixel count (rounded to 1 decimal)
-    /// - `$size`: The file size of the post media in bytes
-    /// - `$size_mb`: The file size in megabytes (rounded to 2 decimals)
-    /// - `$size_kb`: The file size in kilobytes (rounded to 2 decimals)
-    /// - `$artist`: The first listed artist of the post
-    /// - `$artist_count`: Number of artists tagged
-    /// - `$tag_count`: Total number of tags
-    /// - `$tag_count_general`: Number of general tags
-    /// - `$tag_count_character`: Number of character tags
-    /// - `$tag_count_species`: Number of species tags
-    /// - `$tag_count_copyright`: Number of copyright tags
-    /// - `$pool_ids`: Comma-separated pool IDs
-    /// - `$pool_count`: Number of pools the post is in
-    /// - `$uploader`: The name of the person who uploaded the post
-    /// - `$uploader_id`: The user ID of the person who uploaded the post
-    /// - `$approver`: The name of the approver (if approved)
-    /// - `$approver_id`: The ID of the approver (if approved)
-    /// - `$has_children`: "yes" if post has children, "no" otherwise
-    /// - `$parent_id`: The parent post ID (if exists)
-    /// - `$year`: The year when the post was uploaded
-    /// - `$month`: The month when the post was uploaded
-    /// - `$day`: The day when the post was uploaded
-    /// - `$hour`: The hour the post was uploaded at
-    /// - `$minute`: The minute the post was uploaded at
-    /// - `$second`: The second the post was uploaded at
-    /// - `$date`: Shorthand for "$year-$month-$day"
-    /// - `$time`: Shorthand for "$hour-$minute-$second"
-    /// - `$datetime`: Shorthand for "$year-$month-$day $hour-$minute-$second"
-    /// - `$timestamp`: Unix timestamp of upload
-    /// - `$year_updated`: The year when the post was last updated
-    /// - `$month_updated`: The month when the post was last updated
-    /// - `$day_updated`: The day when the post was last updated
-    /// - `$date_updated`: Shorthand for "$year_updated-$month_updated-$day_updated"
-    /// - `$now_year`: The year at the time of downloading the post
-    /// - `$now_month`: The month at the time of downloading the post
-    /// - `$now_day`: The day at the time of downloading the post
-    /// - `$now_hour`: The hour of the day at the time of downloading the post
-    /// - `$now_minute`: The minute of the hour at the time of downloading the post
-    /// - `$now_second`: The second of the minute at the time of downloading the post
-    /// - `$now_date`: Shorthand for "$now_year-$now_month-$now_day"
-    /// - `$now_time`: Shorthand for "$now_hour-$now_minute-$now_second"
-    /// - `$now_datetime`: Shorthand for "$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second"
-    /// - `$now_timestamp`: Unix timestamp at download time
-    /// - `$is_pending`: "yes" if pending approval, "no" otherwise
-    /// - `$is_flagged`: "yes" if flagged, "no" otherwise
-    /// - `$is_deleted`: "yes" if deleted, "no" otherwise
-    /// - `$has_notes`: "yes" if has notes, "no" otherwise
-    /// - `$duration`: Video duration in seconds (if applicable)
-    /// - `$duration_formatted`: Video duration as MM:SS or HH:MM:SS
-    /// - `$file_type`: Media type (image, video, flash, etc.)
+    /// The `output_format` setting controls how filenames are generated when saving posts. Forward slashes denote subfolders.
+    ///
+    /// ### Simple Placeholders
+    ///
+    /// These placeholders insert a single value:
+    ///
+    /// **Basic Post Information:**
+    ///
+    /// - `$id` → post ID
+    /// - `$rating` → rating (e.g. `"safe"`, `"questionable"`, `"explicit"`)
+    /// - `$rating_first` → first character of rating (`s`, `q`, `e`)
+    /// - `$md5` → MD5 hash of file
+    /// - `$ext` → file extension
+    ///
+    /// **Scores & Engagement:**
+    ///
+    /// - `$score` → total post score
+    /// - `$score_up` → upvote score
+    /// - `$score_down` → downvote score
+    /// - `$fav_count` → number of favorites
+    /// - `$comment_count` → number of comments
+    ///
+    /// **File Metadata:**
+    ///
+    /// - `$width` / `$height` → file dimensions in pixels
+    /// - `$aspect_ratio` → aspect ratio (width/height)
+    /// - `$orientation` → `"portrait"`, `"landscape"`, or `"square"`
+    /// - `$resolution` → resolution category (`"SD"`, `"HD"`, `"FHD"`, `"QHD"`, `"4K"`, `"8K"`)
+    /// - `$megapixels` → megapixel count (rounded to 1 decimal)
+    /// - `$size` → file size in bytes
+    /// - `$size_mb` → file size in megabytes (rounded to 2 decimals)
+    /// - `$size_kb` → file size in kilobytes (rounded to 2 decimals)
+    /// - `$file_type` → media type (`"image"`, `"video"`, `"flash"`, `"unknown"`)
+    ///
+    /// **Video-Specific:**
+    ///
+    /// - `$duration` → video duration in seconds (0 if not applicable)
+    /// - `$duration_formatted` → video duration as `MM:SS` or `HH:MM:SS`
+    ///
+    /// **User Information:**
+    ///
+    /// - `$artist` → first listed artist (or `"unknown"`)
+    /// - `$uploader` → uploader username
+    /// - `$uploader_id` → uploader user ID
+    /// - `$approver_id` → approver ID (or `"none"`)
+    ///
+    /// **Tag Counts:**
+    ///
+    /// - `$tag_count` → total number of tags
+    /// - `$artist_count` → number of artist tags
+    /// - `$tag_count_general` → number of general tags
+    /// - `$tag_count_character` → number of character tags
+    /// - `$tag_count_species` → number of species tags
+    /// - `$tag_count_copyright` → number of copyright tags
+    ///
+    /// **Pool Information:**
+    ///
+    /// - `$pool_ids` → comma-separated list of pool IDs
+    /// - `$pool_count` → number of pools the post is in
+    ///
+    /// **Relationships:**
+    ///
+    /// - `$has_children` → `"yes"` if post has children, `"no"` otherwise
+    /// - `$parent_id` → parent post ID (or `"none"`)
+    ///
+    /// **Flags:**
+    ///
+    /// - `$is_pending` → `"yes"` if pending approval, `"no"` otherwise
+    /// - `$is_flagged` → `"yes"` if flagged, `"no"` otherwise
+    /// - `$is_deleted` → `"yes"` if deleted, `"no"` otherwise
+    /// - `$has_notes` → `"yes"` if has notes, `"no"` otherwise
+    ///
+    /// ### Date/Time Placeholders
+    ///
+    /// **Post Creation Date:**
+    ///
+    /// - `$year`, `$month`, `$day` → creation date components
+    /// - `$hour`, `$minute`, `$second` → creation time components
+    /// - `$date` → shorthand for `$year-$month-$day`
+    /// - `$time` → shorthand for `$hour-$minute-$second`
+    /// - `$datetime` → shorthand for `$year-$month-$day $hour-$minute-$second`
+    /// - `$timestamp` → Unix timestamp of upload
+    ///
+    /// **Post Update Date:**
+    ///
+    /// - `$year_updated`, `$month_updated`, `$day_updated` → last update date components
+    /// - `$date_updated` → shorthand for `$year_updated-$month_updated-$day_updated`
+    ///
+    /// **Download Time:**
+    ///
+    /// - `$now_year`, `$now_month`, `$now_day` → download date components
+    /// - `$now_hour`, `$now_minute`, `$now_second` → download time components
+    /// - `$now_date` → shorthand for `$now_year-$now_month-$now_day`
+    /// - `$now_time` → shorthand for `$now_hour-$now_minute-$now_second`
+    /// - `$now_datetime` → shorthand for `$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second`
+    /// - `$now_timestamp` → Unix timestamp at download time
+    ///
+    /// ### Indexed Placeholders
+    ///
+    /// These placeholders allow you to extract multiple items from lists. They support several range syntaxes:
+    ///
+    /// **Syntax:**
+    ///
+    /// - `$key[N]` → first N items (e.g., `$tags[5]`)
+    /// - `$key[L..R]` → items from index L to R (exclusive) (e.g., `$tags[2..5]`)
+    /// - `$key[N..]` → all items from index N onwards (e.g., `$artists[1..]`)
+    /// - `$key[..N]` → items from start to index N (exclusive) (e.g., `$sources[..3]`)
+    ///
+    /// **Available indexed placeholders:**
+    ///
+    /// - `$tags[...]` → general tags, joined by commas
+    /// - `$artists[...]` → artist tags, joined by commas
+    /// - `$characters[...]` → character tags, joined by commas
+    /// - `$species[...]` → species tags, joined by commas
+    /// - `$copyright[...]` → copyright tags, joined by commas
+    /// - `$sources[...]` → source domains, joined by commas
+    ///
+    /// **Examples:**
+    ///
+    /// ```toml
+    /// # First 3 tags
+    /// output_format = "$tags[3] - $id.$ext"
+    /// # → "anthro, digital_media, solo - 123456.png"
+    ///
+    /// # Tags 2 through 5
+    /// output_format = "$tags[2..5] - $id.$ext"
+    /// # → "fur, blue_eyes, sitting - 123456.png"
+    ///
+    /// # All artists except the first
+    /// output_format = "$artists[1..]/$id.$ext"
+    /// # → "collaborator1, collaborator2/123456.png"
+    ///
+    /// # First 2 sources
+    /// output_format = "$sources[..2] - $id.$ext"
+    /// # → "twitter.com, deviantart.com - 123456.png"
+    ///
+    /// # Organize by primary artist, include other artists in filename
+    /// output_format = "$artists[..1]/$artists[1..] - $id.$ext"
+    /// # → "primary_artist/collab1, collab2 - 123456.png"
+    /// ```
     #[default("$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string())]
     pub output_format: String,
 }

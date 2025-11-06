@@ -9,6 +9,7 @@ use {
     indicatif::ProgressBar,
     reqwest::Client,
     std::{
+        borrow::Cow,
         fs::OpenOptions,
         io::Write,
         path::{Path, PathBuf},
@@ -48,6 +49,346 @@ fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
     }
 
     PathBuf::from(sanitized)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IndexRange {
+    Exact(usize),
+    Range(usize, usize),
+    RangeFrom(usize),
+    RangeTo(usize),
+}
+
+impl IndexRange {
+    fn parse(s: &str) -> Option<Self> {
+        if let Some((left, right)) = s.split_once("..") {
+            match (left, right) {
+                ("", "") => None,
+                ("", r) => r.parse().ok().map(IndexRange::RangeTo),
+                (l, "") => l.parse().ok().map(IndexRange::RangeFrom),
+                (l, r) => {
+                    let start = l.parse().ok()?;
+                    let end = r.parse().ok()?;
+                    Some(IndexRange::Range(start, end))
+                }
+            }
+        } else {
+            s.parse().ok().map(IndexRange::Exact)
+        }
+    }
+
+    fn apply<'a, T>(&self, items: &'a [T]) -> &'a [T] {
+        match *self {
+            IndexRange::Exact(n) => &items[..n.min(items.len())],
+            IndexRange::Range(start, end) => {
+                let start = start.min(items.len());
+                let end = end.min(items.len());
+                &items[start..end]
+            }
+            IndexRange::RangeFrom(start) => {
+                let start = start.min(items.len());
+                &items[start..]
+            }
+            IndexRange::RangeTo(end) => {
+                let end = end.min(items.len());
+                &items[..end]
+            }
+        }
+    }
+}
+
+struct FormatContext<'a> {
+    post: &'a E6Post,
+    now: chrono::DateTime<chrono::Local>,
+}
+
+impl<'a> FormatContext<'a> {
+    fn new(post: &'a E6Post) -> Self {
+        Self {
+            post,
+            now: chrono::Local::now(),
+        }
+    }
+
+    fn get_simple(&self, key: &str) -> Option<Cow<'a, str>> {
+        match key {
+            "id" => Some(Cow::Owned(self.post.id.to_string())),
+            "md5" => Some(Cow::Borrowed(&self.post.file.md5)),
+            "ext" => Some(Cow::Borrowed(&self.post.file.ext)),
+            "width" => Some(Cow::Owned(self.post.file.width.to_string())),
+            "height" => Some(Cow::Owned(self.post.file.height.to_string())),
+            "size" => Some(Cow::Owned(self.post.file.size.to_string())),
+            "size_mb" => Some(Cow::Owned(format!(
+                "{:.2}",
+                self.post.file.size as f64 / (1024.0 * 1024.0)
+            ))),
+            "size_kb" => Some(Cow::Owned(format!(
+                "{:.2}",
+                self.post.file.size as f64 / 1024.0
+            ))),
+
+            "rating" => Some(Cow::Borrowed(match self.post.rating.as_str() {
+                "e" => "explicit",
+                "q" => "questionable",
+                "s" => "safe",
+                _ => "unknown",
+            })),
+            "rating_first" => Some(Cow::Owned(
+                self.post
+                    .rating
+                    .chars()
+                    .next()
+                    .unwrap_or('u')
+                    .to_lowercase()
+                    .to_string(),
+            )),
+
+            "score" => Some(Cow::Owned(self.post.score.total.to_string())),
+            "score_up" => Some(Cow::Owned(self.post.score.up.to_string())),
+            "score_down" => Some(Cow::Owned(self.post.score.down.to_string())),
+            "fav_count" => Some(Cow::Owned(self.post.fav_count.to_string())),
+            "comment_count" => Some(Cow::Owned(self.post.comment_count.to_string())),
+
+            "aspect_ratio" => {
+                let ratio = if self.post.file.height > 0 {
+                    self.post.file.width as f64 / self.post.file.height as f64
+                } else {
+                    0.0
+                };
+                Some(Cow::Owned(format!("{:.2}", ratio)))
+            }
+            "orientation" => Some(Cow::Borrowed(
+                if self.post.file.width > self.post.file.height {
+                    "landscape"
+                } else if self.post.file.width < self.post.file.height {
+                    "portrait"
+                } else {
+                    "square"
+                },
+            )),
+            "resolution" => Some(Cow::Borrowed(
+                match (self.post.file.width, self.post.file.height) {
+                    (w, h) if w >= 7680 || h >= 4320 => "8K",
+                    (w, h) if w >= 3840 || h >= 2160 => "4K",
+                    (w, h) if w >= 2560 || h >= 1440 => "QHD",
+                    (w, h) if w >= 1920 || h >= 1080 => "FHD",
+                    (w, h) if w >= 1280 || h >= 720 => "HD",
+                    _ => "SD",
+                },
+            )),
+            "megapixels" => Some(Cow::Owned(format!(
+                "{:.1}",
+                (self.post.file.width * self.post.file.height) as f64 / 1_000_000.0
+            ))),
+
+            "artist" => Some(Cow::Borrowed(
+                self.post
+                    .tags
+                    .artist
+                    .first()
+                    .map(|s| s.as_str())
+                    .unwrap_or("unknown"),
+            )),
+            "artist_count" => Some(Cow::Owned(self.post.tags.artist.len().to_string())),
+
+            "tag_count" => {
+                let total = self.post.tags.general.len()
+                    + self.post.tags.artist.len()
+                    + self.post.tags.character.len()
+                    + self.post.tags.species.len()
+                    + self.post.tags.copyright.len()
+                    + self.post.tags.meta.len()
+                    + self.post.tags.lore.len();
+                Some(Cow::Owned(total.to_string()))
+            }
+            "tag_count_general" => Some(Cow::Owned(self.post.tags.general.len().to_string())),
+            "tag_count_character" => Some(Cow::Owned(self.post.tags.character.len().to_string())),
+            "tag_count_species" => Some(Cow::Owned(self.post.tags.species.len().to_string())),
+            "tag_count_copyright" => Some(Cow::Owned(self.post.tags.copyright.len().to_string())),
+
+            "pool_count" => Some(Cow::Owned(self.post.pools.len().to_string())),
+            "pool_ids" => Some(Cow::Owned(
+                self.post
+                    .pools
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            )),
+
+            "uploader" => Some(Cow::Borrowed(&self.post.uploader_name)),
+            "uploader_id" => Some(Cow::Owned(self.post.uploader_id.to_string())),
+            "approver_id" => Some(Cow::Owned(
+                self.post
+                    .approver_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            )),
+
+            "has_children" => Some(Cow::Borrowed(if self.post.relationships.has_children {
+                "yes"
+            } else {
+                "no"
+            })),
+            "parent_id" => Some(Cow::Owned(
+                self.post
+                    .relationships
+                    .parent_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            )),
+
+            "is_pending" => Some(Cow::Borrowed(if self.post.flags.pending {
+                "yes"
+            } else {
+                "no"
+            })),
+            "is_flagged" => Some(Cow::Borrowed(if self.post.flags.flagged {
+                "yes"
+            } else {
+                "no"
+            })),
+            "is_deleted" => Some(Cow::Borrowed(if self.post.flags.deleted {
+                "yes"
+            } else {
+                "no"
+            })),
+            "has_notes" => Some(Cow::Borrowed(if self.post.has_notes {
+                "yes"
+            } else {
+                "no"
+            })),
+
+            "duration" => Some(Cow::Owned(
+                self.post
+                    .duration
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| "0".to_string()),
+            )),
+            "duration_formatted" => {
+                if let Some(duration) = self.post.duration {
+                    let total_seconds = duration as i64;
+                    let hours = total_seconds / 3600;
+                    let minutes = (total_seconds % 3600) / 60;
+                    let seconds = total_seconds % 60;
+                    Some(Cow::Owned(if hours > 0 {
+                        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+                    } else {
+                        format!("{:02}:{:02}", minutes, seconds)
+                    }))
+                } else {
+                    Some(Cow::Borrowed("N/A"))
+                }
+            }
+
+            "file_type" => Some(Cow::Borrowed(match self.post.file.ext.as_str() {
+                "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" => "image",
+                "mp4" | "webm" | "mov" | "avi" | "mkv" => "video",
+                "swf" => "flash",
+                _ => "unknown",
+            })),
+
+            key if key.starts_with("year")
+                || key.starts_with("month")
+                || key.starts_with("day")
+                || key.starts_with("hour")
+                || key.starts_with("minute")
+                || key.starts_with("second")
+                || key.starts_with("date")
+                || key.starts_with("time")
+                || key == "timestamp"
+                || key == "datetime" =>
+            {
+                self.get_date_field(key)
+            }
+
+            key if key.starts_with("now_") => self.get_now_field(key),
+
+            _ => None,
+        }
+    }
+
+    fn get_indexed(&self, key: &str, range: IndexRange) -> Option<Cow<'a, str>> {
+        let result = match key {
+            "tags" => {
+                let items = range.apply(&self.post.tags.general);
+                items.to_vec().join(", ")
+            }
+            "artists" => {
+                let items = range.apply(&self.post.tags.artist);
+                items.to_vec().join(", ")
+            }
+            "characters" => {
+                let items = range.apply(&self.post.tags.character);
+                items.to_vec().join(", ")
+            }
+            "species" => {
+                let items = range.apply(&self.post.tags.species);
+                items.to_vec().join(", ")
+            }
+            "copyright" => {
+                let items = range.apply(&self.post.tags.copyright);
+                items.to_vec().join(", ")
+            }
+            "sources" => {
+                let items = range.apply(&self.post.sources);
+                items
+                    .iter()
+                    .map(|source| {
+                        Url::parse(source)
+                            .ok()
+                            .and_then(|u| u.domain().map(String::from))
+                            .unwrap_or_else(|| "unknown".to_string())
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+            _ => return None,
+        };
+
+        Some(Cow::Owned(result))
+    }
+
+    fn get_date_field(&self, key: &str) -> Option<Cow<'a, str>> {
+        let date_str = if key.contains("updated") {
+            &self.post.updated_at
+        } else {
+            &self.post.created_at
+        };
+
+        let parsed_date = chrono::DateTime::parse_from_rfc3339(date_str).ok()?;
+
+        Some(Cow::Owned(match key {
+            k if k.contains("year") => parsed_date.format("%Y").to_string(),
+            k if k.contains("month") => parsed_date.format("%m").to_string(),
+            k if k.contains("day") => parsed_date.format("%d").to_string(),
+            k if k.contains("hour") => parsed_date.format("%H").to_string(),
+            k if k.contains("minute") => parsed_date.format("%M").to_string(),
+            k if k.contains("second") => parsed_date.format("%S").to_string(),
+            "date" => parsed_date.format("%Y-%m-%d").to_string(),
+            "date_updated" => parsed_date.format("%Y-%m-%d").to_string(),
+            "time" => parsed_date.format("%H-%M-%S").to_string(),
+            "datetime" => parsed_date.format("%Y-%m-%d %H-%M-%S").to_string(),
+            "timestamp" => parsed_date.timestamp().to_string(),
+            _ => return None,
+        }))
+    }
+
+    fn get_now_field(&self, key: &str) -> Option<Cow<'a, str>> {
+        Some(Cow::Owned(match key {
+            "now_year" => self.now.format("%Y").to_string(),
+            "now_month" => self.now.format("%m").to_string(),
+            "now_day" => self.now.format("%d").to_string(),
+            "now_hour" => self.now.format("%H").to_string(),
+            "now_minute" => self.now.format("%M").to_string(),
+            "now_second" => self.now.format("%S").to_string(),
+            "now_date" => self.now.format("%Y-%m-%d").to_string(),
+            "now_time" => self.now.format("%H-%M-%S").to_string(),
+            "now_datetime" => self.now.format("%Y-%m-%d %H-%M-%S").to_string(),
+            "now_timestamp" => self.now.timestamp().to_string(),
+            _ => return None,
+        }))
+    }
 }
 
 impl PostDownloader {
@@ -229,341 +570,39 @@ impl PostDownloader {
 
     pub fn format_filename(&self, post: &E6Post) -> Result<String> {
         let out_fmt = self.output_format.as_deref().unwrap_or("$id.$ext");
-        let artist = post
-            .tags
-            .artist
-            .first()
-            .map(|s| s.as_str())
-            .unwrap_or("unknown");
 
-        let tags_re = regex::Regex::new(r"\$tags\[(\d+)\]").unwrap();
-        let artists_re = regex::Regex::new(r"\$artists\[(\d+)\]").unwrap();
-        let characters_re = regex::Regex::new(r"\$characters\[(\d+)\]").unwrap();
-        let species_re = regex::Regex::new(r"\$species\[(\d+)\]").unwrap();
-        let copyright_re = regex::Regex::new(r"\$copyright\[(\d+)\]").unwrap();
-        let sources_re = regex::Regex::new(r"\$sources\[(\d+)\]").unwrap();
+        let indexed_re =
+            regex::Regex::new(r"\$([a-z_]+)\[([0-9]+(?:\.\.[0-9]*)?|\.\.(?:[0-9]+)?)\]").unwrap();
 
-        let mut formatted = out_fmt.to_string();
+        let simple_re = regex::Regex::new(r"\$([a-z_]+)").unwrap();
 
-        for cap in tags_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_tags) = num_match.as_str().parse::<usize>()
-            {
-                let tags = post
-                    .tags
-                    .general
-                    .iter()
-                    .take(num_tags)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &tags);
-            }
-        }
+        let mut formatted = String::from(out_fmt);
 
-        for cap in artists_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_artists) = num_match.as_str().parse::<usize>()
-            {
-                let artists = post
-                    .tags
-                    .artist
-                    .iter()
-                    .take(num_artists)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &artists);
-            }
-        }
+        formatted = indexed_re
+            .replace_all(&formatted, |caps: &regex::Captures| {
+                let key = &caps[1];
+                let range_str = &caps[2];
 
-        for cap in characters_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_chars) = num_match.as_str().parse::<usize>()
-            {
-                let characters = post
-                    .tags
-                    .character
-                    .iter()
-                    .take(num_chars)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &characters);
-            }
-        }
+                let ctx = FormatContext::new(post);
 
-        for cap in species_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_species) = num_match.as_str().parse::<usize>()
-            {
-                let species = post
-                    .tags
-                    .species
-                    .iter()
-                    .take(num_species)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &species);
-            }
-        }
+                IndexRange::parse(range_str)
+                    .and_then(|range| ctx.get_indexed(key, range))
+                    .map(|v| v.into_owned())
+                    .unwrap_or_else(|| caps[0].to_string())
+            })
+            .into_owned();
 
-        for cap in copyright_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_copyright) = num_match.as_str().parse::<usize>()
-            {
-                let copyright = post
-                    .tags
-                    .copyright
-                    .iter()
-                    .take(num_copyright)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &copyright);
-            }
-        }
+        formatted = simple_re
+            .replace_all(&formatted, |caps: &regex::Captures| {
+                let key = &caps[1];
 
-        for cap in sources_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_sources) = num_match.as_str().parse::<usize>()
-            {
-                let sources = post
-                    .sources
-                    .iter()
-                    .take(num_sources)
-                    .map(|source| {
-                        Url::parse(source)
-                            .ok()
-                            .and_then(|u| u.domain().map(String::from))
-                            .unwrap_or_else(|| "unknown".to_string())
-                    })
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &sources);
-            }
-        }
+                let ctx = FormatContext::new(post);
 
-        let aspect_ratio = if post.file.height > 0 {
-            post.file.width as f64 / post.file.height as f64
-        } else {
-            0.0
-        };
-
-        let orientation = if post.file.width > post.file.height {
-            "landscape"
-        } else if post.file.width < post.file.height {
-            "portrait"
-        } else {
-            "square"
-        };
-
-        let megapixels = (post.file.width * post.file.height) as f64 / 1_000_000.0;
-
-        let resolution = match (post.file.width, post.file.height) {
-            (w, h) if w >= 7680 || h >= 4320 => "8K",
-            (w, h) if w >= 3840 || h >= 2160 => "4K",
-            (w, h) if w >= 2560 || h >= 1440 => "QHD",
-            (w, h) if w >= 1920 || h >= 1080 => "FHD",
-            (w, h) if w >= 1280 || h >= 720 => "HD",
-            _ => "SD",
-        };
-
-        let size_mb = post.file.size as f64 / (1024.0 * 1024.0);
-        let size_kb = post.file.size as f64 / 1024.0;
-
-        let file_type = match post.file.ext.as_str() {
-            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" => "image",
-            "mp4" | "webm" | "mov" | "avi" | "mkv" => "video",
-            "swf" => "flash",
-            _ => "unknown",
-        };
-
-        let duration_formatted = if let Some(duration) = post.duration {
-            let total_seconds = duration as i64;
-            let hours = total_seconds / 3600;
-            let minutes = (total_seconds % 3600) / 60;
-            let seconds = total_seconds % 60;
-
-            if hours > 0 {
-                format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
-            } else {
-                format!("{:02}:{:02}", minutes, seconds)
-            }
-        } else {
-            "N/A".to_string()
-        };
-
-        let tag_count = post.tags.general.len()
-            + post.tags.artist.len()
-            + post.tags.character.len()
-            + post.tags.species.len()
-            + post.tags.copyright.len()
-            + post.tags.meta.len()
-            + post.tags.lore.len();
-
-        let now = chrono::Local::now();
-        let rating_first = post
-            .rating
-            .chars()
-            .next()
-            .unwrap_or('u')
-            .to_lowercase()
-            .to_string();
-
-        let (year, month, day, hour, minute, second, timestamp) =
-            if let Ok(created_date) = chrono::DateTime::parse_from_rfc3339(&post.created_at) {
-                (
-                    created_date.format("%Y").to_string(),
-                    created_date.format("%m").to_string(),
-                    created_date.format("%d").to_string(),
-                    created_date.format("%H").to_string(),
-                    created_date.format("%M").to_string(),
-                    created_date.format("%S").to_string(),
-                    created_date.timestamp().to_string(),
-                )
-            } else {
-                (
-                    now.format("%Y").to_string(),
-                    now.format("%m").to_string(),
-                    now.format("%d").to_string(),
-                    now.format("%H").to_string(),
-                    now.format("%M").to_string(),
-                    now.format("%S").to_string(),
-                    now.timestamp().to_string(),
-                )
-            };
-
-        let (year_updated, month_updated, day_updated) =
-            if let Ok(updated_date) = chrono::DateTime::parse_from_rfc3339(&post.updated_at) {
-                (
-                    updated_date.format("%Y").to_string(),
-                    updated_date.format("%m").to_string(),
-                    updated_date.format("%d").to_string(),
-                )
-            } else {
-                (year.clone(), month.clone(), day.clone())
-            };
-
-        let rating_full = match post.rating.as_str() {
-            "e" => "explicit",
-            "q" => "questionable",
-            "s" => "safe",
-            _ => "unknown",
-        };
-
-        let pool_ids = post
-            .pools
-            .iter()
-            .map(|id| id.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        let approver_id = post
-            .approver_id
-            .map(|id| id.to_string())
-            .unwrap_or_else(|| "none".to_string());
-
-        let formatted = formatted
-            .replace("$id", &post.id.to_string())
-            .replace("$rating", rating_full)
-            .replace("$rating_first", &rating_first)
-            .replace("$score", &post.score.total.to_string())
-            .replace("$score_up", &post.score.up.to_string())
-            .replace("$score_down", &post.score.down.to_string())
-            .replace("$fav_count", &post.fav_count.to_string())
-            .replace("$comment_count", &post.comment_count.to_string())
-            .replace("$md5", &post.file.md5)
-            .replace("$ext", &post.file.ext)
-            .replace("$width", &post.file.width.to_string())
-            .replace("$height", &post.file.height.to_string())
-            .replace("$aspect_ratio", &format!("{:.2}", aspect_ratio))
-            .replace("$orientation", orientation)
-            .replace("$resolution", resolution)
-            .replace("$megapixels", &format!("{:.1}", megapixels))
-            .replace("$size", &post.file.size.to_string())
-            .replace("$size_mb", &format!("{:.2}", size_mb))
-            .replace("$size_kb", &format!("{:.2}", size_kb))
-            .replace("$artist", artist)
-            .replace("$artist_count", &post.tags.artist.len().to_string())
-            .replace("$tag_count", &tag_count.to_string())
-            .replace("$tag_count_general", &post.tags.general.len().to_string())
-            .replace(
-                "$tag_count_character",
-                &post.tags.character.len().to_string(),
-            )
-            .replace("$tag_count_species", &post.tags.species.len().to_string())
-            .replace(
-                "$tag_count_copyright",
-                &post.tags.copyright.len().to_string(),
-            )
-            .replace("$pool_ids", &pool_ids)
-            .replace("$pool_count", &post.pools.len().to_string())
-            .replace("$uploader", &post.uploader_name)
-            .replace("$uploader_id", &post.uploader_id.to_string())
-            .replace("$approver_id", &approver_id)
-            .replace(
-                "$has_children",
-                if post.relationships.has_children {
-                    "yes"
-                } else {
-                    "no"
-                },
-            )
-            .replace(
-                "$parent_id",
-                &post
-                    .relationships
-                    .parent_id
-                    .map(|id| id.to_string())
-                    .unwrap_or_else(|| "none".to_string()),
-            )
-            .replace("$year", &year)
-            .replace("$month", &month)
-            .replace("$day", &day)
-            .replace("$hour", &hour)
-            .replace("$minute", &minute)
-            .replace("$second", &second)
-            .replace("$date", &format!("{}-{}-{}", year, month, day))
-            .replace("$time", &format!("{}-{}-{}", hour, minute, second))
-            .replace(
-                "$datetime",
-                &format!("{}-{}-{} {}-{}-{}", year, month, day, hour, minute, second),
-            )
-            .replace("$timestamp", &timestamp)
-            .replace("$year_updated", &year_updated)
-            .replace("$month_updated", &month_updated)
-            .replace("$day_updated", &day_updated)
-            .replace(
-                "$date_updated",
-                &format!("{}-{}-{}", year_updated, month_updated, day_updated),
-            )
-            .replace("$now_year", &now.format("%Y").to_string())
-            .replace("$now_month", &now.format("%m").to_string())
-            .replace("$now_day", &now.format("%d").to_string())
-            .replace("$now_hour", &now.format("%H").to_string())
-            .replace("$now_minute", &now.format("%M").to_string())
-            .replace("$now_second", &now.format("%S").to_string())
-            .replace("$now_date", &now.format("%Y-%m-%d").to_string())
-            .replace("$now_time", &now.format("%H-%M-%S").to_string())
-            .replace(
-                "$now_datetime",
-                &now.format("%Y-%m-%d %H-%M-%S").to_string(),
-            )
-            .replace("$now_timestamp", &now.timestamp().to_string())
-            .replace("$is_pending", if post.flags.pending { "yes" } else { "no" })
-            .replace("$is_flagged", if post.flags.flagged { "yes" } else { "no" })
-            .replace("$is_deleted", if post.flags.deleted { "yes" } else { "no" })
-            .replace("$has_notes", if post.has_notes { "yes" } else { "no" })
-            .replace(
-                "$duration",
-                &post
-                    .duration
-                    .map(|d| d.to_string())
-                    .unwrap_or_else(|| "0".to_string()),
-            )
-            .replace("$duration_formatted", &duration_formatted)
-            .replace("$file_type", file_type);
+                ctx.get_simple(key)
+                    .map(|v| v.into_owned())
+                    .unwrap_or_else(|| caps[0].to_string())
+            })
+            .into_owned();
 
         Ok(formatted)
     }
