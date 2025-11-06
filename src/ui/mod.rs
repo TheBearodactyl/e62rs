@@ -66,12 +66,14 @@ impl E6Ui {
         }
     }
 
-    pub fn collect_tags(&self) -> Result<(Vec<String>, Vec<String>)> {
+    pub fn collect_tags(&self) -> Result<(Vec<String>, Vec<String>, Vec<String>)> {
         let mut include_tags = Vec::new();
         let mut exclude_tags = Vec::new();
+        let mut or_tags = Vec::new();
 
         loop {
-            let prompt = if include_tags.is_empty() && exclude_tags.is_empty() {
+            let prompt = if include_tags.is_empty() && or_tags.is_empty() && exclude_tags.is_empty()
+            {
                 "Would you like to add tags to the search?"
             } else {
                 if !include_tags.is_empty() {
@@ -79,6 +81,9 @@ impl E6Ui {
                 }
                 if !exclude_tags.is_empty() {
                     println!("Exclude tags: -{}", exclude_tags.join(" -"));
+                }
+                if !or_tags.is_empty() {
+                    println!("Inclusionary tags: -{}", or_tags.join(" -"));
                 }
 
                 "Would you like to add more tags?"
@@ -95,7 +100,7 @@ impl E6Ui {
 
             let tag_type = Select::new(
                 "What type of tags would you like to add?",
-                vec!["Include tags", "Exclude tags"],
+                vec!["Include tags", "Exclude tags", "Inclusionary (OR) tags"],
             )
             .prompt()
             .context("Failed to get tag type selection")?;
@@ -112,8 +117,10 @@ impl E6Ui {
             let selected_tags = MultiSelect::new(
                 if tag_type == "Include tags" {
                     "Select tags to include (use spacebar to select, enter to confirm):"
-                } else {
+                } else if tag_type == "Exclude tags" {
                     "Select tags to exclude (use spacebar to select, enter to confirm):"
+                } else {
+                    "Select tags to include (non-exclusive) (use spacebar to select, enter to confirm)"
                 },
                 all_tags,
             )
@@ -125,8 +132,10 @@ impl E6Ui {
             if let Some(selected) = selected_tags {
                 let target_list = if tag_type == "Include tags" {
                     &mut include_tags
-                } else {
+                } else if tag_type == "Exclude tags" {
                     &mut exclude_tags
+                } else {
+                    &mut or_tags
                 };
 
                 for tag in selected {
@@ -142,7 +151,7 @@ impl E6Ui {
                 }
             }
 
-            if include_tags.is_empty() && exclude_tags.is_empty() {
+            if include_tags.is_empty() && exclude_tags.is_empty() && or_tags.is_empty() {
                 let try_again = Confirm::new("No tags were selected. Would you like to try again?")
                     .with_default(true)
                     .prompt()
@@ -154,7 +163,7 @@ impl E6Ui {
             }
         }
 
-        Ok((include_tags, exclude_tags))
+        Ok((include_tags, or_tags, exclude_tags))
     }
 
     pub async fn batch_interaction_menu(&self, posts: Vec<E6Post>) -> Result<BatchAction> {

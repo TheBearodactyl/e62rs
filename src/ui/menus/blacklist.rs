@@ -195,7 +195,7 @@ impl E6Ui {
         let blacklist = E62Rs::get()?.blacklist;
         println!("This will allow you to search for posts and add their tags to the blacklist.");
 
-        let (include_tags, exclude_tags) = self.collect_tags()?;
+        let (include_tags, _, exclude_tags) = self.collect_tags()?;
         if include_tags.is_empty() && exclude_tags.is_empty() {
             println!("No search tags provided.");
             return Ok(());

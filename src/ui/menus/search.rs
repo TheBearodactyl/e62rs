@@ -290,12 +290,17 @@ impl E6Ui {
     }
 
     pub async fn perform_search(&self) -> Result<bool> {
-        let (include_tags, exclude_tags) = self.collect_tags()?;
+        let (include_tags, or_tags, exclude_tags) = self.collect_tags()?;
         let total_limit = self.get_post_limit()?;
 
         let mut all_tags = include_tags;
+
         for exclude_tag in exclude_tags {
             all_tags.push(format!("-{}", exclude_tag));
+        }
+
+        for inclusionary_tag in or_tags {
+            all_tags.push(format!("~{}", inclusionary_tag));
         }
 
         let mut all_fetched_posts: Vec<E6Post> = Vec::new();
