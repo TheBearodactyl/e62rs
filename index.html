@@ -1,22 +1,23 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0" />
     <title>e6srv</title>
     <style>
       :root {
-        {{THEME_CSS_VARS}}
+        /* {{THEME_CSS_VARS}} */
         --highlight-low: #21202e;
         --highlight-med: #403d52;
         --highlight-high: #524f67;
 
         --accent: hsl(340, 82%, 52%);
         --surface-elevated: hsl(230, 20%, 20%);
-        --card-shadow:
-          0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-        --card-shadow-hover:
-          0 20px 25px -5px rgba(0, 0, 0, 0.3),
+        --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3),
+          0 2px 4px -1px rgba(0, 0, 0, 0.2);
+        --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.3),
           0 10px 10px -5px rgba(0, 0, 0, 0.2);
 
         --space-1: 0.25rem;
@@ -60,9 +61,8 @@
       }
 
       body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
-          Cantarell, "Fira Sans", "Droid Sans", sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", sans-serif;
         background-color: var(--base);
         color: var(--text);
         line-height: 1.6;
@@ -158,6 +158,249 @@
         border-color: var(--highlight-med);
         font-weight: 500;
         white-space: nowrap;
+      }
+
+      /* Add these new styles */
+
+      .toast-container {
+        position: fixed;
+        top: var(--space-8);
+        right: var(--space-8);
+        z-index: 1100;
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+        max-width: 350px;
+      }
+
+      .toast {
+        background-color: var(--surface-elevated);
+        color: var(--text);
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--card-shadow-hover);
+        border: 2px solid var(--iris);
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        animation: slideInRight 0.3s ease;
+        min-width: 250px;
+      }
+
+      .toast.success {
+        border-color: var(--foam);
+      }
+
+      .toast.error {
+        border-color: var(--love);
+      }
+
+      .toast.info {
+        border-color: var(--iris);
+      }
+
+      @keyframes slideInRight {
+        from {
+          transform: translateX(400px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+
+      .toast-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
+
+      .toast-content {
+        flex: 1;
+      }
+
+      .toast-close {
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: var(--space-1);
+        transition: color var(--transition-fast);
+      }
+
+      .toast-close:hover {
+        color: var(--text);
+      }
+
+      .keyboard-help-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        z-index: var(--z-modal);
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(5px);
+      }
+
+      .keyboard-help-overlay.active {
+        display: flex;
+      }
+
+      .keyboard-help-content {
+        background-color: var(--surface);
+        border: 2px solid var(--overlay);
+        border-radius: var(--radius-lg);
+        padding: var(--space-8);
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: var(--card-shadow-hover);
+      }
+
+      .keyboard-help-content h2 {
+        color: var(--accent);
+        margin-bottom: var(--space-6);
+        text-align: center;
+      }
+
+      .keyboard-help-section {
+        margin-bottom: var(--space-6);
+      }
+
+      .keyboard-help-section h3 {
+        color: var(--iris);
+        margin-bottom: var(--space-3);
+        font-size: 1.1rem;
+      }
+
+      .keyboard-shortcut {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-2) 0;
+        border-bottom: 1px solid var(--overlay);
+      }
+
+      .keyboard-shortcut:last-child {
+        border-bottom: none;
+      }
+
+      .shortcut-key {
+        background-color: var(--overlay);
+        padding: var(--space-1) var(--space-3);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--highlight-med);
+        font-family: monospace;
+        font-weight: 600;
+        color: var(--foam);
+        min-width: 40px;
+        text-align: center;
+      }
+
+      .shortcut-description {
+        color: var(--subtle);
+        flex: 1;
+        margin-left: var(--space-4);
+      }
+
+      .media-preview.loading {
+        opacity: 0.3;
+        background: linear-gradient(
+          90deg,
+          var(--overlay) 0%,
+          var(--highlight-med) 50%,
+          var(--overlay) 100%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+
+      @keyframes shimmer {
+        0% {
+          background-position: -200% 0;
+        }
+        100% {
+          background-position: 200% 0;
+        }
+      }
+
+      .media-preview.loaded {
+        animation: fadeIn 0.3s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .modal-info {
+        display: block;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: rgba(31, 29, 46, 0.95);
+        padding: var(--space-4);
+        max-height: 35%;
+        overflow-y: auto;
+        transition: transform var(--transition-normal),
+          opacity var(--transition-normal);
+        backdrop-filter: blur(10px);
+        transform: translateY(100%);
+        opacity: 0;
+      }
+
+      .modal-info.active {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .selection-count {
+        color: var(--iris);
+        font-weight: 600;
+      }
+
+      .btn:focus-visible,
+      .input-base:focus-visible,
+      .view-btn:focus-visible {
+        outline: 2px solid var(--iris);
+        outline-offset: 2px;
+      }
+
+      @media (max-width: 768px) {
+        .modal-nav {
+          padding: var(--space-3);
+          font-size: 1.2rem;
+          width: 44px;
+          height: 44px;
+        }
+
+        .modal-nav.prev {
+          left: 10px;
+        }
+
+        .modal-nav.next {
+          right: 10px;
+        }
+
+        .keyboard-help-content {
+          padding: var(--space-4);
+          max-width: 90%;
+        }
+
+        .toast-container {
+          right: var(--space-2);
+          max-width: calc(100% - var(--space-4));
+        }
       }
 
       .btn:hover {
@@ -437,7 +680,7 @@
         transition: opacity var(--transition-normal);
       }
       .media-card:hover .media-overlay {
-        opacity: 1;
+        opacity: 0;
       }
 
       .quick-actions {
@@ -695,22 +938,11 @@
         right: 20px;
       }
 
-      .modal-info {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background-color: rgba(31, 29, 46, 0.9);
-        padding: var(--space-4);
-        max-height: 35%;
-        overflow-y: auto;
-        transition: opacity var(--transition-normal);
-        backdrop-filter: blur(5px);
-        opacity: 0;
-      }
-      .modal-body:hover .modal-info {
+      .modal-body .modal-info .showmodalmeta {
+        display: block;
         opacity: 1;
       }
+
       .modal-info h3 {
         color: var(--rose);
         margin-bottom: var(--space-2);
@@ -874,57 +1106,94 @@
             type="text"
             class="search-box input-base"
             id="searchBox"
-            placeholder="Search by filename, ID, artist, or tags..."
-          />
-          <button class="search-clear" id="searchClear">&times;</button>
+            placeholder="Search by filename, ID, artist, or tags..." />
+          <button
+            class="search-clear"
+            id="searchClear">
+            &times;
+          </button>
         </div>
         <div class="controls-group">
-          <select class="sort-select input-base" id="sortBy">
+          <select
+            class="sort-select input-base"
+            id="sortBy">
+            <option value="random">Sort: Random</option>
             <option value="name">Sort: Name</option>
             <option value="size">Sort: Size</option>
             <option value="date">Sort: Date</option>
             <option value="score">Sort: Score</option>
             <option value="fav_count">Sort: Favorites</option>
-            <option value="random">Sort: Random</option>
           </select>
           <button
             class="btn"
             id="sortOrder"
             data-order="asc"
             title="Toggle sort order"
-            style="width: 44px"
-          >
+            style="width: 44px">
             ↑
           </button>
         </div>
         <div class="view-options">
-          <button class="view-btn active" data-view="grid" title="Grid view">
+          <button
+            class="view-btn active"
+            data-view="grid"
+            title="Grid view">
             ⊞
           </button>
-          <button class="view-btn" data-view="list" title="List view">
+          <button
+            class="view-btn"
+            data-view="list"
+            title="List view">
             ☰
           </button>
-          <button class="view-btn" data-view="compact" title="Compact view">
+          <button
+            class="view-btn"
+            data-view="compact"
+            title="Compact view">
             ⊡
           </button>
         </div>
       </div>
 
-      <div class="controls" style="padding-top: 0">
+      <div
+        class="controls"
+        style="padding-top: 0">
         <div class="controls-group">
-          <button class="btn filter-btn active" data-filter="all">All</button>
-          <button class="btn filter-btn" data-filter="image">Images</button>
-          <button class="btn filter-btn" data-filter="video">Videos</button>
+          <button
+            class="btn filter-btn active"
+            data-filter="all">
+            All
+          </button>
+          <button
+            class="btn filter-btn"
+            data-filter="image">
+            Images
+          </button>
+          <button
+            class="btn filter-btn"
+            data-filter="video">
+            Videos
+          </button>
         </div>
-        <div class="controls-group" style="margin-left: auto">
-          <button class="btn" id="advancedFilterToggle">
+        <div
+          class="controls-group"
+          style="margin-left: auto">
+          <button
+            class="btn"
+            id="advancedFilterToggle">
             Advanced Filters
           </button>
-          <button class="btn" id="clearFilters">Clear All</button>
+          <button
+            class="btn"
+            id="clearFilters">
+            Clear All
+          </button>
         </div>
       </div>
 
-      <div class="advanced-filters" id="advancedFilters">
+      <div
+        class="advanced-filters"
+        id="advancedFilters">
         <div class="filter-grid">
           <div class="filter-group">
             <label for="ratingFilter">Rating</label>
@@ -940,12 +1209,14 @@
             <input
               type="text"
               id="artistFilter"
-              placeholder="Filter by artist..."
-            />
+              placeholder="Filter by artist..." />
           </div>
           <div class="filter-group">
             <label for="tagFilter">Tag</label>
-            <input type="text" id="tagFilter" placeholder="Filter by tag..." />
+            <input
+              type="text"
+              id="tagFilter"
+              placeholder="Filter by tag..." />
           </div>
           <div class="filter-group">
             <label for="extensionFilter">File Type</label>
@@ -964,48 +1235,42 @@
             <input
               type="number"
               id="minScoreFilter"
-              placeholder="Minimum score..."
-            />
+              placeholder="Minimum score..." />
           </div>
           <div class="filter-group">
             <label for="maxScoreFilter">Max Score</label>
             <input
               type="number"
               id="maxScoreFilter"
-              placeholder="Maximum score..."
-            />
+              placeholder="Maximum score..." />
           </div>
           <div class="filter-group">
             <label for="minFavFilter">Min Favorites</label>
             <input
               type="number"
               id="minFavFilter"
-              placeholder="Minimum favorites..."
-            />
+              placeholder="Minimum favorites..." />
           </div>
           <div class="filter-group">
             <label for="postIdFilter">Post ID</label>
             <input
               type="number"
               id="postIdFilter"
-              placeholder="Search by post ID..."
-            />
+              placeholder="Search by post ID..." />
           </div>
           <div class="filter-group">
             <label for="minWidthFilter">Min Width</label>
             <input
               type="number"
               id="minWidthFilter"
-              placeholder="Min width (px)..."
-            />
+              placeholder="Min width (px)..." />
           </div>
           <div class="filter-group">
             <label for="minHeightFilter">Min Height</label>
             <input
               type="number"
               id="minHeightFilter"
-              placeholder="Min height (px)..."
-            />
+              placeholder="Min height (px)..." />
           </div>
           <div class="filter-group">
             <label for="aspectRatioFilter">Aspect Ratio</label>
@@ -1021,15 +1286,16 @@
             <button
               class="btn"
               id="applyFilters"
-              style="width: 100%; height: 40px"
-            >
+              style="width: 100%; height: 40px">
               Apply Filters
             </button>
           </div>
         </div>
       </div>
 
-      <div class="stats" id="stats">
+      <div
+        class="stats"
+        id="stats">
         <div class="stats-info">
           <div class="stat-item">Loading media...</div>
         </div>
@@ -1037,60 +1303,214 @@
           <label for="itemsPerPage">Items per page:</label>
           <select id="itemsPerPage">
             <option value="10">10</option>
-            <option value="20" selected>20</option>
+            <option
+              value="20"
+              selected>
+              20
+            </option>
             <option value="50">50</option>
             <option value="100">100</option>
           </select>
         </div>
       </div>
 
-      <div class="gallery grid-view" id="gallery">
+      <div
+        class="gallery grid-view"
+        id="gallery">
         <div class="loading"></div>
       </div>
 
       <div id="pagination"></div>
     </main>
 
-    <div class="bulk-actions" id="bulkActions">
+    <div
+      class="bulk-actions"
+      id="bulkActions">
       <span id="selectedCount">0 selected</span>
       <button class="btn">Download Selected</button>
       <button class="btn">Clear Selection</button>
     </div>
 
-    <button class="scroll-top" id="scrollTop" title="Scroll to top">↑</button>
+    <button
+      class="scroll-top"
+      id="scrollTop"
+      title="Scroll to top">
+      ↑
+    </button>
 
-    <div class="modal" id="modal">
+    <div
+      class="modal"
+      id="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <div class="modal-counter" id="modalCounter">1 / 1</div>
+          <div
+            class="modal-counter"
+            id="modalCounter">
+            1 / 1
+          </div>
           <div class="modal-header-actions">
-            <button class="btn modal-btn" id="modalDownload" title="Download">
+            <button
+              class="btn modal-btn"
+              id="modalMetadata"
+              title="info">
+              i
+            </button>
+            <button
+              class="btn modal-btn"
+              id="modalDownload"
+              title="Info">
               ⬇
             </button>
             <button
               class="btn modal-btn"
               id="modalFullscreen"
-              title="Fullscreen"
-            >
+              title="Fullscreen">
               ⛶
             </button>
-            <button class="btn modal-btn modal-close" id="modalClose">
+            <button
+              class="btn modal-btn modal-close"
+              id="modalClose">
               Close
             </button>
           </div>
         </div>
         <div class="modal-body">
-          <button class="modal-nav prev" id="modalPrev">‹</button>
-          <img class="modal-media" id="modalMedia" src="" alt="" />
-          <button class="modal-nav next" id="modalNext">›</button>
-          <div class="modal-info" id="modalInfo"></div>
+          <button
+            class="modal-nav prev"
+            id="modalPrev">
+            ‹
+          </button>
+          <img
+            class="modal-media"
+            id="modalMedia"
+            src=""
+            alt="" />
+          <button
+            class="modal-nav next"
+            id="modalNext">
+            ›
+          </button>
+          <div
+            class="modal-info"
+            id="modalInfo"></div>
         </div>
       </div>
     </div>
 
     <script>
-      // The JavaScript remains the same as it primarily handles logic
-      // and dynamic content generation, which is compatible with the new styles.
+      const toastContainer = document.createElement("div");
+      toastContainer.className = "toast-container";
+      document.body.appendChild(toastContainer);
+
+      function showToast(message, type = "info", duration = 3000) {
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+
+        const icons = {
+          success: "✓",
+          error: "✗",
+          info: "ℹ",
+        };
+
+        toast.innerHTML = `
+          <span class="toast-icon">${icons[type] || icons.info}</span>
+          <div class="toast-content">${message}</div>
+          <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        setTimeout(() => {
+          toast.style.animation = "slideInRight 0.3s ease reverse";
+          setTimeout(() => toast.remove(), 300);
+        }, duration);
+      }
+
+      const keyboardHelpHTML = `
+        <div class="keyboard-help-overlay" id="keyboardHelp">
+          <div class="keyboard-help-content">
+            <h2>⌨️ Keyboard Shortcuts</h2>
+
+            <div class="keyboard-help-section">
+              <h3>Gallery Navigation</h3>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">N</span>
+                <span class="shortcut-description">Next page</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">P</span>
+                <span class="shortcut-description">Previous page</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">/</span>
+                <span class="shortcut-description">Focus search box</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">?</span>
+                <span class="shortcut-description">Show this help</span>
+              </div>
+            </div>
+
+            <div class="keyboard-help-section">
+              <h3>Selection</h3>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">Ctrl/Cmd + A</span>
+                <span class="shortcut-description">Select all visible items</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">Shift + Click</span>
+                <span class="shortcut-description">Select range</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">Escape</span>
+                <span class="shortcut-description">Clear selection</span>
+              </div>
+            </div>
+
+            <div class="keyboard-help-section">
+              <h3>Modal View</h3>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">←</span>
+                <span class="shortcut-description">Previous image</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">→</span>
+                <span class="shortcut-description">Next image</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">D</span>
+                <span class="shortcut-description">Download current image</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">I</span>
+                <span class="shortcut-description">Toggle info panel</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">F</span>
+                <span class="shortcut-description">Toggle fullscreen</span>
+              </div>
+              <div class="keyboard-shortcut">
+                <span class="shortcut-key">Escape</span>
+                <span class="shortcut-description">Close modal</span>
+              </div>
+            </div>
+
+            <div style="text-align: center; margin-top: var(--space-6);">
+              <button class="btn" onclick="closeKeyboardHelp()">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.insertAdjacentHTML("beforeend", keyboardHelpHTML);
+
+      function closeKeyboardHelp() {
+        document.getElementById("keyboardHelp").classList.remove("active");
+      }
+
+      document.getElementById("keyboardHelp").addEventListener("click", (e) => {
+        if (e.target.id === "keyboardHelp") closeKeyboardHelp();
+      });
+
       let all_media = [];
       let filtered_media = [];
       let current_filter = "all";
@@ -1101,6 +1521,7 @@
       let sort_order = "asc";
       let advanced_filters = {};
       let selected_items = new Set();
+      let last_selected_index = -1;
 
       async function load_media() {
         try {
@@ -1132,6 +1553,11 @@
             params.append("aspect_ratio", advanced_filters.aspectRatio);
 
           const response = await fetch(`/api/media?${params}`);
+
+          if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+          }
+
           filtered_media = await response.json();
 
           apply_sorting();
@@ -1139,12 +1565,15 @@
           update_stats();
           render_pagination_ctrls();
         } catch (error) {
+          console.error("Error loading media:", error);
           document.getElementById("gallery").innerHTML = `
-                    <div class="empty">
-                        <h2>Error loading downloads</h2>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+            <div class="empty">
+              <h2>Error loading downloads</h2>
+              <p>${error.message}</p>
+              <button class="btn" onclick="load_media()">Retry</button>
+            </div>
+          `;
+          showToast("Failed to load media", "error");
         }
       }
 
@@ -1198,18 +1627,18 @@
 
         if (filtered_media.length === 0) {
           gallery.innerHTML = `
-                    <div class="empty">
-                        <h2>No downloads found</h2>
-                        <p>Try adjusting your filters or search query.</p>
-                    </div>
-                `;
+            <div class="empty">
+              <h2>No downloads found</h2>
+              <p>Try adjusting your filters or search query.</p>
+            </div>
+          `;
           return;
         }
 
         const start_idx = (current_page - 1) * items_per_page;
         const end_index = Math.min(
           start_idx + items_per_page,
-          filtered_media.length,
+          filtered_media.length
         );
         const pag_media = filtered_media.slice(start_idx, end_index);
 
@@ -1223,91 +1652,145 @@
               const meta = item.metadata;
               const ratingClass = `rating-${meta.rating}`;
               metadataHtml = `
-                        <div class="media-metadata">
-                            <div class="metadata-row">
-                                <span class="metadata-label">ID:</span>
-                                <span class="metadata-value">${meta.id}</span>
-                            </div>
-                            <div class="metadata-row">
-                                <span class="metadata-label">Artist:</span>
-                                <span class="metadata-value">${meta.artists.join(", ") || "Unknown"}</span>
-                            </div>
-                            <div class="metadata-row">
-                                <span class="metadata-label">Rating:</span>
-                                <span class="rating-badge ${ratingClass}">${meta.rating.toUpperCase()}</span>
-                            </div>
-                            <div class="metadata-row">
-                                <span class="metadata-label">Score:</span>
-                                <span class="metadata-value">${meta.score}</span>
-                            </div>
-                            <div class="metadata-row">
-                                <span class="metadata-label">Favs:</span>
-                                <span class="metadata-value">${meta.fav_count}</span>
-                            </div>
-                            ${
-                              meta.artists.length > 0
-                                ? `
-                                <div class="tag-list">
-                                    ${meta.artists
-                                      .slice(0, 3)
-                                      .map(
-                                        (a) =>
-                                          `<span class="tag artist" onclick="filter_by_tag('${a}', 'artist'); event.stopPropagation();">${a}</span>`,
-                                      )
-                                      .join("")}
-                                </div>
-                            `
-                                : ""
-                            }
-                        </div>
-                    `;
+                <div class="media-metadata">
+                  <div class="metadata-row">
+                    <span class="metadata-label">ID:</span>
+                    <span class="metadata-value">${meta.id}</span>
+                  </div>
+                  <div class="metadata-row">
+                    <span class="metadata-label">Artist:</span>
+                    <span class="metadata-value">${
+                      meta.artists.join(", ") || "Unknown"
+                    }</span>
+                  </div>
+                  <div class="metadata-row">
+                    <span class="metadata-label">Rating:</span>
+                    <span class="rating-badge ${ratingClass}">${meta.rating.toUpperCase()}</span>
+                  </div>
+                  <div class="metadata-row">
+                    <span class="metadata-label">Score:</span>
+                    <span class="metadata-value">${meta.score}</span>
+                  </div>
+                  <div class="metadata-row">
+                    <span class="metadata-label">Favs:</span>
+                    <span class="metadata-value">${meta.fav_count}</span>
+                  </div>
+                  ${
+                    meta.artists.length > 0
+                      ? `
+                    <div class="tag-list">
+                      ${meta.artists
+                        .slice(0, 3)
+                        .map(
+                          (a) =>
+                            `<span class="tag artist" onclick="filter_by_tag('${a}', 'artist'); event.stopPropagation();">${a}</span>`
+                        )
+                        .join("")}
+                    </div>
+                  `
+                      : ""
+                  }
+                </div>
+              `;
             }
 
             return `
-                    <div class="media-card ${isSelected ? "selected" : ""}" onclick="open_modal(${globalIndex})" data-index="${globalIndex}">
-                        <div class="media-preview-container">
-                            ${
-                              item.media_type === "video"
-                                ? `<video class="media-preview" src="${item.path}" preload="metadata" loop muted></video>`
-                                : `<img class="media-preview" src="${item.path}" alt="${item.name}" loading="lazy">`
-                            }
-                            <div class="media-overlay">
-                                <div class="quick-actions">
-                                    <button class="quick-action" onclick="toggle_select(${globalIndex}); event.stopPropagation();" title="Select">☑</button>
-                                    <button class="quick-action" onclick="download_media(${globalIndex}); event.stopPropagation();" title="Download">⬇</button>
-                                </div>
-                                <span class="media-type ${item.media_type}">${item.media_type}</span>
-                            </div>
-                        </div>
-                        <div class="media-info">
-                            <div class="media-name">${item.name}</div>
-                            <div class="media-meta">
-                                <span>${format_file_size(item.size)}</span>
-                            </div>
-                            ${metadataHtml}
-                        </div>
+              <div class="media-card ${isSelected ? "selected" : ""}"
+                   onclick="open_modal(${globalIndex})"
+                   ondblclick="open_modal(${globalIndex})"
+                   data-index="${globalIndex}">
+                <div class="media-preview-container">
+                  ${
+                    item.media_type === "video"
+                      ? `<video class="media-preview" src="${item.path}" preload="metadata" loop muted></video>`
+                      : `<img class="media-preview loading" data-src="${item.path}" alt="${item.name}">`
+                  }
+                  <div class="media-overlay">
+                    <div class="quick-actions">
+                      <button class="quick-action" onclick="toggle_select_with_shift(${globalIndex}, event); event.stopPropagation();" title="Select">☑</button>
+                      <button class="quick-action" onclick="download_media(${globalIndex}); event.stopPropagation();" title="Download">⬇</button>
                     </div>
-                `;
+                    <span class="media-type ${item.media_type}">${
+              item.media_type
+            }</span>
+                  </div>
+                </div>
+                <div class="media-info">
+                  <div class="media-name">${item.name}</div>
+                  <div class="media-meta">
+                    <span>${format_file_size(item.size)}</span>
+                  </div>
+                  ${metadataHtml}
+                </div>
+              </div>
+            `;
           })
           .join("");
 
+        setupLazyLoading();
+
         if (current_view === "grid" || current_view === "compact") {
           document.querySelectorAll(".media-card video").forEach((video) => {
-            video.parentElement.parentElement.addEventListener(
-              "mouseenter",
-              () => {
-                video.play().catch(() => {});
-              },
-            );
-            video.parentElement.parentElement.addEventListener(
-              "mouseleave",
-              () => {
-                video.pause();
-                video.currentTime = 0;
-              },
-            );
+            const card = video.closest(".media-card");
+            card.addEventListener("mouseenter", () => {
+              video.play().catch(() => {});
+            });
+            card.addEventListener("mouseleave", () => {
+              video.pause();
+              video.currentTime = 0;
+            });
           });
         }
+      }
+
+      function setupLazyLoading() {
+        const imageObserver = new IntersectionObserver(
+          (entries, observer) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                const img = entry.target;
+                img.src = img.dataset.src;
+                img.classList.remove("loading");
+
+                img.onload = () => {
+                  img.classList.add("loaded");
+                };
+
+                img.onerror = () => {
+                  img.classList.remove("loading");
+                  img.alt = "Failed to load image";
+                };
+
+                observer.unobserve(img);
+              }
+            });
+          },
+          {
+            rootMargin: "50px",
+          }
+        );
+
+        document.querySelectorAll("img[data-src]").forEach((img) => {
+          imageObserver.observe(img);
+        });
+      }
+
+      function toggle_select_with_shift(index, event) {
+        if (event && event.shiftKey && last_selected_index !== -1) {
+          const start = Math.min(last_selected_index, index);
+          const end = Math.max(last_selected_index, index);
+
+          for (let i = start; i <= end; i++) {
+            selected_items.add(i);
+            const card = document.querySelector(`[data-index="${i}"]`);
+            if (card) card.classList.add("selected");
+          }
+          showToast(`Selected ${end - start + 1} items`, "success", 2000);
+        } else {
+          toggle_select(index);
+        }
+
+        last_selected_index = index;
       }
 
       function toggle_select(index) {
@@ -1323,6 +1806,23 @@
         }
 
         update_bulk_actions();
+      }
+
+      function select_all_visible() {
+        const start_idx = (current_page - 1) * items_per_page;
+        const end_index = Math.min(
+          start_idx + items_per_page,
+          filtered_media.length
+        );
+
+        for (let i = start_idx; i < end_index; i++) {
+          selected_items.add(i);
+          const card = document.querySelector(`[data-index="${i}"]`);
+          if (card) card.classList.add("selected");
+        }
+
+        update_bulk_actions();
+        showToast(`Selected ${end_index - start_idx} items`, "success", 2000);
       }
 
       function update_bulk_actions() {
@@ -1346,6 +1846,7 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        showToast(`Downloading ${item.name}`, "success", 2000);
       }
 
       function filter_by_tag(tag, type) {
@@ -1356,6 +1857,7 @@
         }
         document.getElementById("advancedFilters").classList.add("active");
         document.getElementById("applyFilters").click();
+        showToast(`Filtering by ${type}: ${tag}`, "info", 2000);
       }
 
       function update_stats() {
@@ -1363,10 +1865,10 @@
           .getElementById("stats")
           .querySelector(".stats-info");
         const images = filtered_media.filter(
-          (m) => m.media_type === "image",
+          (m) => m.media_type === "image"
         ).length;
         const videos = filtered_media.filter(
-          (m) => m.media_type === "video",
+          (m) => m.media_type === "video"
         ).length;
 
         let filter_info = [];
@@ -1383,7 +1885,7 @@
 
         const totalSize = filtered_media.reduce(
           (sum, item) => sum + item.size,
-          0,
+          0
         );
 
         stats.innerHTML = `
@@ -1399,7 +1901,16 @@
           <div class="stat-item">
             <strong>${format_file_size(totalSize)}</strong> total
           </div>
-          ${filter_txt ? `<div class="stat-item" style="color: var(--iris);">${filter_txt}</div>` : ""}
+          ${
+            filter_txt
+              ? `<div class="stat-item" style="color: var(--iris);">${filter_txt}</div>`
+              : ""
+          }
+          ${
+            selected_items.size > 0
+              ? `<div class="stat-item selection-count">${selected_items.size} selected</div>`
+              : ""
+          }
         `;
       }
 
@@ -1422,6 +1933,7 @@
 
       function close_modal() {
         document.getElementById("modal").classList.remove("active");
+        document.getElementById("modalInfo").classList.remove("active");
         document.body.style.overflow = "";
       }
 
@@ -1437,7 +1949,9 @@
 
         let pagination_html = "";
 
-        pagination_html += `<button class="btn page-button" onclick="prev_page()" ${current_page === 1 ? "disabled" : ""}>« Prev</button>`;
+        pagination_html += `<button class="btn page-button" onclick="prev_page()" ${
+          current_page === 1 ? "disabled" : ""
+        }>« Prev</button>`;
 
         const showPages = 5;
         let startPage = Math.max(1, current_page - Math.floor(showPages / 2));
@@ -1455,7 +1969,9 @@
         }
 
         for (let i = startPage; i <= endPage; i++) {
-          pagination_html += `<button class="btn page-button ${i === current_page ? "active" : ""}" onclick="goto_page(${i})">${i}</button>`;
+          pagination_html += `<button class="btn page-button ${
+            i === current_page ? "active" : ""
+          }" onclick="goto_page(${i})">${i}</button>`;
         }
 
         if (endPage < total_pages) {
@@ -1465,7 +1981,9 @@
           pagination_html += `<button class="btn page-button" onclick="goto_page(${total_pages})">${total_pages}</button>`;
         }
 
-        pagination_html += `<button class="btn page-button" onclick="next_page()" ${current_page === total_pages ? "disabled" : ""}>Next »</button>`;
+        pagination_html += `<button class="btn page-button" onclick="next_page()" ${
+          current_page === total_pages ? "disabled" : ""
+        }>Next »</button>`;
 
         pagination_html += `
           <div class="page-jump">
@@ -1522,7 +2040,9 @@
         const modal_info = document.getElementById("modalInfo");
         const modal_counter = document.getElementById("modalCounter");
 
-        modal_counter.textContent = `${current_modal_index + 1} / ${filtered_media.length}`;
+        modal_counter.textContent = `${current_modal_index + 1} / ${
+          filtered_media.length
+        }`;
 
         let new_media_element;
 
@@ -1546,21 +2066,47 @@
         if (item.metadata) {
           const meta = item.metadata;
           modal_info.innerHTML = `
-                    <h3>${item.name}</h3>
-                    <p><strong>ID:</strong> ${meta.id} | <strong>Rating:</strong> ${meta.rating.toUpperCase()} | <strong>Score:</strong> ${meta.score} | <strong>Favorites:</strong> ${meta.fav_count}</p>
-                    ${meta.artists.length > 0 ? `<p><strong>Artists:</strong> ${meta.artists.join(", ")}</p>` : ""}
-                    ${meta.tags.length > 0 ? `<p><strong>Tags:</strong> ${meta.tags.slice(0, 20).join(", ")}${meta.tags.length > 20 ? "..." : ""}</p>` : ""}
-                    ${meta.character_tags.length > 0 ? `<p><strong>Characters:</strong> ${meta.character_tags.join(", ")}</p>` : ""}
-                    ${meta.species_tags.length > 0 ? `<p><strong>Species:</strong> ${meta.species_tags.join(", ")}</p>` : ""}
-                    <p><strong>Created:</strong> ${new Date(meta.created_at).toLocaleString()}</p>
-                    <p><strong>Size:</strong> ${format_file_size(item.size)}</p>
-                `;
+      <h3>${item.name}</h3>
+      <p><strong>ID:</strong> ${
+        meta.id
+      } | <strong>Rating:</strong> ${meta.rating.toUpperCase()} | <strong>Score:</strong> ${
+            meta.score
+          } | <strong>Favorites:</strong> ${meta.fav_count}</p>
+      ${
+        meta.artists.length > 0
+          ? `<p><strong>Artists:</strong> ${meta.artists.join(", ")}</p>`
+          : ""
+      }
+      ${
+        meta.tags.length > 0
+          ? `<p><strong>Tags:</strong> ${meta.tags.slice(0, 20).join(", ")}${
+              meta.tags.length > 20 ? "..." : ""
+            }</p>`
+          : ""
+      }
+      ${
+        meta.character_tags.length > 0
+          ? `<p><strong>Characters:</strong> ${meta.character_tags.join(
+              ", "
+            )}</p>`
+          : ""
+      }
+      ${
+        meta.species_tags.length > 0
+          ? `<p><strong>Species:</strong> ${meta.species_tags.join(", ")}</p>`
+          : ""
+      }
+      <p><strong>Created:</strong> ${new Date(
+        meta.created_at
+      ).toLocaleString()}</p>
+      <p><strong>Size:</strong> ${format_file_size(item.size)}</p>
+    `;
         } else {
           modal_info.innerHTML = `
-            <h3>${item.name}</h3>
-            <p><strong>Size:</strong> ${format_file_size(item.size)}</p>
-            <p>No metadata available</p>
-          `;
+      <h3>${item.name}</h3>
+      <p><strong>Size:</strong> ${format_file_size(item.size)}</p>
+      <p>No metadata available</p>
+    `;
         }
       }
 
@@ -1594,14 +2140,20 @@
         .getElementById("modalFullscreen")
         .addEventListener("click", () => {
           const modalContent = document.querySelector(".modal-content");
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
+          if (!document.fullscreenElement) {
             modalContent.requestFullscreen().catch((err) => {
               console.error("Fullscreen error:", err);
+              showToast("Fullscreen not supported", "error", 2000);
             });
+          } else {
+            document.exitFullscreen();
           }
         });
+
+      document.getElementById("modalMetadata").addEventListener("click", () => {
+        const modalInfo = document.getElementById("modalInfo");
+        modalInfo.classList.toggle("active");
+      });
 
       document.getElementById("modal").addEventListener("click", (e) => {
         if (e.target.id === "modal") close_modal();
@@ -1609,12 +2161,32 @@
 
       document.addEventListener("keydown", (e) => {
         const modal = document.getElementById("modal");
+
         if (modal.classList.contains("active")) {
-          if (e.key === "Escape") close_modal();
-          if (e.key === "ArrowRight") next_media();
-          if (e.key === "ArrowLeft") prev_media();
-          if (e.key === "d" || e.key === "D")
+          if (e.key === "Escape") {
+            close_modal();
+            return;
+          }
+          if (e.key === "ArrowRight") {
+            next_media();
+            return;
+          }
+          if (e.key === "ArrowLeft") {
+            prev_media();
+            return;
+          }
+          if (e.key === "d" || e.key === "D") {
             download_media(current_modal_index);
+            return;
+          }
+          if (e.key === "i" || e.key === "I") {
+            document.getElementById("modalInfo").classList.toggle("active");
+            return;
+          }
+          if (e.key === "f" || e.key === "F") {
+            document.getElementById("modalFullscreen").click();
+            return;
+          }
           return;
         }
 
@@ -1629,6 +2201,25 @@
           next_page();
         } else if (e.key === "p" || e.key === "P") {
           prev_page();
+        } else if (e.key === "?") {
+          document.getElementById("keyboardHelp").classList.toggle("active");
+        } else if (e.key === "/" && !modal.classList.contains("active")) {
+          e.preventDefault();
+          document.getElementById("searchBox").focus();
+        } else if (e.key === "Escape") {
+          if (selected_items.size > 0) {
+            selected_items.clear();
+            document
+              .querySelectorAll(".media-card.selected")
+              .forEach((card) => {
+                card.classList.remove("selected");
+              });
+            update_bulk_actions();
+            showToast("Selection cleared", "info", 2000);
+          }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+          e.preventDefault();
+          select_all_visible();
         }
       });
 
@@ -1674,6 +2265,7 @@
           btn.classList.add("active");
           current_view = btn.dataset.view;
           render_gallery();
+          showToast(`View changed to ${current_view}`, "info", 1500);
         });
       });
 
@@ -1699,6 +2291,7 @@
         current_page = 1;
         render_gallery();
         render_pagination_ctrls();
+        showToast(`Showing ${items_per_page} items per page`, "info", 2000);
       });
 
       document
@@ -1723,6 +2316,7 @@
         };
         current_page = 1;
         load_media();
+        showToast("Filters applied", "success", 2000);
       });
 
       document.getElementById("clearFilters").addEventListener("click", () => {
@@ -1731,6 +2325,7 @@
         advanced_filters = {};
         current_page = 1;
         selected_items.clear();
+        last_selected_index = -1;
 
         searchBox.value = "";
         searchClear.classList.remove("active");
@@ -1755,24 +2350,32 @@
 
         update_bulk_actions();
         load_media();
+        showToast("All filters cleared", "success", 2000);
       });
 
       document
         .querySelector("#bulkActions button:nth-child(2)")
         .addEventListener("click", () => {
+          let count = 0;
           selected_items.forEach((index) => {
             download_media(index);
+            count++;
           });
+          showToast(`Downloading ${count} items`, "success", 3000);
         });
 
       document
         .querySelector("#bulkActions button:nth-child(3)")
         .addEventListener("click", () => {
+          const count = selected_items.size;
           selected_items.clear();
+          last_selected_index = -1;
           document.querySelectorAll(".media-card.selected").forEach((card) => {
             card.classList.remove("selected");
           });
           update_bulk_actions();
+          update_stats();
+          showToast(`Cleared ${count} selections`, "info", 2000);
         });
 
       const scrollTopBtn = document.getElementById("scrollTop");
@@ -1790,34 +2393,29 @@
       });
 
       document.addEventListener("keydown", (e) => {
-        if (e.key === "?" && !e.ctrlKey && !e.metaKey) {
-          alert(`Keyboard Shortcuts:
-          
-Gallery View:
-  N - Next page
-  P - Previous page
-  ? - Show this help
-
-Modal View:
-  ESC - Close modal
-  ← → - Navigate between images
-  D - Download current image
-  
-Search:
-  / - Focus search box (when not in modal)`);
+        if (e.key === "Enter" && e.target.id === "pageJumpInput") {
+          jump_to_page();
         }
+      });
 
-        if (
-          e.key === "/" &&
-          !modal.classList.contains("active") &&
-          document.activeElement.tagName !== "INPUT"
-        ) {
-          e.preventDefault();
-          searchBox.focus();
+      document.addEventListener("fullscreenchange", () => {
+        const fullscreenBtn = document.getElementById("modalFullscreen");
+        if (document.fullscreenElement) {
+          fullscreenBtn.textContent = "⛶";
+          fullscreenBtn.title = "Exit Fullscreen";
+        } else {
+          fullscreenBtn.textContent = "⛶";
+          fullscreenBtn.title = "Fullscreen";
         }
       });
 
       load_media();
+      showToast(
+        "Welcome to e6srv! Press ? for keyboard shortcuts",
+        "info",
+        4000
+      );
     </script>
   </body>
 </html>
+

@@ -32,7 +32,7 @@ pub async fn index_handler(State(_): State<Arc<AppState>>) -> Html<String> {
 
     let registry = ThemeRegistry::new();
     let css_vars = registry.get_theme_css_vars(&configured_theme).unwrap();
-    let html = HTML_TEMPLATE.replace("{{THEME_CSS_VARS}}", &css_vars);
+    let html = HTML_TEMPLATE.replace("/* {{THEME_CSS_VARS}} */", &css_vars);
     Html(html)
 }
 

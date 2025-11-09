@@ -113,8 +113,8 @@ impl<'a> FormatContext<'a> {
     fn get_simple(&self, key: &str) -> Option<Cow<'a, str>> {
         match key {
             "id" => Some(Cow::Owned(self.post.id.to_string())),
-            "md5" => Some(Cow::Borrowed(&self.post.file.md5)),
-            "ext" => Some(Cow::Borrowed(&self.post.file.ext)),
+            "md5" => Some(Cow::Owned(self.post.file.md5.to_string())),
+            "ext" => Some(Cow::Owned(self.post.file.ext.to_string())),
             "width" => Some(Cow::Owned(self.post.file.width.to_string())),
             "height" => Some(Cow::Owned(self.post.file.height.to_string())),
             "size" => Some(Cow::Owned(self.post.file.size.to_string())),
@@ -569,12 +569,12 @@ impl PostDownloader {
     }
 
     pub fn format_filename(&self, post: &E6Post) -> Result<String> {
-        let out_fmt = self.output_format.as_deref().unwrap_or("$id.$ext");
+        let out_fmt = self.output_format.as_deref().unwrap_or("{id}.{ext}");
 
         let indexed_re =
-            regex::Regex::new(r"\$([a-z_]+)\[([0-9]+(?:\.\.[0-9]*)?|\.\.(?:[0-9]+)?)\]").unwrap();
+            regex::Regex::new(r"\{([a-z_]+)\[([0-9]+(?:\.\.[0-9]*)?|\.\.(?:[0-9]+)?)\]\}").unwrap();
 
-        let simple_re = regex::Regex::new(r"\$([a-z_]+)").unwrap();
+        let simple_re = regex::Regex::new(r"\{([a-z_]+)\}").unwrap();
 
         let mut formatted = String::from(out_fmt);
 
@@ -582,7 +582,6 @@ impl PostDownloader {
             .replace_all(&formatted, |caps: &regex::Captures| {
                 let key = &caps[1];
                 let range_str = &caps[2];
-
                 let ctx = FormatContext::new(post);
 
                 IndexRange::parse(range_str)
@@ -595,7 +594,6 @@ impl PostDownloader {
         formatted = simple_re
             .replace_all(&formatted, |caps: &regex::Captures| {
                 let key = &caps[1];
-
                 let ctx = FormatContext::new(post);
 
                 ctx.get_simple(key)
