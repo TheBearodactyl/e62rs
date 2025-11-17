@@ -84,7 +84,8 @@ impl Autocomplete for TagAutocompleter {
             return Ok(Vec::new());
         }
 
-        let matches = self.tag_db.autocomplete(search_tag, self.limit);
+        let mut matches = self.tag_db.autocomplete(search_tag, self.limit);
+        matches.reverse();
 
         let formatted: Vec<String> = matches
             .into_iter()
