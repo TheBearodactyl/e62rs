@@ -171,59 +171,67 @@ impl E6Client {
 
     pub async fn update_tags(&self) -> Result<()> {
         let cfg = E62Rs::get()?;
-        let local_file_cfg = cfg.completion.tags;
-        let local_file = local_file_cfg.as_str();
-        let local_hash_file: &str = &format!("{}.hash", local_file);
-
         let now = Local::now();
-        let url = format!(
-            "https://e621.net/db_export/tags-{:04}-{:02}-{:02}.csv.gz",
-            now.year(),
-            now.month(),
-            now.day()
-        );
+        let date_str = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
 
-        info!("{}", url);
+        let files_to_update = [
+            ("tags", &cfg.completion.tags),
+            ("tag_aliases", &cfg.completion.tag_aliases),
+            ("tag_implications", &cfg.completion.tag_implications),
+        ];
 
-        let response = self.update_client.get(&url).send().await?;
-        if !response.status().clone().is_success() {
-            bail!("Failed to download tags: {}", response.status());
+        for (file_type, local_file_cfg) in files_to_update {
+            let local_file = local_file_cfg.as_str();
+            let local_hash_file = format!("{}.hash", local_file);
+
+            let url = format!(
+                "https://e621.net/db_export/{}-{}.csv.gz",
+                file_type, date_str
+            );
+
+            info!("Checking {}...", file_type);
+            info!("URL: {}", url);
+
+            let response = self.update_client.get(&url).send().await?;
+            if !response.status().is_success() {
+                bail!("Failed to download {}: {}", file_type, response.status());
+            }
+
+            let remote_bytes = response.bytes().await?;
+            let mut hasher = Sha256::new();
+            hasher.update(&remote_bytes);
+
+            let remote_hash = hasher.finalize();
+            let remote_hash_hex = hex::encode(remote_hash);
+
+            let update_needed = if Path::new(&local_hash_file).exists() {
+                let local_hash_hex = fs::read_to_string(&local_hash_file).await?;
+                local_hash_hex.trim() != remote_hash_hex
+            } else {
+                true
+            };
+
+            if update_needed {
+                info!("Updating local {} snapshot...", file_type);
+
+                let mut gz = GzDecoder::new(&remote_bytes[..]);
+                let mut decompressed_data = Vec::new();
+                gz.read_to_end(&mut decompressed_data)?;
+
+                fs::create_dir_all("data").await?;
+                let mut file = fs::File::create(local_file).await?;
+                file.write_all(&decompressed_data).await?;
+
+                let mut hash_file = fs::File::create(&local_hash_file).await?;
+                hash_file.write_all(remote_hash_hex.as_bytes()).await?;
+
+                info!("✓ Updated local {} snapshot at {}", file_type, local_file);
+            } else {
+                info!("✓ Local snapshot of {} is up to date", file_type);
+            }
         }
 
-        let remote_bytes = response.bytes().await?;
-        let mut hasher = Sha256::new();
-
-        hasher.update(&remote_bytes);
-
-        let remote_hash = hasher.finalize();
-        let remote_hash_hex = hex::encode(remote_hash);
-
-        let update_needed = if Path::new(local_hash_file).exists() {
-            let local_hash_hex = fs::read_to_string(local_hash_file).await?;
-            local_hash_hex.trim() != remote_hash_hex
-        } else {
-            true
-        };
-
-        if update_needed {
-            info!("Updating local tags snapshot...");
-
-            let mut gz = GzDecoder::new(&remote_bytes[..]);
-            let mut decompressed_data = Vec::new();
-            gz.read_to_end(&mut decompressed_data)?;
-
-            fs::create_dir_all("data").await?;
-            let mut file = fs::File::create(local_file).await?;
-            file.write_all(&decompressed_data).await?;
-
-            let mut hash_file = fs::File::create(local_hash_file).await?;
-            hash_file.write_all(remote_hash_hex.as_bytes()).await?;
-
-            info!("Updated local tags snapshot at {}", local_file);
-        } else {
-            info!("Local snapshot of `tags.csv` is up to date, continuing");
-        }
-
+        info!("All tag data files are up to date!");
         Ok(())
     }
 }

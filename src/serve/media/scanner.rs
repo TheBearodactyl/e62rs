@@ -1,5 +1,8 @@
 use {
-    crate::serve::media::{item::MediaItem, metadata::PostMetadata, types::MediaType},
+    crate::{
+        models::E6Post,
+        serve::media::{item::MediaItem, metadata::PostMetadata, types::MediaType},
+    },
     jwalk::WalkDir,
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     serde_json::Value,
@@ -62,46 +65,19 @@ impl FileSystemScanner {
     }
 
     fn parse_metadata(&self, contents: &str) -> Option<PostMetadata> {
-        let post: Value = serde_json::from_str(contents).ok()?;
+        let post: E6Post = serde_json::from_str(contents).ok()?;
 
         Some(PostMetadata {
-            id: post["id"].as_i64().unwrap_or(0),
-            rating: post["rating"].as_str().unwrap_or("").to_string(),
-            score: post["score"]["total"].as_i64().unwrap_or(0),
-            fav_count: post["fav_count"].as_i64().unwrap_or(0),
-            artists: post["tags"]["artist"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            tags: post["tags"]["general"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            character_tags: post["tags"]["character"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            species_tags: post["tags"]["species"]
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            created_at: post["created_at"].as_str().unwrap_or("").to_string(),
+            id: post.id,
+            rating: post.rating,
+            score: post.score.total,
+            fav_count: post.fav_count,
+            artists: post.tags.artist,
+            tags: post.tags.general,
+            character_tags: post.tags.character,
+            species_tags: post.tags.species,
+            created_at: post.created_at,
+            pools: post.pools,
         })
     }
 

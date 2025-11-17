@@ -11,4 +11,5 @@ pub struct PostMetadata {
     pub character_tags: Vec<String>,
     pub species_tags: Vec<String>,
     pub created_at: String,
+    pub pools: Vec<i64>,
 }

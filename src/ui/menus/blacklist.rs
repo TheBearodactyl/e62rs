@@ -41,7 +41,6 @@ impl E6Ui {
                 BlacklistManager::RemoveTag => {
                     self.remove_tag_from_blacklist().await?;
                 }
-
                 BlacklistManager::Clear => {
                     self.clear_blacklist().await?;
                 }
@@ -49,6 +48,10 @@ impl E6Ui {
                     self.import_tags_to_blacklist().await?;
                 }
                 BlacklistManager::Back => break,
+            }
+
+            if matches!(blacklist_action, BlacklistManager::Back) {
+                break;
             }
 
             if !Confirm::new("Continue managing blacklist?")

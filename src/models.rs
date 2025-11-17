@@ -313,6 +313,34 @@ pub struct PoolEntry {
     pub post_ids: Vec<i64>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TagAliasEntry {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub antecedent_name: String,
+    #[serde(default)]
+    pub consequent_name: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub status: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TagImplicationEntry {
+    #[serde(default)]
+    pub id: i64,
+    #[serde(default)]
+    pub antecedent_name: String,
+    #[serde(default)]
+    pub consequent_name: String,
+    #[serde(default)]
+    pub created_at: String,
+    #[serde(default)]
+    pub status: String,
+}
+
 impl E6Post {
     pub fn parse_blacklist_rule(rule: &str) -> (Vec<String>, Vec<String>) {
         let mut includes = Vec::new();

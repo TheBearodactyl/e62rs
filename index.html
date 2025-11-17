@@ -1258,6 +1258,13 @@
               id="postIdFilter"
               placeholder="Search by post ID..." />
           </div>
+		  <div class="filter-group">
+			<label for="poolIdFilter">Pool ID</label>
+			<input
+			  type="number"
+			  id="poolIdFilter"
+			  placeholder="Search by pool ID..." />
+		  </div>
           <div class="filter-group">
             <label for="minWidthFilter">Min Width</label>
             <input
@@ -1429,7 +1436,7 @@
       const keyboardHelpHTML = `
         <div class="keyboard-help-overlay" id="keyboardHelp">
           <div class="keyboard-help-content">
-            <h2>⌨️ Keyboard Shortcuts</h2>
+            <h2>⌨Keyboard Shortcuts</h2>
 
             <div class="keyboard-help-section">
               <h3>Gallery Navigation</h3>
@@ -1545,6 +1552,8 @@
             params.append("min_fav", advanced_filters.minFav);
           if (advanced_filters.postId)
             params.append("post_id", advanced_filters.postId);
+          if (advanced_filters.poolId)
+			params.append("pool_id", advanced_filters.poolId)
           if (advanced_filters.minWidth)
             params.append("min_width", advanced_filters.minWidth);
           if (advanced_filters.minHeight)
@@ -2411,7 +2420,7 @@
 
       load_media();
       showToast(
-        "Welcome to e6srv! Press ? for keyboard shortcuts",
+        "Press ? for keyboard shortcuts",
         "info",
         4000
       );

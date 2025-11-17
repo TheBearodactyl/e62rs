@@ -20,6 +20,8 @@ pub struct MediaFilter {
     pub extension: Option<String>,
     #[serde(default)]
     pub post_id: Option<i64>,
+    #[serde(default)]
+    pub pool_id: Option<i64>,
 }
 
 impl MediaFilter {
@@ -100,12 +102,19 @@ impl MediaFilter {
             {
                 return false;
             }
+
+            if let Some(pool_id) = self.pool_id
+                && !metadata.pools.iter().any(|&p| p == pool_id)
+            {
+                return false;
+            }
         } else if self.rating.is_some()
             || self.artist.is_some()
             || self.tag.is_some()
             || self.min_score.is_some()
             || self.max_score.is_some()
             || self.post_id.is_some()
+            || self.pool_id.is_some()
         {
             return false;
         }

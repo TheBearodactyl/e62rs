@@ -358,6 +358,14 @@ pub struct CompletionCfg {
     #[default("data/tags.csv".to_string())]
     pub tags: String,
 
+    /// The path to `tag_aliases.csv` that's used for tag alias computation
+    #[default("data/tag_aliases.csv".to_string())]
+    pub tag_aliases: String,
+
+    /// The path to `tag_implications.csv` that's used for tag implication computation
+    #[default("data/tag_implications.csv".to_string())]
+    pub tag_implications: String,
+
     /// The path to `pools.csv` that's used for pool searching/autocompletion
     #[default("data/pools.csv".to_string())]
     pub pools: String,

@@ -306,14 +306,15 @@ impl E6Ui {
             ))
             .prompt()?;
 
-            match action {
+            let should_break = match action {
                 ExplorerMenu::BrowsePosts => {
                     if state.filtered_posts.is_empty() {
                         println!("No posts match the current filters.");
-                        continue;
+                    } else {
+                        self.browse_local_posts(&state.filtered_posts, &explorer_cfg)
+                            .await?;
                     }
-                    self.browse_local_posts(&state.filtered_posts, &explorer_cfg)
-                        .await?;
+                    false
                 }
                 ExplorerMenu::SearchPosts => {
                     let query =
@@ -321,15 +322,19 @@ impl E6Ui {
                             .prompt_skippable()?;
                     state.search(query);
                     println!("Found {} matching posts", state.filtered_posts.len());
+                    false
                 }
                 ExplorerMenu::FilterByRating => {
                     self.filter_by_rating(&mut state)?;
+                    false
                 }
                 ExplorerMenu::SortBy => {
                     self.sort_posts(&mut state)?;
+                    false
                 }
                 ExplorerMenu::ViewStatistics => {
                     self.display_statistics(&state);
+                    false
                 }
                 ExplorerMenu::ClearFilters => {
                     state.search(None);
@@ -338,9 +343,17 @@ impl E6Ui {
                         "Filters cleared. Showing all {} posts",
                         state.filtered_posts.len()
                     );
+                    false
                 }
-                ExplorerMenu::Slideshow => self.slideshow(&state.filtered_posts).await?,
-                ExplorerMenu::Back => break,
+                ExplorerMenu::Slideshow => {
+                    self.slideshow(&state.filtered_posts).await?;
+                    false
+                }
+                ExplorerMenu::Back => true,
+            };
+
+            if should_break {
+                break;
             }
 
             if !Confirm::new("Continue exploring?")

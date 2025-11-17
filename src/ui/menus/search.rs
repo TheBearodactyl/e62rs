@@ -17,28 +17,36 @@ impl E6Ui {
             let search_type =
                 AdvPoolSearch::select("How would you like to search for pools").prompt()?;
 
-            match search_type {
+            let should_break = match search_type {
                 AdvPoolSearch::ByName => {
                     if let Err(e) = self.perform_pool_search().await {
                         eprintln!("Pool name search error: {}", e);
                     }
+                    false
                 }
                 AdvPoolSearch::ByDesc => {
                     if let Err(e) = self.perform_pool_description_search().await {
                         eprintln!("Pool description search error: {}", e);
                     }
+                    false
                 }
                 AdvPoolSearch::ByCreator => {
                     if let Err(e) = self.perform_pool_creator_search().await {
                         eprintln!("Pool creator search error: {}", e);
                     }
+                    false
                 }
                 AdvPoolSearch::BrowseLatest => {
                     if let Err(e) = self.browse_latest_pools().await {
                         eprintln!("Error browsing pools: {}", e);
                     }
+                    false
                 }
-                AdvPoolSearch::Back => break,
+                AdvPoolSearch::Back => true,
+            };
+
+            if should_break {
+                break;
             }
 
             if !Confirm::new("Would you like to perform another search?")
@@ -340,7 +348,7 @@ impl E6Ui {
             {
                 Ok(response) => response,
                 Err(e) => {
-                    eprintln!("{}", e.to_string());
+                    eprintln!("{}", e);
                     return Err(e);
                 }
             };

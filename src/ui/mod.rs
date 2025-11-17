@@ -6,18 +6,23 @@ use {
         display::image::fetch_and_display_images_as_sixel,
         models::*,
         serve::{cfg::ServerConfig, server::MediaServer},
-        ui::menus::{
-            BatchAction, InteractionMenu, PoolInteractionMenu, download::PostDownloader,
-            view::print_post_to_terminal,
+        ui::{
+            autocomplete::TagAutocompleter,
+            menus::{
+                BatchAction, InteractionMenu, PoolInteractionMenu, download::PostDownloader,
+                view::print_post_to_terminal,
+            },
         },
     },
     color_eyre::eyre::{Context, Result},
-    inquire::{Confirm, Editor, MultiSelect, Select},
+    inquire::{Confirm, Editor, MultiSelect, Select, Text},
+    owo_colors::OwoColorize,
     serde::{Deserialize, Serialize},
     std::{path::PathBuf, str::FromStr, sync::Arc},
     tokio::fs,
 };
 
+pub mod autocomplete;
 pub mod menus;
 pub mod progress;
 
@@ -67,100 +72,97 @@ impl E6Ui {
     }
 
     pub fn collect_tags(&self) -> Result<(Vec<String>, Vec<String>, Vec<String>)> {
+        let autocompleter = TagAutocompleter::new(self.tag_db.clone());
+
+        println!("\n{}", "Tag Input Instructions:".bold().cyan());
+        println!("  {} Separate tags with spaces", "•".bright_blue());
+        println!(
+            "  {} Prefix with {} to exclude a tag (e.g., {})",
+            "•".bright_blue(),
+            "-".red().bold(),
+            "-gore".red()
+        );
+        println!(
+            "  {} Prefix with {} for OR logic (e.g., {} {} means cat OR dog)",
+            "•".bright_blue(),
+            "~".yellow().bold(),
+            "~cat".yellow(),
+            "~dog".yellow()
+        );
+        println!(
+            "  {} Press {} to autocomplete",
+            "•".bright_blue(),
+            "Tab".green().bold()
+        );
+        println!(
+            "  {} Aliases shown as {}\n",
+            "•".bright_blue(),
+            "'alias -> canonical'".italic().bright_black()
+        );
+
+        let tags_input = Text::new("Enter tags:")
+            .with_autocomplete(autocompleter)
+            .with_help_message(
+                "Space-separated tags. Use - to exclude, ~ for OR. Tab to autocomplete.",
+            )
+            .prompt()
+            .context("Failed to get tags input")?;
+
         let mut include_tags = Vec::new();
         let mut exclude_tags = Vec::new();
         let mut or_tags = Vec::new();
 
-        loop {
-            let prompt = if include_tags.is_empty() && or_tags.is_empty() && exclude_tags.is_empty()
-            {
-                "Would you like to add tags to the search?"
+        for tag in tags_input.split_whitespace() {
+            let tag = tag.trim();
+
+            if tag.is_empty() {
+                continue;
+            }
+
+            if let Some(stripped) = tag.strip_prefix('-') {
+                let canonical = self.tag_db.get_canonical_name(stripped);
+                if !exclude_tags.contains(&canonical) {
+                    exclude_tags.push(canonical);
+                }
+            } else if let Some(stripped) = tag.strip_prefix('~') {
+                let canonical = self.tag_db.get_canonical_name(stripped);
+                if !or_tags.contains(&canonical) {
+                    or_tags.push(canonical);
+                }
             } else {
-                if !include_tags.is_empty() {
-                    println!("Include tags: {}", include_tags.join(" "));
-                }
-                if !exclude_tags.is_empty() {
-                    println!("Exclude tags: -{}", exclude_tags.join(" -"));
-                }
-                if !or_tags.is_empty() {
-                    println!("Inclusionary tags: -{}", or_tags.join(" -"));
-                }
-
-                "Would you like to add more tags?"
-            };
-
-            let add_tags = Confirm::new(prompt)
-                .with_default(false)
-                .prompt()
-                .context("Failed to get user confirmation")?;
-
-            if !add_tags {
-                break;
-            }
-
-            let tag_type = Select::new(
-                "What type of tags would you like to add?",
-                vec!["Include tags", "Exclude tags", "Inclusionary (OR) tags"],
-            )
-            .prompt()
-            .context("Failed to get tag type selection")?;
-
-            let all_tags: Vec<String> = unsafe { self.tag_db.iter_tags() }
-                .map(|entry| entry.name.to_string())
-                .collect();
-
-            if all_tags.is_empty() {
-                println!("No tags available in the database.");
-                break;
-            }
-
-            let selected_tags = MultiSelect::new(
-                if tag_type == "Include tags" {
-                    "Select tags to include (use spacebar to select, enter to confirm):"
-                } else if tag_type == "Exclude tags" {
-                    "Select tags to exclude (use spacebar to select, enter to confirm):"
-                } else {
-                    "Select tags to include (non-exclusive) (use spacebar to select, enter to confirm)"
-                },
-                all_tags,
-            )
-            .with_help_message("Select multiple tags using spacebar, press enter when done")
-            .with_page_size(20)
-            .prompt_skippable()
-            .context("Failed to get tag selection")?;
-
-            if let Some(selected) = selected_tags {
-                let target_list = if tag_type == "Include tags" {
-                    &mut include_tags
-                } else if tag_type == "Exclude tags" {
-                    &mut exclude_tags
-                } else {
-                    &mut or_tags
-                };
-
-                for tag in selected {
-                    if !target_list.contains(&tag) {
-                        target_list.push(tag);
-                    } else {
-                        println!(
-                            "Tag '{}' is already selected for {}.",
-                            tag,
-                            tag_type.to_lowercase()
-                        );
-                    }
+                let stripped = tag.strip_prefix('+').unwrap_or(tag);
+                let canonical = self.tag_db.get_canonical_name(stripped);
+                if !include_tags.contains(&canonical) {
+                    include_tags.push(canonical);
                 }
             }
+        }
 
-            if include_tags.is_empty() && exclude_tags.is_empty() && or_tags.is_empty() {
-                let try_again = Confirm::new("No tags were selected. Would you like to try again?")
-                    .with_default(true)
-                    .prompt()
-                    .context("Failed to get retry confirmation")?;
+        println!();
+        if !include_tags.is_empty() {
+            println!(
+                "{} Include tags: {}",
+                "✓".green().bold(),
+                include_tags.join(" ").bright_green()
+            );
+        }
+        if !exclude_tags.is_empty() {
+            println!(
+                "{} Exclude tags: {}",
+                "✓".red().bold(),
+                format!("-{}", exclude_tags.join(" -")).red()
+            );
+        }
+        if !or_tags.is_empty() {
+            println!(
+                "{} OR tags: {}",
+                "✓".yellow().bold(),
+                format!("~{}", or_tags.join(" ~")).yellow()
+            );
+        }
 
-                if !try_again {
-                    break;
-                }
-            }
+        if include_tags.is_empty() && exclude_tags.is_empty() && or_tags.is_empty() {
+            println!("{}", "No tags entered.".bright_black().italic());
         }
 
         Ok((include_tags, or_tags, exclude_tags))
