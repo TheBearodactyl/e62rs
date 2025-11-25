@@ -6,7 +6,7 @@ use {
         data::{pools::PoolDatabase, tags::TagDatabase},
         serve::api::run_api,
         ui::{
-            E6Ui,
+            E6Ui, ROSE_PINE,
             menus::{MainMenu, PoolSearchModeMenu},
         },
         utils::string_to_log_level,
@@ -49,7 +49,9 @@ pub async fn run() -> Result<()> {
     );
 
     let ui = E6Ui::new(client, tag_db, pool_db);
-    let selection = MainMenu::select("What would you like to do?").prompt()?;
+    let selection = MainMenu::select("What would you like to do?")
+        .theme(&ROSE_PINE)
+        .run()?;
 
     loop {
         match selection {
@@ -59,7 +61,8 @@ pub async fn run() -> Result<()> {
             MainMenu::SearchPools => {
                 let search_mode =
                     PoolSearchModeMenu::select("Which search mode would you like to use?")
-                        .prompt()?;
+                        .theme(&ROSE_PINE)
+                        .run()?;
 
                 match search_mode {
                     PoolSearchModeMenu::Simple => ui.search_pools().await?,

@@ -28,14 +28,21 @@ impl ProgressManager {
         }
     }
 
-    pub async fn create_bar(&self, key: &str, len: u64, message: &str) -> Result<ProgressBar> {
+    pub async fn create_download_bar(
+        &self,
+        key: &str,
+        len: u64,
+        message: &str,
+    ) -> Result<ProgressBar> {
         let cfg = E62Rs::get()?;
         let size_format = cfg.progress_format;
         let detailed = cfg.ui.detailed_progress;
+
         let template = if detailed {
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos_size:>10}/{len_size:>10} ({percent}%) {msg}"
+            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
+             {pos_size:>10}/{len_size} ({percent}%) {msg}"
         } else {
-            "{spinner:.green} [{wide_bar:.cyan/blue}] {pos_size:>10}/{len_size:>10} {msg}"
+            "{spinner:.bright_cyan} [{wide_bar:.bright_cyan/blue}] {pos_size:>10}/{len_size} {msg}"
         };
 
         let style = ProgressStyle::with_template(template)?
@@ -59,10 +66,9 @@ impl ProgressManager {
                     .unwrap_or(())
                 },
             )
-            .progress_chars("█▓░");
+            .progress_chars("━╸─");
 
         let pb = self.multi.add(ProgressBar::new(len));
-
         pb.set_style(style);
         pb.set_message(message.to_string());
         pb.enable_steady_tick(Duration::from_millis(10));
@@ -71,6 +77,43 @@ impl ProgressManager {
         bars.insert(key.to_string(), pb.clone());
 
         Ok(pb)
+    }
+
+    pub async fn create_count_bar(
+        &self,
+        key: &str,
+        len: u64,
+        message: &str,
+    ) -> Result<ProgressBar> {
+        let cfg = E62Rs::get()?;
+        let detailed = cfg.ui.detailed_progress;
+
+        let template = if detailed {
+            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
+             {pos:>7}/{len:>7} ({percent}%) {msg}"
+        } else {
+            "{spinner:.bright_cyan} [{wide_bar:.bright_cyan/blue}] {pos:>7}/{len:>7} {msg}"
+        };
+
+        let style = ProgressStyle::with_template(template)?
+            .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
+                write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap_or(())
+            })
+            .progress_chars("━╸─");
+
+        let pb = self.multi.add(ProgressBar::new(len));
+        pb.set_style(style);
+        pb.set_message(message.to_string());
+        pb.enable_steady_tick(Duration::from_millis(10));
+
+        let mut bars = self.bars.write().await;
+        bars.insert(key.to_string(), pb.clone());
+
+        Ok(pb)
+    }
+
+    pub async fn create_bar(&self, key: &str, len: u64, message: &str) -> Result<ProgressBar> {
+        self.create_count_bar(key, len, message).await
     }
 
     pub async fn get_bar(&self, key: &str) -> Result<Option<ProgressBar>> {
@@ -87,7 +130,7 @@ impl ProgressManager {
     }
 
     pub fn create_spinner(&self, message: &str) -> ProgressBar {
-        let style = ProgressStyle::with_template("{spinner:.green} {msg}")
+        let style = ProgressStyle::with_template("{spinner:.bright_cyan} {msg}")
             .unwrap()
             .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
 

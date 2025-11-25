@@ -411,7 +411,7 @@ impl PostDownloader {
 
         let total_pb = self
             .progress_manager
-            .create_bar("total", posts.len() as u64, "Total Downloads")
+            .create_count_bar("total", posts.len() as u64, "Total Downloads")
             .await
             .unwrap();
 
@@ -436,7 +436,7 @@ impl PostDownloader {
 
         let results = futures_util::future::join_all(tasks).await;
 
-        total_pb.finish_with_message("All downloads completed");
+        total_pb.finish_with_message("✓ All downloads completed");
 
         for (i, result) in results.into_iter().enumerate() {
             match result {
@@ -477,7 +477,7 @@ impl PostDownloader {
         let pb_key = format!("download_{}", index);
         let pb = self
             .progress_manager
-            .create_bar(
+            .create_download_bar(
                 &pb_key,
                 0,
                 &format!(

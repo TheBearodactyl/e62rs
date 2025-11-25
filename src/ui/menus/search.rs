@@ -3,19 +3,22 @@ use {
         config::options::E62Rs,
         display::dtext::format_text,
         models::*,
-        ui::{E6Ui, menus::AdvPoolSearch},
+        ui::{
+            E6Ui, ROSE_PINE, RosePineTheme, autocomplete::PoolAutocompleter, menus::AdvPoolSearch,
+        },
     },
     color_eyre::eyre::{Context, Error, Result},
+    demand::{Confirm, DemandOption, Input, Select},
     indicatif::{ProgressBar, ProgressStyle},
-    inquire::{Confirm, Select, Text},
     std::{collections::HashSet, fmt::Display, sync::Arc, time::Duration},
 };
 
 impl E6Ui {
     pub async fn search_pools_adv(&self) -> Result<()> {
         loop {
-            let search_type =
-                AdvPoolSearch::select("How would you like to search for pools").prompt()?;
+            let search_type = AdvPoolSearch::select("How would you like to search for pools")
+                .theme(&ROSE_PINE)
+                .run()?;
 
             let should_break = match search_type {
                 AdvPoolSearch::ByName => {
@@ -50,9 +53,10 @@ impl E6Ui {
             }
 
             if !Confirm::new("Would you like to perform another search?")
-                .with_default(true)
-                .prompt()
-                .context("Failed to get retry confirmation")?
+                .theme(&ROSE_PINE)
+                .affirmative("Yes")
+                .negative("No")
+                .run()?
             {
                 break;
             }
@@ -62,9 +66,7 @@ impl E6Ui {
     }
 
     async fn perform_pool_description_search(&self) -> Result<()> {
-        let query = Text::new("Enter pool description search:")
-            .prompt()
-            .context("Failed to get pool description query")?;
+        let query = Input::new("Enter pool description search:").run()?;
 
         let limit = self.get_pool_limit()?;
         let results = self
@@ -89,9 +91,7 @@ impl E6Ui {
     }
 
     async fn perform_pool_creator_search(&self) -> Result<()> {
-        let creator = Text::new("Enter creator name:")
-            .prompt()
-            .context("Failed to get creator name")?;
+        let creator = Input::new("Enter creator name:").run()?;
 
         let limit = self.get_pool_limit()?;
         let results = self
@@ -139,13 +139,10 @@ impl E6Ui {
     }
 
     pub fn get_pool_search_query(&self) -> Result<String> {
-        let query = Text::new("Enter pool search query (leave empty for latest pools):")
-            .with_autocomplete(move |input: &str| {
-                let suggestions = self.pool_db.autocomplete(input, 5);
-                Ok(suggestions)
-            })
-            .prompt()
-            .context("Failed to get pool search query")?;
+        let autocompleter = PoolAutocompleter::new(self.pool_db.clone());
+        let query = Input::new("Enter pool search query (leave empty for latest pools):")
+            .autocomplete(autocompleter)
+            .run()?;
 
         Ok(query.trim().to_string())
     }
@@ -154,11 +151,18 @@ impl E6Ui {
         let settings = E62Rs::get()?;
         let default_limit = settings.post_count;
 
-        let prompt = inquire::CustomType::<u64>::new("How many pools to return?")
-            .with_default(default_limit)
-            .with_error_message("Please enter a valid number")
-            .prompt_skippable()
-            .context("Failed to get pool limit")?;
+        let prompt = Input::new("How many pools to return?")
+            .validation(|input| {
+                for c in input.chars() {
+                    if !c.is_numeric() {
+                        return Err("Only numbers allowed");
+                    }
+                }
+
+                Ok(())
+            })
+            .run()?
+            .parse::<u64>();
 
         Ok(prompt.unwrap_or(default_limit).min(100))
     }
@@ -177,14 +181,16 @@ impl E6Ui {
             })
             .collect();
 
-        let selection = Select::new("Select a pool to view:", options)
-            .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-            .prompt_skippable()
-            .context("Failed to get pool selection")?;
+        let selection = Some(
+            Select::new("Select a pool to view:")
+                .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
+                .theme(&ROSE_PINE)
+                .run()?,
+        );
 
         Ok(selection.and_then(|s| {
             let index = pools.iter().position(|p| {
-                format!(
+                &format!(
                     "ID: {} | {} | {} posts | {}",
                     p.id,
                     self.truncate_string(&p.name, 40),
@@ -301,14 +307,18 @@ impl E6Ui {
         let (include_tags, or_tags, exclude_tags) = self.collect_tags()?;
         let total_limit = self.get_post_limit()?;
 
-        let mut all_tags = include_tags;
+        let mut all_tags = Vec::new();
+
+        for include_tag in include_tags {
+            all_tags.push(include_tag);
+        }
 
         for exclude_tag in exclude_tags {
-            all_tags.push(format!("-{}", exclude_tag));
+            all_tags.push(format!(" -{}", exclude_tag));
         }
 
         for inclusionary_tag in or_tags {
-            all_tags.push(format!("~{}", inclusionary_tag));
+            all_tags.push(format!(" ~{}", inclusionary_tag));
         }
 
         let mut all_fetched_posts: Vec<E6Post> = Vec::new();
@@ -321,11 +331,12 @@ impl E6Ui {
         println!("Fetching up to {} posts...", total_limit);
         let pb = ProgressBar::new(total_limit);
         pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) {msg}",
-        )?
-        .progress_chars("█▓░"),
-    );
+            ProgressStyle::with_template(
+                "{spinner:.bright_cyan} [{elapsed_precise}] [{bar:40.bright_cyan/blue}] \
+                 {pos}/{len} ({percent}%) {msg}",
+            )?
+            .progress_chars("█▓░"),
+        );
         pb.enable_steady_tick(Duration::from_millis(100));
 
         while (all_fetched_posts.len() as u64) < total_limit
@@ -408,9 +419,9 @@ impl E6Ui {
 
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
         let use_multi_select = Confirm::new("Select multiple posts?")
-            .with_default(false)
-            .prompt()
-            .context("Failed to get multi-select preference")?;
+            .affirmative("Yes")
+            .negative("No")
+            .run()?;
 
         if use_multi_select {
             let selected_posts = self.select_multiple_posts(&posts)?;
@@ -452,7 +463,8 @@ impl E6Ui {
         let pb = ProgressBar::new(total_count as u64);
         pb.set_style(
             ProgressStyle::with_template(
-                "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} ({percent}%) {msg}",
+                "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
+                 {pos}/{len} ({percent}%) {msg}",
             )?
             .with_key(
                 "eta",
@@ -460,7 +472,7 @@ impl E6Ui {
                     write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap_or(())
                 },
             )
-            .progress_chars("█▓░"),
+            .progress_chars("━╸─"),
         );
         pb.set_message("Fetching posts...");
         pb.enable_steady_tick(Duration::from_millis(100));
@@ -522,11 +534,19 @@ impl E6Ui {
         let settings = E62Rs::get()?;
 
         if settings.post_count.eq(&32) {
-            let prompt = inquire::CustomType::<u64>::new("How many posts to return?")
-                .with_default(32)
-                .with_error_message("Please enter a valid number")
-                .prompt_skippable()
-                .context("Failed to get post limit")?;
+            let prompt = Input::new("How many posts to return?")
+                .validation(|input| {
+                    for c in input.chars() {
+                        if !c.is_numeric() {
+                            return Err("Please enter a valid number");
+                        }
+                    }
+
+                    Ok(())
+                })
+                .default_value(32.to_string())
+                .run()?
+                .parse::<u64>();
 
             Ok(prompt.unwrap_or(32))
         } else {
@@ -536,9 +556,10 @@ impl E6Ui {
 
     fn ask_retry(&self) -> Result<bool> {
         Confirm::new("Would you like to perform another search?")
-            .with_default(true)
-            .prompt()
-            .context("Failed to get retry confirmation")
+            .affirmative("Yes")
+            .negative("No")
+            .run()
+            .map_err(|e| color_eyre::Report::new(e))
     }
 
     fn select_post<'a>(&self, posts: &'a [E6Post]) -> Result<Option<&'a E6Post>> {
@@ -552,14 +573,15 @@ impl E6Ui {
             })
             .collect();
 
-        let selection = Select::new("Select a post to view:", options)
-            .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-            .prompt_skippable()
-            .context("Failed to get post selection")?;
+        let selection = Some(
+            Select::new("Select a post to view:")
+                .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
+                .run()?,
+        );
 
         Ok(selection.and_then(|s| {
             let index = posts.iter().position(|p| {
-                format!(
+                &format!(
                     "ID: {} | Score: {} | Rating: {}",
                     p.id, p.score.total, p.rating
                 ) == s

@@ -2,9 +2,10 @@ use {
     crate::{
         config::options::E62Rs,
         models::E6Post,
-        ui::{E6Ui, progress::ProgressManager},
+        ui::{E6Ui, ROSE_PINE, progress::ProgressManager},
     },
     color_eyre::eyre::{Context, Result, bail},
+    demand::{Confirm, DemandOption, Input, Select},
     std::{
         fs::{self, OpenOptions},
         io::Read,
@@ -660,7 +661,7 @@ impl FileReorganizer {
 
         let pb = self
             .progress_manager
-            .create_bar("reorganize", files.len() as u64, "Reorganizing files")
+            .create_count_bar("reorganize", files.len() as u64, "Reorganizing files")
             .await?;
 
         let mut result = ReorganizeResult {
@@ -734,8 +735,6 @@ impl FileReorganizer {
 
 impl E6Ui {
     pub async fn reorganize_downloads(&self) -> Result<()> {
-        use inquire::{Confirm, Select, Text};
-
         println!("\n=== Downloads Reorganizer ===\n");
         println!("This will reorganize your downloaded files based on the current output format.");
         println!("Files will be moved to match the format specified in your config.\n");
@@ -744,9 +743,10 @@ impl E6Ui {
         let dl_cfg = cfg.download;
         let download_dir = dl_cfg.download_dir;
 
-        let directory = Text::new("Enter directory to reorganize:")
-            .with_default(&download_dir)
-            .prompt()?;
+        let directory = Input::new("Enter directory to reorganize:")
+            .theme(&ROSE_PINE)
+            .default_value(&download_dir)
+            .run()?;
 
         let directory = Path::new(&directory);
         if !directory.exists() {
@@ -754,33 +754,46 @@ impl E6Ui {
         }
 
         let recursive = Confirm::new("Search subdirectories recursively?")
-            .with_default(true)
-            .prompt()?;
+            .affirmative("Yes")
+            .negative("No")
+            .theme(&ROSE_PINE)
+            .run()?;
 
         let use_current_format = Confirm::new("Use current output format from config?")
-            .with_default(true)
-            .prompt()?;
+            .affirmative("Yes")
+            .negative("No")
+            .theme(&ROSE_PINE)
+            .run()?;
 
         let output_format = if !use_current_format {
             Some(
-                Text::new("Enter output format:")
-                    .with_default(dl_cfg.output_format.as_str())
-                    .prompt()?,
+                Input::new("Enter output format:")
+                    .default_value(dl_cfg.output_format.as_str())
+                    .theme(&ROSE_PINE)
+                    .run()?,
             )
         } else {
             None
         };
 
-        let conflict_options = vec![
+        let conflict_options = [
             "Skip existing files",
             "Overwrite existing files",
             "Auto-rename duplicates",
         ];
-        let conflict_choice = Select::new("How should conflicts be handled?", conflict_options)
-            .with_help_message("Choose what to do when target file already exists")
-            .prompt()?;
 
-        let conflict_resolution = match conflict_choice {
+        let conflict_choice = Select::new("How should conflicts be handled?")
+            .options(
+                conflict_options
+                    .iter()
+                    .map(DemandOption::new)
+                    .collect::<Vec<_>>(),
+            )
+            .description("Choose what to do when target file already exists")
+            .theme(&ROSE_PINE)
+            .run()?;
+
+        let conflict_resolution = match *conflict_choice {
             "Skip existing files" => ConflictResolution::Skip,
             "Overwrite existing files" => ConflictResolution::Overwrite,
             "Auto-rename duplicates" => ConflictResolution::AutoRename,
@@ -788,8 +801,10 @@ impl E6Ui {
         };
 
         let dry_run = Confirm::new("Perform dry run? (preview changes without moving files)")
-            .with_default(true)
-            .prompt()?;
+            .affirmative("Yes")
+            .negative("No")
+            .theme(&ROSE_PINE)
+            .run()?;
 
         let options = ReorganizeOptions {
             dry_run,
@@ -818,8 +833,10 @@ impl E6Ui {
         if options.dry_run && result.successful > 0 {
             println!("\nThis was a dry run. No files were actually moved.");
             let proceed = Confirm::new("Would you like to perform the reorganization for real?")
-                .with_default(false)
-                .prompt()?;
+                .affirmative("Yes")
+                .negative("No")
+                .theme(&ROSE_PINE)
+                .run()?;
 
             if proceed {
                 let real_options = ReorganizeOptions {

@@ -1,10 +1,11 @@
 use {
     crate::{
         config::options::E62Rs,
-        ui::{E6Ui, menus::BlacklistManager},
+        ui::{E6Ui, ROSE_PINE, menus::BlacklistManager},
     },
     color_eyre::eyre::Result,
-    inquire::{Confirm, MultiSelect, Select, Text},
+    demand::{Confirm, DemandOption, Input, MultiSelect, Select},
+    std::sync::Arc,
 };
 
 impl E6Ui {
@@ -20,7 +21,8 @@ impl E6Ui {
                 println!("  {}. {}", i + 1, tag);
             }
             println!(
-                "\nNote: Posts with these tags will be filtered out unless explicitly searched for."
+                "\nNote: Posts with these tags will be filtered out unless explicitly searched \
+                 for."
             );
         }
 
@@ -29,7 +31,7 @@ impl E6Ui {
 
     pub async fn manage_blacklist(&self) -> Result<()> {
         loop {
-            let blacklist_action = BlacklistManager::select("Blacklist Settings:").prompt()?;
+            let blacklist_action = BlacklistManager::select("Blacklist Settings:").run()?;
 
             match blacklist_action {
                 BlacklistManager::ShowCurrent => {
@@ -55,8 +57,10 @@ impl E6Ui {
             }
 
             if !Confirm::new("Continue managing blacklist?")
-                .with_default(true)
-                .prompt()?
+                .affirmative("Yes")
+                .negative("No")
+                .theme(&ROSE_PINE)
+                .run()?
             {
                 break;
             }
@@ -64,13 +68,20 @@ impl E6Ui {
         Ok(())
     }
 
+    fn autocomplete_blacklist_tags(&self, input: &str) -> Result<Vec<String>, String> {
+        let suggestions = self.tag_db.autocomplete(input, 10);
+
+        Ok(suggestions)
+    }
+
     async fn add_tag_to_blacklist(&self) -> Result<()> {
-        let tag = Text::new("Enter tag to add to blacklist:")
-            .with_autocomplete(move |input: &str| {
-                let suggestions = self.tag_db.autocomplete(input, 10);
-                Ok(suggestions)
+        let tag_db = Arc::clone(&self.tag_db);
+
+        let tag = Input::new("Enter tag to add to blacklist:")
+            .autocomplete(move |input: &str| -> Result<Vec<String>, String> {
+                Ok(tag_db.autocomplete(input, 10))
             })
-            .prompt()?;
+            .run()?;
 
         let tag = tag.trim().to_string();
         if tag.is_empty() {
@@ -79,22 +90,29 @@ impl E6Ui {
         }
 
         if !self.tag_db.exists(&tag) {
-            let use_anyway = Confirm::new(&format!(
+            let use_anyway = Confirm::new(format!(
                 "Tag '{}' not found in database. Add to blacklist anyway?",
                 tag
             ))
-            .with_default(false)
-            .prompt()?;
+            .affirmative("Yes")
+            .negative("No")
+            .theme(&ROSE_PINE)
+            .run()?;
 
             if !use_anyway {
                 let suggestions = self.tag_db.search(&tag, 5);
                 if !suggestions.is_empty() {
-                    let selected = Select::new("Did you mean one of these tags?", suggestions)
-                        .with_help_message("Select a tag or press ESC to cancel")
-                        .prompt_skippable()?;
+                    let opts = suggestions
+                        .iter()
+                        .map(DemandOption::new)
+                        .collect::<Vec<_>>();
+                    let selected = Select::new("Did you mean one of these tags?")
+                        .options(opts)
+                        .description("Select a tag or press ESC to cancel")
+                        .run()?;
 
-                    if let Some(selected_tag) = selected {
-                        return self.add_validated_tag_to_blacklist(selected_tag).await;
+                    if !selected.is_empty() {
+                        return self.add_validated_tag_to_blacklist(selected.clone()).await;
                     }
                 }
                 return Ok(());
@@ -132,26 +150,30 @@ impl E6Ui {
         let config = E62Rs::get().unwrap_or_default();
         let blacklist = &config.blacklist;
 
-        let tag_to_remove = Select::new("Select tag to remove from blacklist:", blacklist.clone())
-            .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-            .prompt_skippable()?;
+        let blacklisted = blacklist.iter().map(DemandOption::new).collect::<Vec<_>>();
+        let tag_to_remove = Select::new("Select tag to remove from blacklist:")
+            .options(blacklisted)
+            .description("Use arrow keys to navigate, Enter to select, Esc to cancel")
+            .run()?;
 
-        if let Some(tag) = tag_to_remove {
-            let confirm = Confirm::new(&format!("Remove '{}' from blacklist?", tag))
-                .with_default(true)
-                .prompt()?;
+        if !tag_to_remove.is_empty() {
+            let confirm = Confirm::new(format!("Remove '{}' from blacklist?", tag_to_remove))
+                .affirmative("Yes")
+                .negative("No")
+                .theme(&ROSE_PINE)
+                .run()?;
 
             if confirm {
                 let mut config = E62Rs::get().unwrap_or_default();
-                match config.remove_from_blacklist(&tag) {
+                match config.remove_from_blacklist(tag_to_remove) {
                     Ok(true) => {
                         println!(
                             "Successfully removed '{}' from blacklist and saved configuration.",
-                            tag
+                            tag_to_remove
                         );
                     }
                     Ok(false) => {
-                        println!("Tag '{}' was not found in blacklist.", tag);
+                        println!("Tag '{}' was not found in blacklist.", tag_to_remove);
                     }
                     Err(e) => {
                         println!("Failed to remove tag from blacklist: {}", e);
@@ -172,12 +194,11 @@ impl E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(&format!(
+        let confirm = Confirm::new(format!(
             "Clear all {} tags from blacklist? This cannot be undone.",
             blacklist_count
         ))
-        .with_default(false)
-        .prompt()?;
+        .run()?;
 
         if confirm {
             let mut config = E62Rs::get().unwrap_or_default();
@@ -242,27 +263,29 @@ impl E6Ui {
             return Ok(());
         }
 
-        let selected_tags = MultiSelect::new(
-            &format!(
-                "Select tags to add to blacklist ({} available):",
-                sorted_tags.len()
-            ),
-            sorted_tags,
+        let selected_tags = MultiSelect::new(format!(
+            "Select tags to add to blacklist ({} available):",
+            sorted_tags.len()
+        ))
+        .description("Space to select/deselect, Enter to confirm, Esc to cancel")
+        .options(
+            sorted_tags
+                .iter()
+                .map(DemandOption::new)
+                .collect::<Vec<_>>(),
         )
-        .with_help_message("Space to select/deselect, Enter to confirm, Esc to cancel")
-        .prompt()?;
+        .run()?;
 
         if selected_tags.is_empty() {
             println!("No tags selected.");
             return Ok(());
         }
 
-        let confirm = Confirm::new(&format!(
+        let confirm = Confirm::new(format!(
             "Add {} selected tags to blacklist?",
             selected_tags.len()
         ))
-        .with_default(true)
-        .prompt()?;
+        .run()?;
 
         if confirm {
             let mut config = E62Rs::get()?;
@@ -270,7 +293,7 @@ impl E6Ui {
             let mut already_exists = 0;
 
             for tag in selected_tags {
-                if blacklist.contains(&tag) {
+                if blacklist.contains(tag) {
                     already_exists += 1;
                     continue;
                 }

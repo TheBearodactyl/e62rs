@@ -104,7 +104,7 @@ impl MediaFilter {
             }
 
             if let Some(pool_id) = self.pool_id
-                && !metadata.pools.iter().any(|&p| p == pool_id)
+                && !metadata.pools.contains(&pool_id)
             {
                 return false;
             }

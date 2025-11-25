@@ -4,13 +4,13 @@ use {
         display::image::display_image_from_path_as_sixel,
         models::E6Post,
         ui::{
-            E6Ui,
+            E6Ui, ROSE_PINE,
             menus::{ExplorerMenu, ExplorerSortBy, view::print_post_to_terminal},
             progress::ProgressManager,
         },
     },
     color_eyre::eyre::{Context, Result, bail},
-    inquire::{Confirm, Select, Text},
+    demand::{Confirm, DemandOption, Input, Select},
     jwalk::WalkDir,
     std::{
         collections::HashMap,
@@ -304,7 +304,8 @@ impl E6Ui {
                 "Downloads Explorer ({} posts shown)",
                 state.filtered_posts.len()
             ))
-            .prompt()?;
+            .theme(&ROSE_PINE)
+            .run()?;
 
             let should_break = match action {
                 ExplorerMenu::BrowsePosts => {
@@ -318,9 +319,9 @@ impl E6Ui {
                 }
                 ExplorerMenu::SearchPosts => {
                     let query =
-                        Text::new("Enter search query (tags, ID, uploader, or description):")
-                            .prompt_skippable()?;
-                    state.search(query);
+                        Input::new("Enter search query (tags, ID, uploader, or description):")
+                            .run()?;
+                    state.search(Some(query));
                     println!("Found {} matching posts", state.filtered_posts.len());
                     false
                 }
@@ -357,8 +358,9 @@ impl E6Ui {
             }
 
             if !Confirm::new("Continue exploring?")
-                .with_default(true)
-                .prompt()?
+                .affirmative("Yes")
+                .negative("No")
+                .run()?
             {
                 break;
             }
@@ -397,7 +399,7 @@ impl E6Ui {
         let pb = if show_progress_bar {
             Some(
                 progress_manager
-                    .create_bar(
+                    .create_count_bar(
                         "explorer_scan",
                         total_files as u64,
                         "Scanning files for metadata",
@@ -559,9 +561,12 @@ impl E6Ui {
             }
             options.push("◄ Back to Explorer Menu".to_string());
 
-            let selection = Select::new("Select a post to view:", options)
-                .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-                .prompt_skippable()?;
+            let selection = Some(
+                Select::new("Select a post to view:")
+                    .options(options.iter().map(DemandOption::new).collect())
+                    .description("Use arrow keys to navigate, Enter to select, Esc to cancel")
+                    .run()?,
+            );
 
             if let Some(selected) = selection {
                 if selected.starts_with("Next Page") {
@@ -575,7 +580,7 @@ impl E6Ui {
                 }
 
                 let index = page_posts.iter().position(|lp| {
-                    format!(
+                    &format!(
                         "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
                         lp.post.id,
                         lp.post.score.total,
@@ -613,20 +618,20 @@ impl E6Ui {
             warn!("Failed to auto-display image: {}", e);
         }
 
-        loop {
-            let action = Select::new(
-                "What would you like to do?",
-                vec![
-                    "View image in terminal",
-                    "Open in browser",
-                    "Open file location",
-                    "Show full metadata",
-                    "Back to list",
-                ],
-            )
-            .prompt()?;
+        let opts = [
+            "View image in terminal",
+            "Open in browser",
+            "Open file location",
+            "Show full metadata",
+            "Back to list",
+        ];
 
-            match action {
+        loop {
+            let action = Select::new("What would you like to do?")
+                .options(opts.iter().map(DemandOption::new).collect())
+                .run()?;
+
+            match *action {
                 "View image in terminal" => {
                     match display_image_from_path_as_sixel(&local_post.file_path) {
                         Ok(_) => {}
@@ -662,10 +667,7 @@ impl E6Ui {
                 _ => {}
             }
 
-            if !Confirm::new("Continue viewing this post?")
-                .with_default(false)
-                .prompt()?
-            {
+            if !Confirm::new("Continue viewing this post?").run()? {
                 break;
             }
         }
@@ -674,10 +676,12 @@ impl E6Ui {
     }
 
     fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
-        let options = vec!["All ratings", "Safe", "Questionable", "Explicit"];
-        let selection = Select::new("Filter by rating:", options).prompt()?;
+        let options = ["All ratings", "Safe", "Questionable", "Explicit"];
+        let selection = Select::new("Filter by rating:")
+            .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
+            .run()?;
 
-        match selection {
+        match *selection {
             "All ratings" => state.filter_by_rating(None),
             "Safe" => state.filter_by_rating(Some("s".to_string())),
             "Questionable" => state.filter_by_rating(Some("q".to_string())),
@@ -690,7 +694,9 @@ impl E6Ui {
     }
 
     fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
-        let sort_by = ExplorerSortBy::select("Sort posts by:").prompt()?;
+        let sort_by = ExplorerSortBy::select("Sort posts by:")
+            .theme(&ROSE_PINE)
+            .run()?;
         state.sort(sort_by);
         println!("Posts sorted");
         Ok(())
