@@ -64,7 +64,7 @@ impl TagAutocompleter {
 }
 
 impl Autocomplete for TagAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, String> {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let current_tag = Self::get_current_tag(input);
 
         let (prefix_char, search_tag) = if let Some(stripped) = current_tag.strip_prefix('-') {
@@ -104,8 +104,8 @@ impl Autocomplete for TagAutocompleter {
     fn get_completion(
         &mut self,
         input: &str,
-        highlighted_suggestion: Option<String>,
-    ) -> Result<Option<String>, String> {
+        highlighted_suggestion: Option<&str>,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
         if let Some(suggestion) = highlighted_suggestion {
             let prefix = Self::get_prefix(input);
             let current_tag = Self::get_current_tag(input);
@@ -120,7 +120,7 @@ impl Autocomplete for TagAutocompleter {
                 ""
             };
 
-            let tag_name = Self::extract_tag_from_suggestion(&suggestion);
+            let tag_name = Self::extract_tag_from_suggestion(suggestion);
             let canonical_tag = self.tag_db.resolve_alias(&tag_name);
             let new_input = format!("{}{}{} ", prefix, prefix_char, canonical_tag);
 
@@ -218,7 +218,7 @@ impl PoolAutocompleter {
 }
 
 impl Autocomplete for PoolAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, String> {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let current_pool = Self::get_current_pool(input);
 
         let (prefix_char, search_pool) = if let Some(stripped) = current_pool.strip_prefix('-') {
@@ -258,8 +258,8 @@ impl Autocomplete for PoolAutocompleter {
     fn get_completion(
         &mut self,
         input: &str,
-        highlighted_suggestion: Option<String>,
-    ) -> Result<Option<String>, String> {
+        highlighted_suggestion: Option<&str>,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
         if let Some(suggestion) = highlighted_suggestion {
             let prefix = Self::get_prefix(input);
             let current_pool = Self::get_current_pool(input);
@@ -274,7 +274,7 @@ impl Autocomplete for PoolAutocompleter {
                 ""
             };
 
-            let pool_name = Self::extract_pool_from_suggestion(&suggestion);
+            let pool_name = Self::extract_pool_from_suggestion(suggestion);
             let new_input = format!("{}{}{} ", prefix, prefix_char, pool_name);
 
             return Ok(Some(new_input));

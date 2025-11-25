@@ -1,7 +1,7 @@
 use {
     crate::{
         config::options::E62Rs,
-        ui::{E6Ui, ROSE_PINE, menus::BlacklistManager},
+        ui::{E6Ui, ROSE_PINE, autocomplete::TagAutocompleter, menus::BlacklistManager},
     },
     color_eyre::eyre::Result,
     demand::{Confirm, DemandOption, Input, MultiSelect, Select},
@@ -76,11 +76,9 @@ impl E6Ui {
 
     async fn add_tag_to_blacklist(&self) -> Result<()> {
         let tag_db = Arc::clone(&self.tag_db);
-
+        let completer = TagAutocompleter::new(tag_db);
         let tag = Input::new("Enter tag to add to blacklist:")
-            .autocomplete(move |input: &str| -> Result<Vec<String>, String> {
-                Ok(tag_db.autocomplete(input, 10))
-            })
+            .autocomplete(completer)
             .run()?;
 
         let tag = tag.trim().to_string();

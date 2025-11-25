@@ -735,10 +735,9 @@ dependencies = [
 [[package]]
 name = "demand"
 version = "1.7.2"
-source = "git+https://github.com/TheBearodactyl/demand#857615a08527c9369339b113fb3617c57f17e27a"
+source = "git+https://github.com/TheBearodactyl/demand#8c2ff021b59aab2a66a29646f8144a11177e2a98"
 dependencies = [
  "console",
- "dyn-clone",
  "fuzzy-matcher",
  "itertools",
  "signal-hook",
