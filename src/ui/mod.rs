@@ -254,14 +254,14 @@ impl E6Ui {
 
         match choice {
             BatchAction::DownloadAll => {
-                self.download_posts(posts).await?;
+                self.downloader.clone().download_posts(posts).await?;
             }
             BatchAction::OpenAllInBrowser => {
                 self.open_posts_in_browser(&posts)?;
             }
             BatchAction::DownloadAndOpenAll => {
                 let posts_clone = posts.clone();
-                self.download_posts(posts).await?;
+                self.downloader.clone().download_posts(posts).await?;
                 self.open_posts_in_browser(&posts_clone)?;
             }
             BatchAction::Back => {
@@ -328,7 +328,7 @@ impl E6Ui {
                         posts.posts.len(),
                         pool.name
                     );
-                    self.download_posts(posts.posts).await?;
+                    self.downloader.clone().download_posts(posts.posts).await?;
                 }
             }
             PoolInteractionMenu::OpenInBrowser => {
@@ -383,7 +383,10 @@ impl E6Ui {
                 self.open_in_browser(&post)?;
             }
             InteractionMenu::Download => {
-                self.download_post(post).await?;
+                self.downloader
+                    .clone()
+                    .download_post(post.clone(), post.id as usize)
+                    .await?;
             }
             InteractionMenu::Back => {
                 return Ok(InteractionMenu::Back);

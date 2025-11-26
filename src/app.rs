@@ -87,6 +87,9 @@ pub async fn run() -> Result<()> {
             MainMenu::ExploreDownloads => {
                 ui.explore_downloads().await?;
             }
+            MainMenu::UpdateDownloads => {
+                ui.redownload_by_artists().await?;
+            }
             MainMenu::Exit => break,
         }
     }

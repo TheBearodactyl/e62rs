@@ -2,21 +2,24 @@ use {
     crate::{
         config::options::E62Rs,
         models::E6Post,
-        ui::{E6Ui, progress::ProgressManager},
+        ui::{E6Ui, ROSE_PINE, progress::ProgressManager},
     },
     color_eyre::eyre::{Context, ContextCompat, Result, bail},
+    demand::{Confirm, DemandOption, Input, MultiSelect},
     futures::StreamExt,
     indicatif::ProgressBar,
+    owo_colors::OwoColorize,
     reqwest::Client,
     std::{
         borrow::Cow,
+        collections::{HashMap, HashSet},
         fs::OpenOptions,
         io::Write,
         path::{Path, PathBuf},
         sync::Arc,
     },
     tokio::{fs::File, io::AsyncWriteExt},
-    tracing::warn,
+    tracing::{info, warn},
     url::Url,
 };
 
@@ -630,16 +633,410 @@ impl PostDownloader {
 }
 
 impl E6Ui {
-    pub async fn download_posts(&self, posts: Vec<E6Post>) -> Result<()> {
-        println!("Downloading {} posts...", posts.len());
+    pub async fn redownload_by_artists(&self) -> Result<()> {
+        println!("\n=== Update Downloads by Artists ===\n");
+        println!(
+            "This will scan your downloads, find all artists, and download NEW posts from them."
+        );
 
-        self.downloader.clone().download_posts(posts).await?;
+        let cfg = E62Rs::get()?;
+        let dl_cfg = cfg.download;
+        let explorer_cfg = cfg.explorer;
+        let download_dir = std::path::Path::new(&dl_cfg.download_dir);
 
-        println!("\n✓ Batch download complete");
+        if !download_dir.exists() {
+            bail!(
+                "Download directory does not exist: {}",
+                download_dir.display()
+            );
+        }
+
+        println!("Scanning downloaded posts for artist names and post IDs...\n");
+        let progress_manager = Arc::new(ProgressManager::new());
+
+        let local_posts = self
+            .scan_downloads_directory(download_dir, &explorer_cfg)
+            .await?;
+
+        if local_posts.is_empty() {
+            println!("No posts with metadata found in {}", download_dir.display());
+            return Ok(());
+        }
+
+        let mut artist_post_counts: HashMap<String, usize> = HashMap::new();
+        let mut downloaded_post_ids: HashSet<i64> = HashSet::new();
+
+        let special_tags = HashSet::from([
+            "conditional_dnp",
+            "conditional-dnp",
+            "sound_warning",
+            "sound-warning",
+            "epilepsy_warning",
+            "epilepsy-warning",
+            "animated",
+            "comic",
+            "unknown_artist",
+            "unknown-artist",
+            "anonymous_artist",
+            "anonymous-artist",
+        ]);
+
+        for local_post in &local_posts {
+            downloaded_post_ids.insert(local_post.post.id);
+
+            for artist in &local_post.post.tags.artist {
+                let artist_lower = artist.to_lowercase();
+
+                if !special_tags.contains(artist_lower.as_str()) {
+                    *artist_post_counts.entry(artist.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        if artist_post_counts.is_empty() {
+            println!("No artist tags found in downloaded posts.");
+            return Ok(());
+        }
+
+        println!(
+            "{} Found {} downloaded posts from {} unique artists",
+            "✓".green().bold(),
+            downloaded_post_ids.len(),
+            artist_post_counts.len()
+        );
+
+        let mut sorted_artists: Vec<_> = artist_post_counts.iter().collect();
+        sorted_artists.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+
+        let artist_options: Vec<DemandOption<String>> = sorted_artists
+            .iter()
+            .map(|(artist, count)| {
+                DemandOption::new((*artist).clone())
+                    .label(&format!(
+                        "{} ({} downloaded post{})",
+                        artist,
+                        count,
+                        if **count == 1 { "" } else { "s" }
+                    ))
+                    .selected(true)
+            })
+            .collect();
+
+        let selected_artists = MultiSelect::new(
+            "Select artists to check for new posts (Space to toggle, Enter to confirm):",
+        )
+        .description("All artists are selected by default. Deselect any you don't want to update.")
+        .options(artist_options)
+        .theme(&ROSE_PINE)
+        .filterable(true)
+        .run()
+        .context("Failed to get artist selection")?;
+
+        if selected_artists.is_empty() {
+            println!("No artists selected. Operation cancelled.");
+            return Ok(());
+        }
+
+        println!(
+            "\n{} Selected {} artist{} to check for updates:",
+            "→".bright_cyan(),
+            selected_artists.len(),
+            if selected_artists.len() == 1 { "" } else { "s" }
+        );
+
+        for (i, artist) in selected_artists.iter().enumerate() {
+            let count = artist_post_counts.get(artist).unwrap_or(&0);
+            if i < 20 {
+                println!(
+                    "  • {} ({} already downloaded)",
+                    artist.bright_white(),
+                    count,
+                );
+            } else if i == 20 {
+                println!("  ... and {} more", selected_artists.len() - 20);
+                break;
+            }
+        }
+
+        println!();
+        let confirm = Confirm::new(format!(
+            "Check for and download new posts from these {} artist{}?",
+            selected_artists.len(),
+            if selected_artists.len() == 1 { "" } else { "s" }
+        ))
+        .affirmative("Yes")
+        .negative("No")
+        .theme(&ROSE_PINE)
+        .run()?;
+
+        if !confirm {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+
+        let limit_per_artist =
+            demand::Input::new("Maximum NEW posts per artist to download (leave empty for all):")
+                .theme(&ROSE_PINE)
+                .placeholder("e.g., 50")
+                .validation(|input| {
+                    if input.is_empty() {
+                        return Ok(());
+                    }
+                    if input.parse::<u64>().is_ok() {
+                        Ok(())
+                    } else {
+                        Err("Please enter a valid number or leave empty")
+                    }
+                })
+                .run()?;
+
+        let limit: Option<u64> = if limit_per_artist.is_empty() {
+            None
+        } else {
+            Some(limit_per_artist.parse()?)
+        };
+
+        println!("\n{} Checking for new posts...\n", "→".bright_cyan());
+
+        let total_pb = progress_manager
+            .create_count_bar(
+                "artists",
+                selected_artists.len() as u64,
+                "Processing artists",
+            )
+            .await?;
+
+        let mut total_new_posts = 0u64;
+        let mut total_already_downloaded = 0u64;
+        let mut total_errors = 0u64;
+        type U64x2 = Result<(u64, u64), String>;
+        let mut artist_results: Vec<(String, U64x2)> = Vec::new();
+
+        for artist in selected_artists {
+            total_pb.set_message(format!("Processing artist: {}", artist));
+
+            match self
+                .download_new_artist_posts(&artist, limit, &downloaded_post_ids)
+                .await
+            {
+                Ok((new_count, skipped_count)) => {
+                    total_new_posts += new_count;
+                    total_already_downloaded += skipped_count;
+                    artist_results.push((artist.clone(), Ok((new_count, skipped_count))));
+
+                    if new_count > 0 {
+                        info!(
+                            "Downloaded {} new posts from {} ({} already had)",
+                            new_count, artist, skipped_count
+                        );
+                    } else {
+                        info!(
+                            "No new posts from {} ({} already had)",
+                            artist, skipped_count
+                        );
+                    }
+                }
+                Err(e) => {
+                    total_errors += 1;
+                    let error_msg = e.to_string();
+                    artist_results.push((artist.clone(), Err(error_msg.clone())));
+                    warn!("Failed to check posts from {}: {}", artist, error_msg);
+                }
+            }
+
+            total_pb.inc(1);
+        }
+
+        total_pb.finish_with_message(format!(
+            "✓ Processed {} artist{}",
+            artist_results.len(),
+            if artist_results.len() == 1 { "" } else { "s" }
+        ));
+
+        println!("\n{}", "=".repeat(70));
+        println!("Update Summary:");
+        println!("{}", "=".repeat(70));
+        println!("Artists checked: {}", artist_results.len());
+        println!(
+            "{} NEW posts downloaded: {}",
+            "✓".green().bold(),
+            total_new_posts.to_string().bright_green()
+        );
+        println!(
+            "{} Posts already downloaded: {}",
+            "→".bright_black(),
+            total_already_downloaded
+        );
+
+        if total_errors > 0 {
+            println!("{} Errors encountered: {}", "✗".red().bold(), total_errors);
+            println!("\n{} Failed artists:", "✗".red().bold());
+            for (artist, result) in &artist_results {
+                if let Err(error) = result {
+                    println!("  • {}: {}", artist.red(), error);
+                }
+            }
+        }
+
+        let mut with_new_posts: Vec<_> = artist_results
+            .iter()
+            .filter_map(|(artist, result)| {
+                if let Ok((new_count, skipped)) = result {
+                    if *new_count > 0 {
+                        Some((artist, new_count, skipped))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !with_new_posts.is_empty() {
+            with_new_posts.sort_by(|a, b| b.1.cmp(a.1));
+
+            println!("\n{} Artists with new posts:", "✓".green().bold());
+            for (i, (artist, new_count, skipped)) in with_new_posts.iter().enumerate() {
+                if i < 15 {
+                    println!(
+                        "  • {}: {} new post{} ({} already had)",
+                        artist.green(),
+                        new_count.to_string().bright_green().bold(),
+                        if **new_count == 1 { "" } else { "s" },
+                        skipped
+                    );
+                } else if i == 15 {
+                    println!("  ... and {} more", with_new_posts.len() - 15);
+                    break;
+                }
+            }
+        }
+
+        let no_new_posts: Vec<_> = artist_results
+            .iter()
+            .filter_map(|(artist, result)| {
+                if let Ok((new_count, skipped)) = result {
+                    if *new_count == 0 {
+                        Some((artist, skipped))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !no_new_posts.is_empty() {
+            println!("\n{} Artists with no new posts:", "→".bright_black());
+            for (i, (artist, skipped)) in no_new_posts.iter().enumerate() {
+                if i < 10 {
+                    println!(
+                        "  • {}: {} already downloaded",
+                        artist.bright_black(),
+                        skipped
+                    );
+                } else if i == 10 {
+                    println!("  ... and {} more", no_new_posts.len() - 10);
+                    break;
+                }
+            }
+        }
+
+        println!("{}", "=".repeat(70));
+
+        if total_new_posts > 0 {
+            println!(
+                "\n{} Successfully downloaded {} new post{} from {} artist{}!",
+                "✓".green().bold(),
+                total_new_posts.to_string().bright_green().bold(),
+                if total_new_posts == 1 { "" } else { "s" },
+                with_new_posts.len(),
+                if with_new_posts.len() == 1 { "" } else { "s" }
+            );
+        } else {
+            println!(
+                "\n{} All downloads are up to date! No new posts found.",
+                "✓".green().bold()
+            );
+        }
+
         Ok(())
     }
 
-    pub async fn download_post(&self, post: E6Post) -> Result<()> {
-        self.download_posts(vec![post]).await
+    async fn download_new_artist_posts(
+        &self,
+        artist: &str,
+        limit: Option<u64>,
+        downloaded_post_ids: &HashSet<i64>,
+    ) -> Result<(u64, u64)> {
+        let search_tags = vec![format!("artist:{}", artist)];
+
+        let mut new_posts = Vec::new();
+        let mut skipped_count = 0u64;
+        let mut before_id: Option<i64> = None;
+        let max_fetch = limit.unwrap_or(u64::MAX);
+
+        let mut consecutive_empty = 0;
+        const MAX_CONSECUTIVE_EMPTY: i32 = 2;
+
+        loop {
+            let results = self
+                .client
+                .search_posts(search_tags.clone(), Some(320), before_id)
+                .await?;
+
+            if results.posts.is_empty() {
+                break;
+            }
+
+            let batch_size = results.posts.len();
+            let mut found_new_in_batch = false;
+
+            for post in results.posts {
+                if downloaded_post_ids.contains(&post.id) {
+                    skipped_count += 1;
+                } else {
+                    new_posts.push(post.clone());
+                    found_new_in_batch = true;
+
+                    if new_posts.len() >= max_fetch as usize {
+                        break;
+                    }
+                }
+
+                if before_id.is_none() || post.id < before_id.unwrap() {
+                    before_id = Some(post.id);
+                }
+            }
+
+            if !found_new_in_batch {
+                consecutive_empty += 1;
+                if consecutive_empty >= MAX_CONSECUTIVE_EMPTY {
+                    break;
+                }
+            } else {
+                consecutive_empty = 0;
+            }
+
+            if new_posts.len() >= max_fetch as usize || batch_size < 320 {
+                break;
+            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+
+        if let Some(lim) = limit {
+            new_posts.truncate(lim as usize);
+        }
+
+        let new_count = new_posts.len() as u64;
+
+        if !new_posts.is_empty() {
+            self.downloader.clone().download_posts(new_posts).await?;
+        }
+
+        Ok((new_count, skipped_count))
     }
 }

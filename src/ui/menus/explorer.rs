@@ -369,7 +369,7 @@ impl E6Ui {
         Ok(())
     }
 
-    async fn scan_downloads_directory(
+    pub async fn scan_downloads_directory(
         &self,
         directory: &Path,
         explorer_cfg: &ExplorerCfg,

@@ -156,6 +156,7 @@ pub enum MainMenu {
     ManageBlacklist,
     ReorganizeDownloads,
     EditConfig,
+    UpdateDownloads,
     Exit,
 }
 
@@ -176,6 +177,10 @@ impl MainMenu {
             .option(
                 DemandOption::new(Self::ReorganizeDownloads)
                     .label("Reorganize already downloaded files"),
+            )
+            .option(
+                DemandOption::new(Self::UpdateDownloads)
+                    .label("Update all downloads based on already downloaded artists"),
             )
             .option(DemandOption::new(Self::EditConfig).label("Edit your config file"))
             .option(DemandOption::new(Self::Exit).label("Exit e62rs"))
