@@ -823,18 +823,6 @@ impl E6Ui {
                     total_new_posts += new_count;
                     total_already_downloaded += skipped_count;
                     artist_results.push((artist.clone(), Ok((new_count, skipped_count))));
-
-                    if new_count > 0 {
-                        info!(
-                            "Downloaded {} new posts from {} ({} already had)",
-                            new_count, artist, skipped_count
-                        );
-                    } else {
-                        info!(
-                            "No new posts from {} ({} already had)",
-                            artist, skipped_count
-                        );
-                    }
                 }
                 Err(e) => {
                     total_errors += 1;
@@ -971,7 +959,7 @@ impl E6Ui {
         limit: Option<u64>,
         downloaded_post_ids: &HashSet<i64>,
     ) -> Result<(u64, u64)> {
-        let search_tags = vec![format!("artist:{}", artist)];
+        let search_tags = vec![format!("~{}", artist), format!("~{}_(artist)", artist)];
 
         let mut new_posts = Vec::new();
         let mut skipped_count = 0u64;
@@ -979,7 +967,7 @@ impl E6Ui {
         let max_fetch = limit.unwrap_or(u64::MAX);
 
         let mut consecutive_empty = 0;
-        const MAX_CONSECUTIVE_EMPTY: i32 = 2;
+        const MAX_CONSECUTIVE_EMPTY: i32 = 3;
 
         loop {
             let results = self
@@ -994,7 +982,13 @@ impl E6Ui {
             let batch_size = results.posts.len();
             let mut found_new_in_batch = false;
 
+            let mut min_id_in_batch: Option<i64> = None;
+
             for post in results.posts {
+                if min_id_in_batch.is_none() || post.id < min_id_in_batch.unwrap() {
+                    min_id_in_batch = Some(post.id);
+                }
+
                 if downloaded_post_ids.contains(&post.id) {
                     skipped_count += 1;
                 } else {
@@ -1005,10 +999,10 @@ impl E6Ui {
                         break;
                     }
                 }
+            }
 
-                if before_id.is_none() || post.id < before_id.unwrap() {
-                    before_id = Some(post.id);
-                }
+            if let Some(min_id) = min_id_in_batch {
+                before_id = Some(min_id);
             }
 
             if !found_new_in_batch {

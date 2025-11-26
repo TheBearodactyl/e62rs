@@ -66,7 +66,9 @@ impl E6Ui {
     }
 
     async fn perform_pool_description_search(&self) -> Result<()> {
-        let query = Input::new("Enter pool description search:").run()?;
+        let query = Input::new("Enter pool description search:")
+            .theme(&ROSE_PINE)
+            .run()?;
 
         let limit = self.get_pool_limit()?;
         let results = self
@@ -91,7 +93,7 @@ impl E6Ui {
     }
 
     async fn perform_pool_creator_search(&self) -> Result<()> {
-        let creator = Input::new("Enter creator name:").run()?;
+        let creator = Input::new("Enter creator name:").theme(&ROSE_PINE).run()?;
 
         let limit = self.get_pool_limit()?;
         let results = self
@@ -142,6 +144,7 @@ impl E6Ui {
         let autocompleter = PoolAutocompleter::new(self.pool_db.clone());
         let query = Input::new("Enter pool search query (leave empty for latest pools):")
             .autocomplete(autocompleter)
+            .theme(&ROSE_PINE)
             .run()?;
 
         Ok(query.trim().to_string())
@@ -161,6 +164,7 @@ impl E6Ui {
 
                 Ok(())
             })
+            .theme(&ROSE_PINE)
             .run()?
             .parse::<u64>();
 
@@ -419,6 +423,7 @@ impl E6Ui {
 
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
         let use_multi_select = Confirm::new("Select multiple posts?")
+            .theme(&ROSE_PINE)
             .affirmative("Yes")
             .negative("No")
             .run()?;
@@ -545,6 +550,7 @@ impl E6Ui {
                     Ok(())
                 })
                 .default_value(32.to_string())
+                .theme(&ROSE_PINE)
                 .run()?
                 .parse::<u64>();
 
@@ -558,6 +564,7 @@ impl E6Ui {
         Confirm::new("Would you like to perform another search?")
             .affirmative("Yes")
             .negative("No")
+            .theme(&ROSE_PINE)
             .run()
             .map_err(|e| color_eyre::Report::new(e))
     }
@@ -576,6 +583,7 @@ impl E6Ui {
         let selection = Some(
             Select::new("Select a post to view:")
                 .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
+                .theme(&ROSE_PINE)
                 .run()?,
         );
 

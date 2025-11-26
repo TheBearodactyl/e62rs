@@ -89,10 +89,10 @@ impl ProgressManager {
         let detailed = cfg.ui.detailed_progress;
 
         let template = if detailed {
-            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
-             {pos:>7}/{len:>7} ({percent}%) {msg}"
+            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] {pos}/{len} \
+             ({percent}%) {msg}"
         } else {
-            "{spinner:.bright_cyan} [{wide_bar:.bright_cyan/blue}] {pos:>7}/{len:>7} {msg}"
+            "{spinner:.bright_cyan} [{wide_bar:.bright_cyan/blue}] {pos}/{len} {msg}"
         };
 
         let style = ProgressStyle::with_template(template)?
