@@ -14,6 +14,10 @@ use {
 };
 
 /// deserialize a string into a boolean
+///
+/// # Arguments
+///
+/// * `deserializer` - the deserializer
 pub fn deserialize_bool_from_str<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -23,6 +27,10 @@ where
 }
 
 /// deserialize a string into a list of post ids
+///
+/// # Arguments
+///
+/// * `deserializer` - the deserializer
 pub fn deserialize_post_ids<'de, D>(deserializer: D) -> Result<Vec<i64>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -59,6 +67,11 @@ pub fn create_auth_header() -> Result<HeaderMap> {
 }
 
 /// shorten a path to a given length
+///
+/// # Arguments
+///
+/// * `path` - the path to shorten
+/// * `max_len` - the max length for a single segment
 pub fn shorten_path(path: &str, max_len: usize) -> String {
     let shortened = Path::new(path)
         .components()
@@ -78,6 +91,12 @@ pub fn shorten_path(path: &str, max_len: usize) -> String {
 }
 
 /// create and write to an ADS stream (windows only)
+///
+/// # Arguments
+///
+/// * `file_path` - the path to the file to make an ads on
+/// * `stream_name` - the name of the ads stream
+/// * `data` - the data to put into the ads stream
 pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str) -> Result<usize> {
     let file_path = file_path.as_ref();
     let ads_path = format!("{}:{}", file_path.display(), stream_name);
@@ -93,6 +112,11 @@ pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str)
 }
 
 /// write some json data to a given file
+///
+/// # Arguments
+///
+/// * `file_path` - the path to the json file
+/// * `data` - the data to write to `file_path`
 pub fn _write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> {
     let file_path = file_path.as_ref();
     let json_path = format!("{}.json", file_path.display());
@@ -108,6 +132,10 @@ pub fn _write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> 
 }
 
 /// convert a string to a log level
+///
+/// # Arguments
+///
+/// * `lvl` - the string rep of the log level
 pub fn string_to_log_level(lvl: &str) -> tracing::Level {
     match lvl.to_lowercase().as_str() {
         "d" | "debug" | "dbg" => Level::DEBUG,
@@ -122,6 +150,10 @@ pub fn string_to_log_level(lvl: &str) -> tracing::Level {
 /// a repeatable function
 pub trait Repeat {
     /// repeat n times
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     fn repeat(self, n: usize);
 }
 
@@ -129,6 +161,11 @@ impl<F> Repeat for F
 where
     F: Fn(),
 {
+    /// repeat n times
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     fn repeat(self, n: usize) {
         for _ in 0..n {
             self();
@@ -141,6 +178,10 @@ pub trait RepeatCollect {
     /// the type that'll be collected
     type Output;
     /// repeat n times and return the collected results
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     fn repeat_collect(self, n: usize) -> Vec<Self::Output>;
 }
 
@@ -150,6 +191,11 @@ where
 {
     type Output = R;
 
+    /// repeat n times and return the collected results
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     fn repeat_collect(self, n: usize) -> Vec<R> {
         (0..n).map(|_| self()).collect()
     }
@@ -159,7 +205,13 @@ where
 pub trait RepeatWith<Args> {
     /// the type to return
     type Output;
+
     /// repeat n times with args
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
+    /// * `args` - the arguments to pass to the repeated function
     fn repeat_with(self, n: usize, args: Args) -> Self::Output;
 }
 
@@ -170,6 +222,12 @@ where
 {
     type Output = Vec<R>;
 
+    /// repeat n times with args
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
+    /// * `args` - the arguments to pass to the repeated function
     fn repeat_with(self, n: usize, args: A) -> Vec<R> {
         (0..n).map(|_| self(args.clone())).collect()
     }
@@ -194,8 +252,17 @@ macro_rules! impl_display {
 /// iterator repetition utils
 pub trait IteratorRepeatExt: Iterator {
     /// repeat n times, returning the collected outputs
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     fn repeat_next(&mut self, n: usize) -> Vec<Self::Item>;
+
     /// repeat n times, ignoring the results
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     fn skip_n(&mut self, n: usize);
 }
 
@@ -230,6 +297,10 @@ where
     F: FnMut() -> R,
 {
     /// repeat n times
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     pub fn repeat(mut self, n: usize) {
         for _ in 0..n {
             (self.f)();
@@ -237,11 +308,19 @@ where
     }
 
     /// repeat n times, collecting the output
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     pub fn repeat_collect(mut self, n: usize) -> Vec<R> {
         (0..n).map(|_| (self.f)()).collect()
     }
 
     /// repeat n times and return the last result
+    ///
+    /// # Arguments
+    ///
+    /// * `n` - the number of times to repeat
     pub fn repeat_last(mut self, n: usize) -> R {
         assert!(n > 0, "repeat_last requires n > 0");
         let mut result = (self.f)();

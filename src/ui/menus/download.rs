@@ -159,17 +159,16 @@ impl PostDownloader {
         let filename = self.format_filename(&post)?;
         let filepath = self.get_filepath(&filename)?;
 
+        let prog_message = match getopt!(ui.progress_message_mode).as_str() {
+            "id" => post.id.to_string(),
+            "filename" => filename.clone(),
+            _ => post.id.to_string(),
+        };
+
         let pb_key = format!("download_{}", index);
         let pb = self
             .progress_manager
-            .mk_dl_bar(
-                &pb_key,
-                0,
-                &format!(
-                    "Downloading {}",
-                    crate::utils::shorten_path(filename.as_str(), 30)
-                ),
-            )
+            .mk_dl_bar(&pb_key, 0, &format!("Downloading {}", prog_message))
             .await?;
 
         let response = self

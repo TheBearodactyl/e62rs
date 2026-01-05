@@ -25,7 +25,7 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 
 ## Features
 
-- [ ] Add GIF support for viewing downloaded images in-terminal (will require a really janky setup)
+- [x] Add GIF/WebP support for viewing downloaded images in-terminal
 - [x] Add more filters to post and pool searching
 - [x] Add more configuration options
 

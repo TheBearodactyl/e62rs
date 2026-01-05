@@ -28,9 +28,9 @@ impl ImageData {
 
     /// convert `DynamicImage` to `ImageData`
     pub fn from_dynamic_image(img: DynamicImage) -> Self {
-        let rgb8 = img.to_rgb8();
-        let (width, height) = rgb8.dimensions();
-        let rgb_data = rgb8.into_raw();
+        let rgba8 = img.to_rgba8();
+        let (width, height) = rgba8.dimensions();
+        let rgb_data = rgba8.into_raw();
 
         Self {
             rgb_data,

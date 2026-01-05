@@ -220,6 +220,10 @@ pub struct UiConfig {
     #[default(Some(20))]
     pub progress_refresh_rate: Option<u64>,
 
+    /// The string to display next to download progress bars
+    #[default(Some("id".to_string()))]
+    pub progress_message_mode: Option<String>,
+
     /// Show detailed progress info
     #[default(Some(true))]
     pub detailed_progress: Option<bool>,

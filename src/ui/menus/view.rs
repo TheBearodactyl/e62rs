@@ -3,14 +3,98 @@ use {
     crate::{
         display::{
             dtext::parser::format_text,
-            image::{encoder::SixelEncoder, processor::ImageProcessor, source::ImageSource},
+            image::{
+                animation::{AnimatedImage, is_animated_format, load_animated},
+                encoder::SixelEncoder,
+                processor::ImageProcessor,
+                source::ImageSource,
+            },
         },
         models::E6Post,
         ui::E6Ui,
     },
     color_eyre::eyre::{Context, Result, bail},
-    std::path::Path,
+    std::{
+        io::{self, Write},
+        path::Path,
+        thread,
+        time::Duration,
+    },
 };
+
+/// load an animation from bytes with explicit extension
+fn load_animated_from_bytes_with_ext(bytes: &[u8], ext: &str) -> Result<AnimatedImage> {
+    match ext.to_lowercase().as_str() {
+        "gif" => AnimatedImage::from_gif_bytes(bytes),
+        "webp" => AnimatedImage::from_webp_bytes(bytes),
+        _ => bail!("Unsupported animation format: {}", ext),
+    }
+}
+
+/// play an animation in the terminal
+fn play_animation(
+    animated: AnimatedImage,
+    processor: &ImageProcessor,
+    encoder: &SixelEncoder,
+) -> Result<()> {
+    if animated.frame_count() == 1 {
+        let frame = animated.get_frame(0).unwrap();
+        let sixel_str = encoder
+            .encode(&frame.data)
+            .context("failed to encode frame to sixel")?;
+        print!("{}", sixel_str);
+        io::stdout().flush()?;
+        return Ok(());
+    }
+
+    let processed = processor
+        .process_animated(animated)
+        .context("failed to process animation")?;
+
+    #[allow(clippy::manual_div_ceil, reason = "bro")]
+    let term_lines = (processed.height + 5) / 6;
+
+    let mut encoded_frames = Vec::with_capacity(processed.frames.len());
+    for frame in &processed.frames {
+        let sixel_str = encoder
+            .encode(&frame.data)
+            .context("failed to encode frame to sixel")?;
+        encoded_frames.push((sixel_str, frame.delay));
+    }
+
+    print!("\x1b[s");
+    io::stdout().flush()?;
+
+    let is_infinite = processed.is_infinite_loop();
+    let loop_count = if is_infinite {
+        1000
+    } else {
+        processed.loop_count.max(1)
+    };
+
+    for loop_idx in 0..loop_count {
+        for (frame_idx, (sixel_str, delay)) in encoded_frames.iter().enumerate() {
+            if loop_idx > 0 || frame_idx > 0 {
+                print!("\x1B[{}A\x1B[G", term_lines);
+            }
+
+            print!("{}", sixel_str);
+            io::stdout().flush()?;
+
+            thread::sleep(*delay);
+        }
+
+        if !is_infinite {
+            break;
+        }
+    }
+
+    thread::sleep(Duration::from_millis(100));
+    print!("\x1b[u");
+    io::stdout().flush()?;
+
+    Ok(())
+}
 
 /// fetch a post image and display it in the terminal
 pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
@@ -20,6 +104,26 @@ pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
     let source = ImageSource::from_url(&post_url)
         .await
         .context("failed to fetch image")?;
+
+    let url_path = Path::new(&post_url);
+    if let (true, Some(ext)) = (is_animated_format(url_path), url_path.extension())
+        && let ImageSource::Bytes(bytes) = &source
+    {
+        let ext_str = ext.to_string_lossy();
+        match load_animated_from_bytes_with_ext(bytes, &ext_str) {
+            Ok(animated) => {
+                return play_animation(animated, &processor, &encoder);
+            }
+            Err(e) => {
+                eprintln!(
+                    "warning: file appears to be animated but failed to load as animation ({}), \
+                     trying as static image...",
+                    e
+                );
+            }
+        }
+    }
+
     let image_data = processor
         .process(source)
         .context("failed to process image")?;
@@ -36,6 +140,22 @@ pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
 pub fn print_dl_to_terminal(path: &Path) -> Result<()> {
     let processor = ImageProcessor::new();
     let encoder = SixelEncoder::new();
+
+    if is_animated_format(path) {
+        match load_animated(path) {
+            Ok(animated) => {
+                return play_animation(animated, &processor, &encoder);
+            }
+            Err(e) => {
+                eprintln!(
+                    "warning: file appears to be animated but failed to load as animation ({}), \
+                     trying as static image...",
+                    e
+                );
+            }
+        }
+    }
+
     let source = ImageSource::from_path(path).context("failed to load image")?;
     let image_data = processor
         .process(source)

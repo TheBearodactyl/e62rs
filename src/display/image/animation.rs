@@ -10,6 +10,7 @@ use {
         fs::File,
         io::{BufRead, BufReader, Cursor, Seek},
         path::Path,
+        thread,
         time::Duration,
     },
 };
@@ -50,6 +51,37 @@ impl AnimatedImage {
         Self::from_gif_reader(cursor)
     }
 
+    /// calculate the number of rows the animation takes up
+    fn terminal_line_count(&self) -> u32 {
+        self.height.div_ceil(6)
+    }
+
+    /// play an animation in-place
+    pub fn play_in_place<W: std::io::Write>(
+        &self,
+        encoder: &crate::display::image::encoder::SixelEncoder,
+        writer: &mut W,
+    ) -> color_eyre::eyre::Result<()> {
+        let line_count = self.terminal_line_count();
+        let mut is_first_frame = true;
+
+        for frame in &self.frames {
+            if !is_first_frame {
+                write!(writer, "\x1B[{}A\x1B[G", line_count).context("failed to move cursor")?;
+            }
+
+            let sixel_data = encoder
+                .encode(&frame.data)
+                .context("failed to encode frame")?;
+            write!(writer, "{}", sixel_data).context("failed to write sixel data")?;
+            writer.flush().context("failed to flush output")?;
+            thread::sleep(frame.delay);
+            is_first_frame = false;
+        }
+
+        Ok(())
+    }
+
     /// load an animated gif from any reader
     fn from_gif_reader<R>(reader: R) -> Result<Self>
     where
@@ -73,7 +105,7 @@ impl AnimatedImage {
                 let buffer = frame.buffer();
                 let (w, h) = buffer.dimensions();
                 let rgb_data = DynamicImage::ImageRgba8(buffer.clone())
-                    .to_rgb8()
+                    .into_rgba8()
                     .into_raw();
 
                 let delay = frame.delay().numer_denom_ms();
@@ -95,7 +127,20 @@ impl AnimatedImage {
         })
     }
 
-    #[allow(unused, reason = "soon to be used")]
+    /// load an animated webp from a file path
+    pub fn from_webp_path(path: &Path) -> Result<Self> {
+        let file =
+            File::open(path).with_context(|| format!("Failed to open WebP: {}", path.display()))?;
+        let reader = BufReader::new(file);
+        Self::from_webp_reader(reader)
+    }
+
+    /// load an animated webp from bytes
+    pub fn from_webp_bytes(bytes: &[u8]) -> Result<Self> {
+        let cursor = Cursor::new(bytes);
+        Self::from_webp_reader(cursor)
+    }
+
     /// load an animated webp from any reader
     fn from_webp_reader<R>(reader: R) -> Result<Self>
     where
@@ -119,7 +164,7 @@ impl AnimatedImage {
                 let buffer = frame.buffer();
                 let (w, h) = buffer.dimensions();
                 let rgb_data = DynamicImage::ImageRgba8(buffer.clone())
-                    .to_rgb8()
+                    .to_rgba8()
                     .into_raw();
 
                 let delay = frame.delay().numer_denom_ms();
@@ -179,5 +224,24 @@ pub fn is_animated_format(path: &Path) -> bool {
         matches!(ext.as_str(), "gif" | "webp")
     } else {
         false
+    }
+}
+
+/// try to load an animation from a path
+pub fn load_animated(path: &Path) -> Result<AnimatedImage> {
+    if !path.exists() {
+        bail!("File does not exist: {}", path.display());
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase());
+
+    match ext.as_deref() {
+        Some("gif") => AnimatedImage::from_gif_path(path),
+        Some("webp") => AnimatedImage::from_webp_path(path),
+        Some(ext) => bail!("Unsupported animation format: {}", ext),
+        None => bail!("Could not determine file format: {}", path.display()),
     }
 }

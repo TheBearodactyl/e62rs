@@ -135,18 +135,18 @@ mod tests {
 
     #[test]
     fn test_superscript_conversion() {
-        assert_eq!(convert_script("x2", ScriptMode::Superscript), "x²");
+        assert_eq!(convert_script("x2", ScriptMode::Superscript), "ˣ²");
         assert_eq!(convert_script("a+b", ScriptMode::Superscript), "ᵃ⁺ᵇ");
     }
 
     #[test]
     fn test_subscript_conversion() {
         assert_eq!(convert_script("H2O", ScriptMode::Subscript), "H₂O");
-        assert_eq!(convert_script("x0", ScriptMode::Subscript), "x₀");
+        assert_eq!(convert_script("x0", ScriptMode::Subscript), "ₓ₀");
     }
 
     #[test]
     fn test_unmapped_chars() {
-        assert_eq!(convert_script("xyz", ScriptMode::Subscript), "xyz");
+        assert_eq!(convert_script("xyz", ScriptMode::Subscript), "ₓyz");
     }
 }

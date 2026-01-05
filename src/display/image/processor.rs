@@ -1,11 +1,12 @@
 //! image processing stuff
 use {
     crate::display::image::{
+        animation::{AnimatedImage, AnimationFrame},
         dimensions::ImageDimensions,
         source::{ImageData, ImageSource},
     },
     color_eyre::eyre::Result,
-    image::{GenericImageView, imageops::FilterType},
+    image::{DynamicImage, GenericImageView, imageops::FilterType},
 };
 
 /// default resampling filter for resizing
@@ -53,7 +54,7 @@ impl ImageProcessor {
         self.filter = filter;
     }
 
-    /// process an image source into rgb888 data
+    /// process an image source into rgba888 data
     pub fn process(&self, source: ImageSource) -> Result<ImageData> {
         let img = source.load()?;
         let original_dimensions = img.dimensions();
@@ -72,6 +73,73 @@ impl ImageProcessor {
     pub fn process_no_resize(&self, source: ImageSource) -> Result<ImageData> {
         let img = source.load()?;
         Ok(ImageData::from_dynamic_image(img))
+    }
+
+    /// process an animation, resizing all frames
+    pub fn process_animated(&self, mut animated: AnimatedImage) -> Result<AnimatedImage> {
+        let orig_dimensions = (animated.width, animated.height);
+        let target_dimensions = self.target_dimensions.compute_target(orig_dimensions);
+
+        if orig_dimensions != target_dimensions {
+            animated.frames = animated
+                .frames
+                .into_iter()
+                .map(|frame| {
+                    let img = DynamicImage::ImageRgba8(
+                        image::RgbaImage::from_raw(
+                            frame.data.width as u32,
+                            frame.data.height as u32,
+                            frame.data.rgb_data,
+                        )
+                        .expect("invalid frame data"),
+                    );
+
+                    let resized = img.resize(target_dimensions.0, target_dimensions.1, self.filter);
+                    let rgba8 = resized.to_rgba8();
+                    let rgba_data = rgba8.into_raw();
+
+                    AnimationFrame {
+                        data: ImageData::new(
+                            rgba_data,
+                            target_dimensions.0 as usize,
+                            target_dimensions.1 as usize,
+                        ),
+                        delay: frame.delay,
+                    }
+                })
+                .collect();
+
+            animated.width = target_dimensions.0;
+            animated.height = target_dimensions.1;
+        }
+
+        Ok(animated)
+    }
+
+    /// extract a single frame from an animation
+    pub fn extract_frame(&self, animated: &AnimatedImage, frame_index: usize) -> Result<ImageData> {
+        let frame = animated
+            .get_frame(frame_index)
+            .ok_or_else(|| color_eyre::eyre::eyre!("Frame {} does not exist", frame_index))?;
+
+        let original_dimensions = (frame.data.width as u32, frame.data.height as u32);
+        let target_dimensions = self.target_dimensions.compute_target(original_dimensions);
+
+        if original_dimensions != target_dimensions {
+            let img = DynamicImage::ImageRgba8(
+                image::RgbaImage::from_raw(
+                    frame.data.width as u32,
+                    frame.data.height as u32,
+                    frame.data.rgb_data.clone(),
+                )
+                .expect("invalid frame data"),
+            );
+
+            let resized = img.resize(target_dimensions.0, target_dimensions.1, self.filter);
+            Ok(ImageData::from_dynamic_image(resized))
+        } else {
+            Ok(frame.data.clone())
+        }
     }
 }
 

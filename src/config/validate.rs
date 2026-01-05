@@ -137,9 +137,13 @@ validator! { PerformanceConfig,
         "must be greater than 0";
 }
 
+const VALID_PROGRESS_MESSAGE_MODES: &[&str] = &["id", "filename"];
+
 validator! { UiConfig,
     progress_refresh_rate => |v: &u64| *v > 0 && *v <= 240,
         "must be between 1 and 240 Hz";
+    progress_message_mode => |v: &String| VALID_PROGRESS_MESSAGE_MODES.contains(&v.to_lowercase().as_str()),
+        "must be either 'id' or 'filename'";
     pagination_size => |v: &usize| *v > 0 && *v <= 1000,
         "must be between 1 and 1000";
 }
