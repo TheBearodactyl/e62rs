@@ -1,7 +1,11 @@
-progress_format = "MegaBytes"
 post_count = 320
 base_url = "https://e621.net"
-blacklist = ["young", "rape", "feral", "bestiality"]
+blacklist = [
+    "young",
+    "rape",
+    "feral",
+    "bestiality",
+]
 
 [display]
 width = 800
@@ -19,7 +23,7 @@ max_connections = 15
 http2_prior_knowledge = true
 tcp_keepalive = true
 tcp_keepalive_secs = 60
-user_agent = "e62rs/v0.7.0 (by bearodactyl on e621)"
+user_agent = "e62rs/v0.8.1 (by bearodactyl on e621)"
 
 [cache]
 enabled = true
@@ -34,10 +38,10 @@ cleanup_interval_secs = 300
 enable_compression = false
 compression_level = 6
 
-[cache.post_cache]
+[cache.posts]
 enabled = true
 max_posts = 50000000
-enable_wal = true
+wal = true
 page_size_kb = 4
 auto_compact = true
 compact_threshold_percent = 25
@@ -55,6 +59,8 @@ detailed_progress = true
 auto_clear_progress = true
 pagination_size = 20
 colored_output = true
+sfx = false
+progress_format = "MegaBytes"
 
 [search]
 min_posts_on_tag = 2
@@ -75,6 +81,8 @@ api_key = ""
 [completion]
 tag_similarity_threshold = 0.8
 tags = "data/tags.csv"
+aliases = "data/tag_aliases.csv"
+implications = "data/tag_implications.csv"
 pools = "data/pools.csv"
 
 [autoupdate]
@@ -84,31 +92,32 @@ pools = true
 [download]
 download_dir = "downloads"
 save_metadata = true
-output_format = "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
+format = "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
 
 [explorer]
-recursive_scan = true
-show_scan_progress = true
+recursive = true
+show_progress = true
 progress_threshold = 100
 default_sort = "date_newest"
 posts_per_page = 20
 cache_metadata = true
 auto_display_image = true
-slideshow_wait_seconds = 5
+slideshow_delay = 5
 
 [gallery]
 enabled = true
-port = 23794
 enable_metadata_filtering = true
+port = 23794
 cache_metadata = true
 auto_open_browser = false
 load_threads = 8
-theme = "rose-pine"
+theme = "catppuccin-frappe"
 
 [logging]
 enable = true
 level = "info"
-log_format = "Pretty"
+format = "Pretty"
 asni = true
 event_targets = false
 line_numbers = false
+

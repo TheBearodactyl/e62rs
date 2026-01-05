@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>e6srv</title>
+  </head>
+  <body>
+    <header>
+      <div class="header-content">
+        <h1>e6srv</h1>
+        <div class="header-actions">
+          <button
+            class="btn keyboard-hint-btn"
+            id="keyboardHintBtn"
+            aria-label="Show keyboard shortcuts"
+            title="Press ? for keyboard shortcuts"
+          >
+            ⌨ Shortcuts
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-container" role="main">
+      <div class="controls">
+        <div class="search-container">
+          <label for="searchBox" class="visually-hidden"
+            >Search media items</label
+          >
+          <input
+            type="search"
+            class="search-box input-base"
+            id="searchBox"
+            placeholder="Search by filename, ID, artist, or tags..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button
+            class="search-clear"
+            id="searchClear"
+            aria-label="Clear search"
+            hidden
+          >
+            ×
+          </button>
+        </div>
+        <div class="controls-group">
+          <label for="sortBy" class="visually-hidden">Sort by</label>
+          <select class="sort-select input-base" id="sortBy">
+            <option value="random">Sort: Random</option>
+            <option value="name">Sort: Name</option>
+            <option value="size">Sort: Size</option>
+            <option value="date">Sort: Date</option>
+            <option value="score">Sort: Score</option>
+            <option value="fav_count">Sort: Favorites</option>
+          </select>
+          <button
+            class="btn"
+            id="sortOrder"
+            data-order="asc"
+            aria-label="Sort ascending, click to toggle"
+            title="Toggle sort order"
+            style="width: 44px"
+          >
+            ↑
+          </button>
+        </div>
+        <div class="view-options" role="group" aria-label="View options">
+          <button
+            class="view-btn active"
+            data-view="grid"
+            title="Grid view"
+            aria-pressed="true"
+          >
+            ⊞
+          </button>
+          <button
+            class="view-btn"
+            data-view="list"
+            title="List view"
+            aria-pressed="false"
+          >
+            ☰
+          </button>
+          <button
+            class="view-btn"
+            data-view="compact"
+            title="Compact view"
+            aria-pressed="false"
+          >
+            ⊡
+          </button>
+        </div>
+      </div>
+
+      <div class="controls" style="padding-top: 0">
+        <div class="controls-group" role="group" aria-label="Media type filter">
+          <button
+            class="btn filter-btn active"
+            data-filter="all"
+            aria-pressed="true"
+          >
+            All
+          </button>
+          <button
+            class="btn filter-btn"
+            data-filter="image"
+            aria-pressed="false"
+          >
+            Images
+          </button>
+          <button
+            class="btn filter-btn"
+            data-filter="video"
+            aria-pressed="false"
+          >
+            Videos
+          </button>
+        </div>
+        <div class="controls-group" style="margin-left: auto">
+          <button
+            class="btn"
+            id="advancedFilterToggle"
+            aria-expanded="false"
+            aria-controls="advancedFilters"
+          >
+            Advanced Filters
+          </button>
+          <button class="btn" id="clearFilters">Clear All</button>
+        </div>
+      </div>
+
+      <div
+        class="advanced-filters"
+        id="advancedFilters"
+        role="region"
+        aria-label="Advanced filters"
+        hidden
+      >
+        <div class="filter-grid">
+          <div class="filter-group">
+            <label for="ratingFilter">Rating</label>
+            <select id="ratingFilter">
+              <option value="">All Ratings</option>
+              <option value="s">Safe</option>
+              <option value="q">Questionable</option>
+              <option value="e">Explicit</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="artistFilter">Artist</label>
+            <input
+              type="text"
+              id="artistFilter"
+              placeholder="Filter by artist..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="tagFilter">Tag</label>
+            <input
+              type="text"
+              id="tagFilter"
+              placeholder="Filter by tag..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="extensionFilter">File Type</label>
+            <select id="extensionFilter">
+              <option value="">All Types</option>
+              <option value="jpg">JPG</option>
+              <option value="png">PNG</option>
+              <option value="gif">GIF</option>
+              <option value="webp">WebP</option>
+              <option value="mp4">MP4</option>
+              <option value="webm">WebM</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="minScoreFilter">Min Score</label>
+            <input
+              type="number"
+              id="minScoreFilter"
+              placeholder="Minimum score..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="maxScoreFilter">Max Score</label>
+            <input
+              type="number"
+              id="maxScoreFilter"
+              placeholder="Maximum score..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="minFavFilter">Min Favorites</label>
+            <input
+              type="number"
+              id="minFavFilter"
+              placeholder="Minimum favorites..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="postIdFilter">Post ID</label>
+            <input
+              type="number"
+              id="postIdFilter"
+              placeholder="Search by post ID..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="poolIdFilter">Pool ID</label>
+            <input
+              type="number"
+              id="poolIdFilter"
+              placeholder="Search by pool ID..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="minWidthFilter">Min Width</label>
+            <input
+              type="number"
+              id="minWidthFilter"
+              placeholder="Min width (px)..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="minHeightFilter">Min Height</label>
+            <input
+              type="number"
+              id="minHeightFilter"
+              placeholder="Min height (px)..."
+              inputmode="numeric"
+            />
+          </div>
+          <div class="filter-group">
+            <label for="aspectRatioFilter">Aspect Ratio</label>
+            <select id="aspectRatioFilter">
+              <option value="">Any</option>
+              <option value="square">Square (1:1)</option>
+              <option value="portrait">Portrait (taller)</option>
+              <option value="landscape">Landscape (wider)</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>&nbsp;</label>
+            <button
+              class="btn"
+              id="applyFilters"
+              style="width: 100%; height: 40px"
+            >
+              Apply Filters
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats" id="stats" aria-live="polite">
+        <div class="stats-info">
+          <div class="stat-item">Loading media...</div>
+        </div>
+        <div class="items-per-page">
+          <label for="itemsPerPage">Items per page:</label>
+          <select id="itemsPerPage">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+
+      <div
+        class="gallery grid-view"
+        id="gallery"
+        role="grid"
+        aria-label="Media gallery"
+      >
+        <div class="loading" aria-label="Loading media"></div>
+      </div>
+
+      <nav id="pagination" aria-label="Gallery pagination"></nav>
+    </main>
+
+    <div
+      class="bulk-actions"
+      id="bulkActions"
+      role="toolbar"
+      aria-label="Bulk actions"
+      hidden
+    >
+      <span id="selectedCount">0 selected</span>
+      <button class="btn" id="downloadSelected">Download Selected</button>
+      <button class="btn" id="clearSelection">Clear Selection</button>
+    </div>
+
+    <button
+      class="scroll-top"
+      id="scrollTop"
+      title="Scroll to top"
+      aria-label="Scroll to top"
+      hidden
+    >
+      ↑
+    </button>
+
+    <dialog class="modal" id="modal" aria-label="Media viewer">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-counter" id="modalCounter" aria-live="polite">
+            1 / 1
+          </div>
+          <div class="modal-header-actions">
+            <button
+              class="btn modal-btn"
+              id="modalMetadata"
+              title="Toggle info panel"
+              aria-label="Toggle info panel"
+              aria-pressed="false"
+            >
+              i
+            </button>
+            <button
+              class="btn modal-btn"
+              id="modalDownload"
+              title="Download"
+              aria-label="Download current media"
+            >
+              ⬇
+            </button>
+            <button
+              class="btn modal-btn"
+              id="modalFullscreen"
+              title="Toggle fullscreen"
+              aria-label="Toggle fullscreen"
+            >
+              ⛶
+            </button>
+            <button
+              class="btn modal-btn modal-close"
+              id="modalClose"
+              aria-label="Close viewer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <button
+            class="modal-nav prev"
+            id="modalPrev"
+            aria-label="Previous media"
+          >
+            ‹
+          </button>
+          <img class="modal-media" id="modalMedia" src="" alt="" />
+          <button class="modal-nav next" id="modalNext" aria-label="Next media">
+            ›
+          </button>
+          <aside class="modal-info" id="modalInfo" hidden></aside>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="keyboard-help-overlay" id="keyboardHelp">
+      <div class="keyboard-help-content">
+        <h2>⌨ Keyboard Shortcuts</h2>
+
+        <div class="keyboard-help-section">
+          <h3>Gallery Navigation</h3>
+          <div class="keyboard-shortcut">
+            <kbd>N</kbd>
+            <span class="shortcut-description">Next page</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>P</kbd>
+            <span class="shortcut-description">Previous page</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>/</kbd>
+            <span class="shortcut-description">Focus search box</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>?</kbd>
+            <span class="shortcut-description">Show this help</span>
+          </div>
+        </div>
+
+        <div class="keyboard-help-section">
+          <h3>Selection</h3>
+          <div class="keyboard-shortcut">
+            <kbd>Ctrl/Cmd + A</kbd>
+            <span class="shortcut-description">Select all visible items</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>Shift + Click</kbd>
+            <span class="shortcut-description">Select range</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>Escape</kbd>
+            <span class="shortcut-description">Clear selection</span>
+          </div>
+        </div>
+
+        <div class="keyboard-help-section">
+          <h3>Modal View</h3>
+          <div class="keyboard-shortcut">
+            <kbd>←</kbd>
+            <span class="shortcut-description">Previous image</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>→</kbd>
+            <span class="shortcut-description">Next image</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>D</kbd>
+            <span class="shortcut-description">Download current image</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>I</kbd>
+            <span class="shortcut-description">Toggle info panel</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>F</kbd>
+            <span class="shortcut-description">Toggle fullscreen</span>
+          </div>
+          <div class="keyboard-shortcut">
+            <kbd>Escape</kbd>
+            <span class="shortcut-description">Close modal</span>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: var(--space-6)">
+          <button class="btn" id="closeKeyboardHelp">Close</button>
+        </div>
+      </div>
+    </dialog>
+
+    <div
+      class="toast-container"
+      id="toastContainer"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+
+    <script src="/script.js"></script>
+  </body>
+</html>
