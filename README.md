@@ -20,7 +20,7 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 
 ## Bugs/Problems
 
-- [ ] Fix menu flow bugs (e.g. pressing back doesn't actually go back)
+- [x] Fix menu flow bugs (e.g. pressing back doesn't actually go back)
 - [x] Finish the on-disk cache implementation
 
 ## Features
@@ -32,4 +32,6 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 ## Code Stuff
 
 - [x] Refactor the whole thing into something that isn't held together with duct tape and a dream
-- [ ] Add unit tests and documentation for like... everything
+- Add unit tests and documentation for like... everything
+  - [ ] Unit tests
+  - [x] Documentation
