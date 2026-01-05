@@ -1,6 +1,6 @@
 [package]
 name = "e62rs"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 description = "An in-terminal E621/926 browser."
 license-file = "LICENSE"
