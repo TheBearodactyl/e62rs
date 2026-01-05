@@ -1,104 +1,212 @@
-use {
-    crate::data::{pools::PoolDatabase, tags::TagDatabase},
-    demand::Autocomplete,
-    owo_colors::OwoColorize,
-    std::sync::Arc,
-};
+//! autocompleters for demand
+use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct TagAutocompleter {
-    tag_db: Arc<TagDatabase>,
-    limit: usize,
+use {demand::Autocomplete, owo_colors::OwoColorize};
+
+use crate::data::{pools::PoolDb, tags::TagDb};
+
+/// the prefix of an inputted tag
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PrefixChar {
+    /// no prefix
+    None,
+    /// exclude (-)
+    Exclude,
+    /// wildcard (~)
+    Wildcard,
+    /// include (+)
+    Include,
 }
 
-impl TagAutocompleter {
-    pub fn new(tag_db: Arc<TagDatabase>) -> Self {
-        Self { tag_db, limit: 10 }
-    }
-
-    pub fn with_limit(tag_db: Arc<TagDatabase>, limit: usize) -> Self {
-        Self { tag_db, limit }
-    }
-
-    fn get_current_tag(input: &str) -> &str {
-        input.split_whitespace().last().unwrap_or("")
-    }
-
-    fn get_prefix(input: &str) -> String {
-        if let Some(last_space_idx) = input.rfind(char::is_whitespace) {
-            input[..=last_space_idx].to_string()
-        } else {
-            String::new()
+impl PrefixChar {
+    #[inline]
+    /// find the prefix symbol of a string
+    fn from_str(s: &str) -> (Self, &str) {
+        match s.as_bytes().first() {
+            Some(b'-') => (Self::Exclude, &s[1..]),
+            Some(b'~') => (Self::Wildcard, &s[1..]),
+            Some(b'+') => (Self::Include, &s[1..]),
+            _ => (Self::None, s),
         }
     }
 
-    fn format_suggestion(&self, tag: &str) -> String {
-        let canonical = self.tag_db.resolve_alias(tag);
+    #[inline]
+    /// converts self to a string
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::Exclude => "-",
+            Self::Wildcard => "~",
+            Self::Include => "+",
+        }
+    }
 
-        if canonical != tag {
+    /// colors text based on the given prefix
+    fn apply_color(self, formatted: String) -> String {
+        match self {
+            Self::Exclude => format!("{}{}", "-".red().bold(), formatted),
+            Self::Wildcard => format!("{}{}", "~".yellow().bold(), formatted),
+            Self::Include => format!("{}{}", "+".green().bold(), formatted),
+            Self::None => formatted,
+        }
+    }
+}
+
+#[inline]
+/// extract the last token from the given input
+fn get_current_token(input: &str) -> &str {
+    input.rsplit(char::is_whitespace).next().unwrap_or("")
+}
+
+#[inline]
+/// get the prefix of the given token
+fn get_prefix(input: &str) -> &str {
+    match input.rfind(char::is_whitespace) {
+        Some(idx) => &input[..=idx],
+        None => "",
+    }
+}
+
+#[inline]
+/// strip ansi from a str
+fn strip_ansi(s: &str) -> String {
+    strip_ansi_escapes::strip_str(s)
+}
+
+/// extract tag/pool name from a formatted suggestion
+fn extract_name_from_suggestion(suggestion: &str) -> String {
+    let stripped = strip_ansi(suggestion);
+    let cleaned = stripped.trim_start_matches(&['-', '~', '+'][..]);
+
+    if let Some(arrow_pos) = cleaned.find(" → ") {
+        cleaned[..arrow_pos].to_string()
+    } else {
+        cleaned.to_string()
+    }
+}
+
+/// an autocompleter for a db
+trait AutocompleteDatabase {
+    /// provide autocompletions based on a query
+    fn autocomplete(&self, query: &str, limit: usize) -> Vec<String>;
+    /// resolve an entry based on the name
+    fn resolve_name(&self, name: &str) -> String;
+    /// format an entry for display
+    fn format_entry(&self, name: &str) -> String;
+}
+
+/// a generic autocompleter
+struct GenericAutocompleter<T: AutocompleteDatabase> {
+    /// the db
+    db: Arc<T>,
+    /// the limit of autocompletions to display at a tme
+    limit: usize,
+}
+
+impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
+    /// make a new autocompleter
+    fn new(db: Arc<T>, limit: usize) -> Self {
+        Self { db, limit }
+    }
+
+    /// get suggestions based on input
+    fn get_suggestions_impl(&self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let current_token = get_current_token(input);
+        let (prefix_char, search_query) = PrefixChar::from_str(current_token);
+
+        if search_query.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let matches = self.db.autocomplete(search_query, self.limit);
+        let formatted: Vec<String> = matches
+            .into_iter()
+            .map(|name| {
+                let formatted = self.db.format_entry(&name);
+                prefix_char.apply_color(formatted)
+            })
+            .collect();
+
+        Ok(formatted)
+    }
+
+    /// get completions based on input
+    fn get_completion_impl(
+        &self,
+        input: &str,
+        highlighted_suggestion: Option<&str>,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let Some(suggestion) = highlighted_suggestion else {
+            return Ok(None);
+        };
+
+        let prefix = get_prefix(input);
+        let current_token = get_current_token(input);
+        let (prefix_char, _) = PrefixChar::from_str(current_token);
+        let name = extract_name_from_suggestion(suggestion);
+        let canonical_name = self.db.resolve_name(name.as_str());
+        let mut completion = String::with_capacity(
+            prefix.len() + prefix_char.as_str().len() + canonical_name.len() + 1,
+        );
+
+        completion.push_str(prefix);
+        completion.push_str(prefix_char.as_str());
+        completion.push_str(&canonical_name);
+        completion.push(' ');
+
+        Ok(Some(completion))
+    }
+}
+
+impl AutocompleteDatabase for TagDb {
+    fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
+        self.autocomplete(query, limit)
+    }
+
+    fn resolve_name(&self, name: &str) -> String {
+        self.resolve_alias(name)
+    }
+
+    fn format_entry(&self, name: &str) -> String {
+        let canonical = self.resolve_alias(name);
+
+        if canonical != name {
             format!(
                 "{} {} {}",
-                tag.cyan(),
+                name.cyan(),
                 "→".bright_black(),
                 canonical.bright_green()
             )
         } else {
-            tag.bright_white().to_string()
+            name.bright_white().to_string()
         }
     }
+}
 
-    fn extract_tag_from_suggestion(suggestion: &str) -> String {
-        let stripped = strip_ansi_escapes::strip_str(suggestion);
+#[derive(Clone)]
+/// a tag autocompleter
+pub struct TagAutocompleter {
+    /// the inner generic completer
+    inner: Arc<GenericAutocompleter<TagDb>>,
+}
 
-        let cleaned = stripped
-            .trim_start_matches('-')
-            .trim_start_matches('~')
-            .trim_start_matches('+');
+impl TagAutocompleter {
+    /// make a new tag autocompleter
+    pub fn new(tag_db: Arc<TagDb>) -> Self {
+        Self::with_limit(tag_db, 10)
+    }
 
-        if let Some(arrow_pos) = cleaned.find(" → ") {
-            cleaned[..arrow_pos].to_string()
-        } else {
-            cleaned.to_string()
+    /// make a new tag autocompleter with the given tag limit
+    pub fn with_limit(tag_db: Arc<TagDb>, limit: usize) -> Self {
+        Self {
+            inner: Arc::new(GenericAutocompleter::new(tag_db, limit)),
         }
     }
 }
 
 impl Autocomplete for TagAutocompleter {
     fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let current_tag = Self::get_current_tag(input);
-
-        let (prefix_char, search_tag) = if let Some(stripped) = current_tag.strip_prefix('-') {
-            ("-", stripped)
-        } else if let Some(stripped) = current_tag.strip_prefix('~') {
-            ("~", stripped)
-        } else if let Some(stripped) = current_tag.strip_prefix('+') {
-            ("+", stripped)
-        } else {
-            ("", current_tag)
-        };
-
-        if search_tag.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut matches = self.tag_db.autocomplete(search_tag, self.limit);
-        matches.reverse();
-
-        let formatted: Vec<String> = matches
-            .into_iter()
-            .map(|tag| {
-                let formatted = self.format_suggestion(&tag);
-
-                match prefix_char {
-                    "-" => format!("{}{}", "-".red().bold(), formatted),
-                    "~" => format!("{}{}", "~".yellow().bold(), formatted),
-                    "+" => format!("{}{}", "+".green().bold(), formatted),
-                    _ => formatted,
-                }
-            })
-            .collect();
-
-        Ok(formatted)
+        self.inner.get_suggestions_impl(input)
     }
 
     fn get_completion(
@@ -106,153 +214,49 @@ impl Autocomplete for TagAutocompleter {
         input: &str,
         highlighted_suggestion: Option<&str>,
     ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        if let Some(suggestion) = highlighted_suggestion {
-            let prefix = Self::get_prefix(input);
-            let current_tag = Self::get_current_tag(input);
+        self.inner
+            .get_completion_impl(input, highlighted_suggestion)
+    }
+}
 
-            let prefix_char = if current_tag.starts_with('-') {
-                "-"
-            } else if current_tag.starts_with('~') {
-                "~"
-            } else if current_tag.starts_with('+') {
-                "+"
-            } else {
-                ""
-            };
+impl AutocompleteDatabase for PoolDb {
+    fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
+        self.autocomplete(query, limit)
+    }
 
-            let tag_name = Self::extract_tag_from_suggestion(suggestion);
-            let canonical_tag = self.tag_db.resolve_alias(&tag_name);
-            let new_input = format!("{}{}{} ", prefix, prefix_char, canonical_tag);
+    fn resolve_name(&self, name: &str) -> String {
+        name.to_string()
+    }
 
-            return Ok(Some(new_input));
-        }
-
-        let current_tag = Self::get_current_tag(input);
-
-        let (prefix_char, search_tag) = if let Some(stripped) = current_tag.strip_prefix('-') {
-            ("-", stripped)
-        } else if let Some(stripped) = current_tag.strip_prefix('~') {
-            ("~", stripped)
-        } else if let Some(stripped) = current_tag.strip_prefix('+') {
-            ("+", stripped)
-        } else {
-            ("", current_tag)
-        };
-
-        if search_tag.is_empty() {
-            return Ok(None);
-        }
-
-        if self.tag_db.exists(search_tag) {
-            let prefix = Self::get_prefix(input);
-            let canonical_tag = self.tag_db.resolve_alias(search_tag);
-            let new_input = format!("{}{}{} ", prefix, prefix_char, canonical_tag);
-            return Ok(Some(new_input));
-        }
-
-        let matches = self.tag_db.autocomplete(search_tag, self.limit);
-
-        if matches.is_empty() {
-            return Ok(None);
-        }
-
-        if matches.len() == 1 {
-            let prefix = Self::get_prefix(input);
-            let canonical_tag = self.tag_db.resolve_alias(&matches[0]);
-            let new_input = format!("{}{}{} ", prefix, prefix_char, canonical_tag);
-            return Ok(Some(new_input));
-        }
-
-        let common_prefix = find_common_prefix(&matches);
-
-        if common_prefix.len() > search_tag.len() {
-            let prefix = Self::get_prefix(input);
-            let new_input = format!("{}{}{}", prefix, prefix_char, common_prefix);
-            return Ok(Some(new_input));
-        }
-
-        Ok(None)
+    fn format_entry(&self, name: &str) -> String {
+        name.bright_cyan().to_string()
     }
 }
 
 #[derive(Clone)]
+/// a pool autocompleter
 pub struct PoolAutocompleter {
-    pool_db: Arc<PoolDatabase>,
-    limit: usize,
+    /// the inner generic completer for the pools db
+    inner: Arc<GenericAutocompleter<PoolDb>>,
 }
 
 impl PoolAutocompleter {
-    pub fn new(pool_db: Arc<PoolDatabase>) -> Self {
-        Self { pool_db, limit: 10 }
+    /// make a new pool autocompleter
+    pub fn new(pool_db: Arc<PoolDb>) -> Self {
+        Self::with_limit(pool_db, 10)
     }
 
-    pub fn with_limit(pool_db: Arc<PoolDatabase>, limit: usize) -> Self {
-        Self { pool_db, limit }
-    }
-
-    fn get_current_pool(input: &str) -> &str {
-        input.split_whitespace().last().unwrap_or("")
-    }
-
-    fn get_prefix(input: &str) -> String {
-        if let Some(last_space_idx) = input.rfind(char::is_whitespace) {
-            input[..=last_space_idx].to_string()
-        } else {
-            String::new()
+    /// make a new pool autocompleter with a given result limit
+    pub fn with_limit(pool_db: Arc<PoolDb>, limit: usize) -> Self {
+        Self {
+            inner: Arc::new(GenericAutocompleter::new(pool_db, limit)),
         }
-    }
-
-    fn format_suggestion(&self, pool: &str) -> String {
-        pool.bright_cyan().to_string()
-    }
-
-    fn extract_pool_from_suggestion(suggestion: &str) -> String {
-        let stripped = strip_ansi_escapes::strip_str(suggestion);
-
-        stripped
-            .trim_start_matches('-')
-            .trim_start_matches('~')
-            .trim_start_matches('+')
-            .to_string()
     }
 }
 
 impl Autocomplete for PoolAutocompleter {
     fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let current_pool = Self::get_current_pool(input);
-
-        let (prefix_char, search_pool) = if let Some(stripped) = current_pool.strip_prefix('-') {
-            ("-", stripped)
-        } else if let Some(stripped) = current_pool.strip_prefix('~') {
-            ("~", stripped)
-        } else if let Some(stripped) = current_pool.strip_prefix('+') {
-            ("+", stripped)
-        } else {
-            ("", current_pool)
-        };
-
-        if search_pool.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut matches = self.pool_db.autocomplete(search_pool, self.limit);
-        matches.reverse();
-
-        let formatted: Vec<String> = matches
-            .into_iter()
-            .map(|pool| {
-                let formatted = self.format_suggestion(&pool);
-
-                match prefix_char {
-                    "-" => format!("{}{}", "-".red().bold(), formatted),
-                    "~" => format!("{}{}", "~".yellow().bold(), formatted),
-                    "+" => format!("{}{}", "+".green().bold(), formatted),
-                    _ => formatted,
-                }
-            })
-            .collect();
-
-        Ok(formatted)
+        self.inner.get_suggestions_impl(input)
     }
 
     fn get_completion(
@@ -260,91 +264,7 @@ impl Autocomplete for PoolAutocompleter {
         input: &str,
         highlighted_suggestion: Option<&str>,
     ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        if let Some(suggestion) = highlighted_suggestion {
-            let prefix = Self::get_prefix(input);
-            let current_pool = Self::get_current_pool(input);
-
-            let prefix_char = if current_pool.starts_with('-') {
-                "-"
-            } else if current_pool.starts_with('~') {
-                "~"
-            } else if current_pool.starts_with('+') {
-                "+"
-            } else {
-                ""
-            };
-
-            let pool_name = Self::extract_pool_from_suggestion(suggestion);
-            let new_input = format!("{}{}{} ", prefix, prefix_char, pool_name);
-
-            return Ok(Some(new_input));
-        }
-
-        let current_pool = Self::get_current_pool(input);
-
-        let (prefix_char, search_pool) = if let Some(stripped) = current_pool.strip_prefix('-') {
-            ("-", stripped)
-        } else if let Some(stripped) = current_pool.strip_prefix('~') {
-            ("~", stripped)
-        } else if let Some(stripped) = current_pool.strip_prefix('+') {
-            ("+", stripped)
-        } else {
-            ("", current_pool)
-        };
-
-        if search_pool.is_empty() {
-            return Ok(None);
-        }
-
-        if self.pool_db.exists(search_pool) {
-            let prefix = Self::get_prefix(input);
-            let new_input = format!("{}{}{} ", prefix, prefix_char, search_pool);
-            return Ok(Some(new_input));
-        }
-
-        let matches = self.pool_db.autocomplete(search_pool, self.limit);
-
-        if matches.is_empty() {
-            return Ok(None);
-        }
-
-        if matches.len() == 1 {
-            let prefix = Self::get_prefix(input);
-            let new_input = format!("{}{}{} ", prefix, prefix_char, matches[0]);
-            return Ok(Some(new_input));
-        }
-
-        let common_prefix = find_common_prefix(&matches);
-
-        if common_prefix.len() > search_pool.len() {
-            let prefix = Self::get_prefix(input);
-            let new_input = format!("{}{}{}", prefix, prefix_char, common_prefix);
-            return Ok(Some(new_input));
-        }
-
-        Ok(None)
+        self.inner
+            .get_completion_impl(input, highlighted_suggestion)
     }
-}
-
-fn find_common_prefix(strings: &[String]) -> String {
-    if strings.is_empty() {
-        return String::new();
-    }
-
-    if strings.len() == 1 {
-        return strings[0].clone();
-    }
-
-    let mut prefix = strings[0].clone();
-
-    for s in &strings[1..] {
-        while !s.starts_with(&prefix) {
-            prefix.pop();
-            if prefix.is_empty() {
-                return String::new();
-            }
-        }
-    }
-
-    prefix
 }

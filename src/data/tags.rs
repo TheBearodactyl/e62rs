@@ -1,11 +1,19 @@
+//! tag db with alias/implication resolution
+
 use {
     crate::{
-        config::options::E62Rs,
-        data::{Database, Entry},
+        data::Entry,
+        getopt,
         models::{TagAliasEntry, TagEntry, TagImplicationEntry},
     },
-    color_eyre::eyre::Result,
-    std::collections::{HashMap, HashSet},
+    color_eyre::Result,
+    hashbrown::{HashMap, HashSet},
+    nucleo_matcher::{
+        Config, Matcher,
+        pattern::{CaseMatching, Normalization, Pattern},
+    },
+    radix_trie::{Trie, TrieCommon},
+    std::{fs::File, sync::Arc},
 };
 
 impl Entry for TagEntry {
@@ -26,79 +34,149 @@ impl Entry for TagImplicationEntry {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct TagDatabase {
-    pub tags: Database<TagEntry>,
-    pub aliases: Database<TagAliasEntry>,
-    pub implications: Database<TagImplicationEntry>,
+/// tag db. manages tags, aliases, and implications
+#[derive(Clone, Debug)]
+pub struct TagDb {
+    /// indexed tags for fast prefix lookup
+    tag_trie: Trie<String, Arc<TagEntry>>,
+    /// indexed aliases for fast prefix lookup
+    alias_trie: Trie<String, String>,
+    /// sorted tags by post count for iteration
+    sorted_tags: Vec<Arc<TagEntry>>,
+    /// alias -> canonical tag translation map
     alias_map: HashMap<String, String>,
-    implication_map: HashMap<String, Vec<String>>,
+    /// implication -> tag(s) translation map
+    impl_map: HashMap<String, Vec<String>>,
+    /// set of all tag names for O(1) existence checks
+    tag_names: HashSet<String>,
 }
 
-impl TagDatabase {
+impl Default for TagDb {
+    fn default() -> Self {
+        Self {
+            tag_trie: Trie::new(),
+            alias_trie: Trie::new(),
+            sorted_tags: Vec::new(),
+            alias_map: HashMap::new(),
+            impl_map: HashMap::new(),
+            tag_names: HashSet::new(),
+        }
+    }
+}
+
+impl TagDb {
+    /// loads tag data from configured csv files
     pub fn load() -> Result<Self> {
-        let cfg = E62Rs::get()?;
+        let tags_path = getopt!(completion.tags);
+        let aliases_path = getopt!(completion.aliases);
+        let impls_path = getopt!(completion.implications);
+        let mut tags: Vec<TagEntry> = Vec::new();
+        let file = File::open(&tags_path)?;
+        let mut rdr = csv::Reader::from_reader(file);
 
-        let tags: Database<TagEntry> = Database::from_csv(&cfg.completion.tags)?;
-        let aliases: Database<TagAliasEntry> = Database::from_csv(&cfg.completion.tag_aliases)?;
-        let implications: Database<TagImplicationEntry> =
-            Database::from_csv(&cfg.completion.tag_implications)?;
+        for res in rdr.deserialize() {
+            tags.push(res?);
+        }
 
-        let mut alias_map = HashMap::new();
-        unsafe {
-            for alias in aliases.buffer.iter() {
-                if alias.status == "active" {
-                    alias_map.insert(alias.antecedent_name.clone(), alias.consequent_name.clone());
-                }
+        let mut aliases: Vec<TagAliasEntry> = Vec::new();
+        let file = File::open(&aliases_path)?;
+        let mut rdr = csv::Reader::from_reader(file);
+
+        for res in rdr.deserialize() {
+            aliases.push(res?);
+        }
+
+        let mut impls: Vec<TagImplicationEntry> = Vec::new();
+        let file = File::open(&impls_path)?;
+        let mut rdr = csv::Reader::from_reader(file);
+
+        for res in rdr.deserialize() {
+            impls.push(res?);
+        }
+
+        let mut alias_map = HashMap::with_capacity(aliases.len());
+        for alias in &aliases {
+            if alias.status == "active" {
+                alias_map.insert(alias.antecedent_name.clone(), alias.consequent_name.clone());
             }
         }
 
-        let mut implication_map: HashMap<String, Vec<String>> = HashMap::new();
-        unsafe {
-            for implication in implications.buffer.iter() {
-                if implication.status == "active" {
-                    implication_map
-                        .entry(implication.antecedent_name.clone())
-                        .or_default()
-                        .push(implication.consequent_name.clone());
-                }
+        let mut impl_map: HashMap<String, Vec<String>> = HashMap::new();
+        for implication in &impls {
+            if implication.status == "active" {
+                impl_map
+                    .entry(implication.antecedent_name.clone())
+                    .or_default()
+                    .push(implication.consequent_name.clone());
             }
+        }
+
+        let mut tag_trie = Trie::new();
+        let mut tag_names = HashSet::with_capacity(tags.len());
+        for tag in &tags {
+            let arc_tag = Arc::new(tag.clone());
+            tag_trie.insert(tag.name.clone(), arc_tag);
+            tag_names.insert(tag.name.clone());
+        }
+
+        let mut alias_trie = Trie::new();
+        for alias in &aliases {
+            if alias.status == "active" {
+                alias_trie.insert(alias.antecedent_name.clone(), alias.consequent_name.clone());
+            }
+        }
+
+        let min_posts = getopt!(search.min_posts_on_tag) as i64;
+        let mut sorted_tags: Vec<Arc<TagEntry>> = tags
+            .into_iter()
+            .filter(|t| t.post_count > min_posts)
+            .map(Arc::new)
+            .collect();
+
+        if getopt!(search.sort_tags_by_post_count) {
+            sorted_tags.sort_by(|a, b| b.post_count.cmp(&a.post_count));
+        }
+
+        if getopt!(search.reverse_tags_order) {
+            sorted_tags.reverse();
         }
 
         Ok(Self {
-            tags,
-            aliases,
-            implications,
+            tag_trie,
+            alias_trie,
+            sorted_tags,
             alias_map,
-            implication_map,
+            impl_map,
+            tag_names,
         })
     }
 
+    /// resolves a tag name through its alias chain
+    #[inline]
     pub fn resolve_alias(&self, tag: &str) -> String {
-        let mut current = tag.to_string();
+        let mut curr = tag;
         let mut visited = HashSet::new();
 
-        while let Some(aliased) = self.alias_map.get(&current) {
-            if !visited.insert(current.clone()) {
+        while let Some(aliased) = self.alias_map.get(curr) {
+            if !visited.insert(curr) {
                 break;
             }
 
-            current = aliased.clone();
+            curr = aliased;
         }
 
-        current
+        curr.to_string()
     }
 
+    /// returns direct implications for a tag
     pub fn get_implications(&self, tag: &str) -> Vec<String> {
         let resolved = self.resolve_alias(tag);
-        self.implication_map
-            .get(&resolved)
-            .cloned()
-            .unwrap_or_default()
+        self.impl_map.get(&resolved).cloned().unwrap_or_default()
     }
 
+    /// returns all implications recursively for a tag
     pub fn get_all_implications(&self, tag: &str) -> Vec<String> {
-        let mut all_implications = Vec::new();
+        let mut all_impls = Vec::new();
         let mut visited = HashSet::new();
         let mut to_process = vec![self.resolve_alias(tag)];
 
@@ -107,91 +185,126 @@ impl TagDatabase {
                 continue;
             }
 
-            if let Some(implications) = self.implication_map.get(&curr_tag) {
+            if let Some(implications) = self.impl_map.get(&curr_tag) {
                 for implied in implications {
-                    if !all_implications.contains(implied) {
-                        all_implications.push(implied.clone());
+                    if !all_impls.contains(implied) {
+                        all_impls.push(implied.clone());
                         to_process.push(implied.clone());
                     }
                 }
             }
         }
 
-        all_implications
+        all_impls
     }
 
+    /// returns an iterator over tags matching configured filters
+    ///
     /// # Safety
+    /// database must not be modified/dropped while iterating
     #[inline(always)]
     pub unsafe fn iter_tags(&self) -> Result<impl Iterator<Item = &TagEntry>> {
-        let cfg = E62Rs::get()?;
-
-        let mut tags = unsafe {
-            self.tags
-                .buffer
-                .iter()
-                .filter(|tag| tag.post_count > cfg.search.min_posts_on_tag as i64)
-                .collect::<Vec<&TagEntry>>()
-        };
-
-        if cfg.search.sort_tags_by_post_count {
-            tags.sort_by(|a, b| b.post_count.cmp(&a.post_count));
-        }
-
-        if cfg.search.reverse_tags_order {
-            tags.reverse();
-        }
-
-        Ok(tags.into_iter())
+        Ok(self.sorted_tags.iter().map(|arc| arc.as_ref()))
     }
 
+    /// returns all tags including resolved aliases
     pub fn list(&self) -> Vec<TagEntry> {
-        let mut result = Vec::new();
+        let mut result: Vec<TagEntry> =
+            self.sorted_tags.iter().map(|arc| (**arc).clone()).collect();
 
-        unsafe {
-            result.extend(self.tags.buffer.iter().cloned());
-        }
-
-        unsafe {
-            for alias in self.aliases.buffer.iter() {
-                if alias.status == "active"
-                    && let Some(consequent_tag) = self.tags.get_by_name(&alias.consequent_name)
-                {
-                    result.push(TagEntry {
-                        id: alias.id,
-                        name: alias.antecedent_name.clone(),
-                        category: consequent_tag.category,
-                        post_count: consequent_tag.post_count,
-                    });
-                }
+        for (alias_name, canonical) in &self.alias_map {
+            if let Some(consequent) = self.tag_trie.get(canonical) {
+                result.push(TagEntry {
+                    id: 0,
+                    name: alias_name.clone(),
+                    category: consequent.category,
+                    post_count: consequent.post_count,
+                });
             }
         }
 
         result
     }
 
+    /// searches for tags matching a query (searches: tags and aliases)
     pub fn search(&self, query: &str, limit: usize) -> Vec<String> {
-        let mut results = self.tags.search(query, limit, 0.7);
-        let alias_results = self.aliases.search(query, limit, 0.7);
+        if query.is_empty() {
+            return Vec::new();
+        }
 
-        for alias_name in alias_results {
-            let resolved = self.resolve_alias(&alias_name);
-            if !results.contains(&resolved) {
-                results.push(resolved);
+        let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+        let mut scored: Vec<(u32, String)> = Vec::new();
+
+        for tag in &self.sorted_tags {
+            let mut buf = Vec::new();
+            if let Some(score) = pattern.score(
+                nucleo_matcher::Utf32Str::new(&tag.name, &mut buf),
+                &mut matcher,
+            ) {
+                scored.push((score, tag.name.clone()));
             }
         }
 
-        results.truncate(limit);
-        results
+        for (alias, canonical) in &self.alias_map {
+            let mut buf = Vec::new();
+            if let Some(score) =
+                pattern.score(nucleo_matcher::Utf32Str::new(alias, &mut buf), &mut matcher)
+            {
+                let resolved = self.resolve_alias(canonical);
+                scored.push((score, resolved));
+            }
+        }
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+
+        let mut seen = HashSet::new();
+        scored
+            .into_iter()
+            .filter_map(|(_, name)| {
+                if seen.insert(name.clone()) {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .take(limit)
+            .collect()
     }
 
+    /// returns autocompletions for tag names
+    /// (includes: tags and aliases, resolves to: canonical names)
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
-        let mut results = self.tags.autocomplete(query, limit);
-        let alias_results = self.aliases.autocomplete(query, limit);
+        if query.is_empty() {
+            return Vec::new();
+        }
 
-        for alias_name in alias_results {
-            let resolved = self.resolve_alias(&alias_name);
-            if !results.contains(&resolved) {
-                results.push(resolved);
+        let query_lower = query.to_lowercase();
+        let mut results = Vec::with_capacity(limit);
+        let mut seen = HashSet::new();
+
+        if let Some(subtrie) = self.tag_trie.get_raw_descendant(&query_lower) {
+            for (key, _) in subtrie.iter().take(limit * 2) {
+                if seen.insert(key.clone()) {
+                    results.push(key.clone());
+                    if results.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if results.len() < limit
+            && let Some(subtrie) = self.alias_trie.get_raw_descendant(&query_lower)
+        {
+            for (_, canonical) in subtrie.iter().take(limit) {
+                let resolved = self.resolve_alias(canonical);
+                if seen.insert(resolved.clone()) {
+                    results.push(resolved);
+                    if results.len() >= limit {
+                        break;
+                    }
+                }
             }
         }
 
@@ -199,19 +312,13 @@ impl TagDatabase {
         results
     }
 
+    /// checks if a tag/alias exists with the given name
     pub fn exists(&self, tag: &str) -> bool {
-        if self.tags.exists(tag) {
-            return true;
-        }
-
-        if self.alias_map.contains_key(tag) {
-            return true;
-        }
-
-        false
+        self.tag_names.contains(tag) || self.alias_map.contains_key(tag)
     }
 
-    pub fn get_canonical_name(&self, tag: &str) -> String {
+    /// returns the canonical name for a given tag/alias
+    pub fn get_canon_name(&self, tag: &str) -> String {
         self.resolve_alias(tag)
     }
 }

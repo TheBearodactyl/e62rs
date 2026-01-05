@@ -1,11 +1,16 @@
+//! every single available configuration option and its type is listed in this file
 use {
-    color_eyre::eyre::{Context, Result},
-    config::Config,
+    crate::config::validate::{Validate, format_validation_errors},
+    color_eyre::{
+        Section, SectionExt,
+        eyre::{Context, OptionExt, Result, eyre},
+    },
+    config::{Config, ConfigBuilder},
     schemars::JsonSchema,
     serde::{Deserialize, Serialize},
     smart_default::SmartDefault,
-    std::{fs, path::Path},
-    tracing::{info, warn},
+    std::path::{Path, PathBuf},
+    tracing::info,
 };
 
 /// Configuration options for making HTTP requests
@@ -33,6 +38,7 @@ pub enum SizeFormat {
 }
 
 impl SizeFormat {
+    /// format a given number of bytes into a format
     pub fn format_size(&self, bytes: u64) -> String {
         let bits = bytes * 8;
         match self {
@@ -51,37 +57,37 @@ impl SizeFormat {
 #[schemars(bound = "T: JsonSchema + Default")]
 pub struct HttpConfig {
     /// Connection pool size per host
-    #[default(32)]
-    pub pool_max_idle_per_host: usize,
+    #[default(Some(32))]
+    pub pool_max_idle_per_host: Option<usize>,
 
     /// Connection pool idle timeout in seconds
-    #[default(90)]
-    pub pool_idle_timeout_secs: u64,
+    #[default(Some(90))]
+    pub pool_idle_timeout_secs: Option<u64>,
 
     /// Request timeout in seconds
-    #[default(30)]
-    pub timeout_secs: u64,
+    #[default(Some(30))]
+    pub timeout_secs: Option<u64>,
 
     /// Connection timeout in seconds
-    #[default(10)]
-    pub connect_timeout_secs: u64,
+    #[default(Some(10))]
+    pub connect_timeout_secs: Option<u64>,
 
     #[schemars(range(min = 1, max = 15))]
     /// Max concurrent connections
-    #[default(15)]
-    pub max_connections: usize,
+    #[default(Some(15))]
+    pub max_connections: Option<usize>,
 
     /// Enable HTTP/2
-    #[default(true)]
-    pub http2_prior_knowledge: bool,
+    #[default(Some(true))]
+    pub http2_prior_knowledge: Option<bool>,
 
     /// Enable keep-alive
-    #[default(true)]
-    pub tcp_keepalive: bool,
+    #[default(Some(true))]
+    pub tcp_keepalive: Option<bool>,
 
     /// How many seconds to keep TCP alive for
-    #[default(60)]
-    pub tcp_keepalive_secs: u64,
+    #[default(Some(60))]
+    pub tcp_keepalive_secs: Option<u64>,
 
     /// User agent string in the format:
     /// `<project name>/<project version> (by <valid e6 username> on <e621/e926>)`
@@ -90,13 +96,13 @@ pub struct HttpConfig {
     /// - `my-project/1.2.3 (by username123 on e621)`
     /// - `another/2.0.0-beta.1 (by user7890 on e926)`
     /// - `test-proj/0.1.0+build.123 (by myuser12345 on e621)`
-    #[default(format!(
+    #[default(Some(format!(
         "{}/v{} (by {} on e621)",
         env!("CARGO_PKG_NAME"),
         env!("CARGO_PKG_VERSION"),
         "bearodactyl"
-    ))]
-    pub user_agent: String,
+    )))]
+    pub user_agent: Option<String>,
 }
 
 /// Configuration options for the response cache
@@ -105,52 +111,52 @@ pub struct HttpConfig {
 #[schemars(default)]
 pub struct CacheConfig {
     /// Enable response caching
-    #[default(true)]
-    pub enabled: bool,
+    #[default(Some(true))]
+    pub enabled: Option<bool>,
 
     /// Cache directory
-    #[default(".cache".to_owned())]
-    pub cache_dir: String,
+    #[default(Some(".cache".to_owned()))]
+    pub cache_dir: Option<String>,
 
     /// Cache TTL in seconds
-    #[default(3600)]
-    pub ttl_secs: u64,
+    #[default(Some(3600))]
+    pub ttl_secs: Option<u64>,
 
     /// Cache TTI in seconds
-    #[default(1800)]
-    pub tti_secs: u64,
+    #[default(Some(1800))]
+    pub tti_secs: Option<u64>,
 
     /// Max cache size in MB
-    #[default(500)]
-    pub max_size_mb: u64,
+    #[default(Some(500))]
+    pub max_size_mb: Option<u64>,
 
     /// Maximum number of entries in memory cache
-    #[default(10000)]
-    pub max_entries: usize,
+    #[default(Some(10000))]
+    pub max_entries: Option<usize>,
 
     /// Enable LRU eviction policy (when false, uses TinyLFU for better hit rates)
-    #[default(false)]
-    pub use_lru_policy: bool,
+    #[default(Some(false))]
+    pub use_lru_policy: Option<bool>,
 
     /// Enable cache statistics tracking
-    #[default(true)]
-    pub enable_stats: bool,
+    #[default(Some(true))]
+    pub enable_stats: Option<bool>,
 
     /// Auto-cleanup interval in seconds (for removing expired entries)
-    #[default(300)]
-    pub cleanup_interval_secs: u64,
+    #[default(Some(300))]
+    pub cleanup_interval: Option<u64>,
 
     /// Enable compression for cached data (reduces size but adds CPU overhead)
-    #[default(false)]
-    pub enable_compression: bool,
+    #[default(Some(false))]
+    pub enable_compression: Option<bool>,
 
     /// Compression level (1-9, where 9 is maximum compression)
-    #[default(6)]
-    pub compression_level: u8,
+    #[default(Some(6))]
+    pub compression_level: Option<u8>,
 
     /// Post cache specific settings
-    #[default(PostCacheConfig::default())]
-    pub post_cache: PostCacheConfig,
+    #[default(Some(PostCacheConfig::default()))]
+    pub posts: Option<PostCacheConfig>,
 }
 
 /// Configuration options for post-specific caching
@@ -159,28 +165,28 @@ pub struct CacheConfig {
 #[schemars(default)]
 pub struct PostCacheConfig {
     /// Enable post cache
-    #[default(true)]
-    pub enabled: bool,
+    #[default(Some(true))]
+    pub enabled: Option<bool>,
 
     /// Maximum number of posts to cache
-    #[default(50000000)]
-    pub max_posts: usize,
+    #[default(Some(50000000))]
+    pub max_posts: Option<usize>,
 
     /// Enable write-ahead logging for better crash recovery
-    #[default(true)]
-    pub enable_wal: bool,
+    #[default(Some(true))]
+    pub wal: Option<bool>,
 
     /// Database page size in bytes (affects performance and size)
-    #[default(4)]
-    pub page_size_kb: usize,
+    #[default(Some(4))]
+    pub page_size_kb: Option<usize>,
 
     /// Enable automatic compaction to reclaim space
-    #[default(true)]
-    pub auto_compact: bool,
+    #[default(Some(true))]
+    pub auto_compact: Option<bool>,
 
     /// Compaction threshold (compact when wasted space exceeds this percentage)
-    #[default(25)]
-    pub compact_threshold_percent: u8,
+    #[default(Some(25))]
+    pub compact_threshold: Option<u8>,
 }
 
 /// Configuration options for performance
@@ -190,24 +196,24 @@ pub struct PostCacheConfig {
 pub struct PerformanceConfig {
     #[schemars(range(min = 1, max = 15))]
     /// Number of concurrent downloads
-    #[default(15)]
-    pub concurrent_downloads: usize,
+    #[default(Some(15))]
+    pub concurrent_downloads: Option<usize>,
 
     /// Prefetch next batch of posts
-    #[default(true)]
-    pub prefetch_enabled: bool,
+    #[default(Some(true))]
+    pub prefetch_enabled: Option<bool>,
 
     /// Prefetch batch size
-    #[default(10)]
-    pub prefetch_batch_size: usize,
+    #[default(Some(10))]
+    pub prefetch_batch_size: Option<usize>,
 
     /// Enable image preloading
-    #[default(true)]
-    pub preload_images: bool,
+    #[default(Some(true))]
+    pub preload_images: Option<bool>,
 
     /// Max image preload size in MB
-    #[default(100)]
-    pub max_preload_size_mb: u64,
+    #[default(Some(100))]
+    pub max_preload_size_mb: Option<u64>,
 }
 
 /// Configuration options for the UI
@@ -216,28 +222,33 @@ pub struct PerformanceConfig {
 #[schemars(default)]
 pub struct UiConfig {
     /// Progress bar refresh rate (Hz)
-    #[default(20)]
-    pub progress_refresh_rate: u64,
+    #[default(Some(20))]
+    pub progress_refresh_rate: Option<u64>,
 
     /// Show detailed progress info
-    #[default(true)]
-    pub detailed_progress: bool,
+    #[default(Some(true))]
+    pub detailed_progress: Option<bool>,
 
     /// Auto-clear completed progress bars
-    #[default(true)]
-    pub auto_clear_progress: bool,
+    #[default(Some(true))]
+    pub auto_clear_progress: Option<bool>,
 
     /// Pagination size for post listings
-    #[default(20)]
-    pub pagination_size: usize,
+    #[default(Some(20))]
+    pub pagination_size: Option<usize>,
 
     /// Enable colored output
-    #[default(true)]
-    pub colored_output: bool,
+    #[default(Some(true))]
+    pub colored_output: Option<bool>,
+
+    /// The format to display download progress in
+    #[default(Some(SizeFormat::default()))]
+    pub progress_format: Option<SizeFormat>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
+/// The format to log in
 pub enum LoggingFormat {
     /// Use the compact output format
     Compact,
@@ -253,28 +264,28 @@ pub enum LoggingFormat {
 #[schemars(default)]
 pub struct LoggingConfig {
     /// Enable logging (HIGHLY RECCOMMEND TO KEEP ON)
-    #[default(true)]
-    pub enable: bool,
+    #[default(Some(true))]
+    pub enable: Option<bool>,
 
     /// The max level to log at
-    #[default("info".to_string())]
-    pub level: String,
+    #[default(Some("info".to_string()))]
+    pub level: Option<String>,
 
     /// Use extra pretty logging
-    #[default(LoggingFormat::Pretty)]
-    pub log_format: LoggingFormat,
+    #[default(Some(LoggingFormat::Pretty))]
+    pub format: Option<LoggingFormat>,
 
     /// Enable ANSI escape codes for colors and stuff
-    #[default(true)]
-    pub asni: bool,
+    #[default(Some(true))]
+    pub asni: Option<bool>,
 
     /// Display event targets in log messages
-    #[default(false)]
-    pub event_targets: bool,
+    #[default(Some(false))]
+    pub event_targets: Option<bool>,
 
     /// Display line numbers in log messages
-    #[default(false)]
-    pub line_numbers: bool,
+    #[default(Some(false))]
+    pub line_numbers: Option<bool>,
 }
 
 /// Configuration options for displaying images
@@ -283,24 +294,24 @@ pub struct LoggingConfig {
 #[schemars(default)]
 pub struct ImageDisplay {
     /// The max width of displayed images
-    #[default(800)]
-    pub width: u64,
+    #[default(Some(800))]
+    pub width: Option<u64>,
 
     /// The max height of displayed images
-    #[default(600)]
-    pub height: u64,
+    #[default(Some(600))]
+    pub height: Option<u64>,
 
     /// Whether to display the image when showing post info
-    #[default(true)]
-    pub image_when_info: bool,
+    #[default(Some(true))]
+    pub image_when_info: Option<bool>,
 
     /// Image quality for sixel conversion (1-100)
-    #[default(100)]
-    pub sixel_quality: u8,
+    #[default(Some(100))]
+    pub sixel_quality: Option<u8>,
 
     /// Resize method (nearest, linear, cubic, gaussian, lanczos3)
-    #[default("lanczos3".to_string())]
-    pub resize_method: String,
+    #[default(Some("lanczos3".to_string()))]
+    pub resize_method: Option<String>,
 }
 
 /// Configuration options for searching posts/pools
@@ -309,40 +320,40 @@ pub struct ImageDisplay {
 #[schemars(default)]
 pub struct SearchCfg {
     /// The minimum amount of posts on a tag for it to show up in tag selection
-    #[default(2)]
-    pub min_posts_on_tag: u64,
+    #[default(Some(2))]
+    pub min_posts_on_tag: Option<u64>,
 
     /// The minimum amount of posts on a pool for it to show up in pool selection
-    #[default(2)]
-    pub min_posts_on_pool: u64,
+    #[default(Some(2))]
+    pub min_posts_on_pool: Option<u64>,
 
     /// Whether or not to show inactive pools
-    #[default(true)]
-    pub show_inactive_pools: bool,
+    #[default(Some(true))]
+    pub show_inactive_pools: Option<bool>,
 
     /// Whether or not to sort pools by how many posts they contain
-    #[default(false)]
-    pub sort_pools_by_post_count: bool,
+    #[default(Some(false))]
+    pub sort_pools_by_post_count: Option<bool>,
 
     /// Whether or not to sort tags by their post count
-    #[default(true)]
-    pub sort_tags_by_post_count: bool,
+    #[default(Some(true))]
+    pub sort_tags_by_post_count: Option<bool>,
 
     /// The minimum score a post should have to show up in search
-    #[default(0)]
-    pub min_post_score: i64,
+    #[default(Some(0))]
+    pub min_post_score: Option<i64>,
 
     /// The maximum score a post should have to show up in search
-    #[default(i64::MAX)]
-    pub max_post_score: i64,
+    #[default(Some(i64::MAX))]
+    pub max_post_score: Option<i64>,
 
     /// Sort tags in reverse alphabetic order
-    #[default(false)]
-    pub reverse_tags_order: bool,
+    #[default(Some(false))]
+    pub reverse_tags_order: Option<bool>,
 
     /// The number of threads to use when fetching post data
-    #[default(8)]
-    pub fetch_threads: usize,
+    #[default(Some(8))]
+    pub fetch_threads: Option<usize>,
 }
 
 /// Configuration options for completion in menus
@@ -351,24 +362,24 @@ pub struct SearchCfg {
 #[schemars(default)]
 pub struct CompletionCfg {
     /// The similarity threshold to complete a tag
-    #[default(0.8)]
-    pub tag_similarity_threshold: f64,
+    #[default(Some(0.8))]
+    pub tag_similarity_threshold: Option<f64>,
 
     /// The path to `tags.csv` that's used for tag searching/autocompletion
-    #[default("data/tags.csv".to_string())]
-    pub tags: String,
+    #[default(Some("data/tags.csv".to_string()))]
+    pub tags: Option<String>,
 
     /// The path to `tag_aliases.csv` that's used for tag alias computation
-    #[default("data/tag_aliases.csv".to_string())]
-    pub tag_aliases: String,
+    #[default(Some("data/tag_aliases.csv".to_string()))]
+    pub aliases: Option<String>,
 
     /// The path to `tag_implications.csv` that's used for tag implication computation
-    #[default("data/tag_implications.csv".to_string())]
-    pub tag_implications: String,
+    #[default(Some("data/tag_implications.csv".to_string()))]
+    pub implications: Option<String>,
 
     /// The path to `pools.csv` that's used for pool searching/autocompletion
-    #[default("data/pools.csv".to_string())]
-    pub pools: String,
+    #[default(Some("data/pools.csv".to_string()))]
+    pub pools: Option<String>,
 }
 
 /// Your login credentials
@@ -376,17 +387,17 @@ pub struct CompletionCfg {
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
 pub struct LoginCfg {
-    #[default(true)]
+    #[default(Some(true))]
     /// Whether to login or not
-    pub login: bool,
+    pub login: Option<bool>,
 
-    #[default(String::new())]
+    #[default(Some(String::new()))]
     /// Your username
-    pub username: String,
+    pub username: Option<String>,
 
-    #[default(String::new())]
+    #[default(Some(String::new()))]
     /// Your API key
-    pub api_key: String,
+    pub api_key: Option<String>,
 }
 
 /// Settings for automatically updating data snapshots
@@ -395,12 +406,12 @@ pub struct LoginCfg {
 #[schemars(default)]
 pub struct AutoUpdateCfg {
     /// Whether or not to auto-update tags
-    #[default(true)]
-    pub tags: bool,
+    #[default(Some(true))]
+    pub tags: Option<bool>,
 
     /// Whether or not to auto-update pools
-    #[default(true)]
-    pub pools: bool,
+    #[default(Some(true))]
+    pub pools: Option<bool>,
 }
 
 /// Settings for the downloads explorer
@@ -409,36 +420,36 @@ pub struct AutoUpdateCfg {
 #[schemars(default)]
 pub struct ExplorerCfg {
     /// Enable recursive directory scanning
-    #[default(true)]
-    pub recursive_scan: bool,
+    #[default(Some(true))]
+    pub recursive: Option<bool>,
 
     /// Show scanning progress for directories with many files
-    #[default(true)]
-    pub show_scan_progress: bool,
+    #[default(Some(true))]
+    pub show_progress: Option<bool>,
 
     /// Minimum number of files before showing progress (0 = always show)
-    #[default(100)]
-    pub progress_threshold: usize,
+    #[default(Some(100))]
+    pub progress_threshold: Option<usize>,
 
     /// Default sort order for explorer
-    #[default("date_newest".to_string())]
-    pub default_sort: String,
+    #[default(Some("date_newest".to_string()))]
+    pub default_sort: Option<String>,
 
     /// Number of posts to display per page in explorer
-    #[default(20)]
-    pub posts_per_page: usize,
+    #[default(Some(20))]
+    pub posts_per_page: Option<usize>,
 
     /// Cache scanned metadata in memory for faster subsequent access
-    #[default(true)]
-    pub cache_metadata: bool,
+    #[default(Some(true))]
+    pub cache_metadata: Option<bool>,
 
     /// Automatically display image when viewing post details
-    #[default(true)]
-    pub auto_display_image: bool,
+    #[default(Some(true))]
+    pub auto_display_image: Option<bool>,
 
     /// The amount of time to wait between slideshow images
-    #[default(5)]
-    pub slideshow_wait_seconds: u64,
+    #[default(Some(5))]
+    pub slideshow_delay: Option<u64>,
 }
 
 /// Settings for post downloading
@@ -447,8 +458,12 @@ pub struct ExplorerCfg {
 #[schemars(default)]
 pub struct DownloadCfg {
     /// The directory to download posts to
-    #[default("downloads".to_string())]
-    pub download_dir: String,
+    #[default(Some("downloads".to_string()))]
+    pub path: Option<String>,
+
+    /// The directory to download pools to
+    #[default(Some("downloads/pools".to_string()))]
+    pub pools_path: Option<String>,
 
     /// Save the data of downloaded posts
     ///
@@ -460,8 +475,8 @@ pub struct DownloadCfg {
     ///
     /// Windows systems: Will save the JSON data to `<imagepath>:metadata`
     ///      To read it: Run `cat <imagepath>:metadata`
-    #[default(true)]
-    pub save_metadata: bool,
+    #[default(Some(true))]
+    pub save_metadata: Option<bool>,
 
     /// ## Filename Formatting
     ///
@@ -605,37 +620,38 @@ pub struct DownloadCfg {
     /// output_format = "$artists[..1]/$artists[1..] - $id.$ext"
     /// # → "primary_artist/collab1, collab2 - 123456.png"
     /// ```
-    #[default("$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string())]
-    pub output_format: String,
+    #[default(Some("$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext".to_string()))]
+    pub format: Option<String>,
 }
 
+/// Settings for the post gallery
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
 pub struct GalleryCfg {
     /// Enable the media gallery server
-    #[default(true)]
-    pub enabled: bool,
-
-    /// Port to run the gallery server on
-    #[default(23794)]
-    pub port: u16,
+    #[default(Some(true))]
+    pub enabled: Option<bool>,
 
     /// Enable metadata-based filtering (requires saved post metadata)
-    #[default(true)]
-    pub enable_metadata_filtering: bool,
+    #[default(Some(true))]
+    pub enable_metadata_filtering: Option<bool>,
+
+    /// Port to run the gallery server on
+    #[default(Some(23794))]
+    pub port: Option<u16>,
 
     /// Cache metadata in memory for faster filtering
-    #[default(true)]
-    pub cache_metadata: bool,
+    #[default(Some(true))]
+    pub cache_metadata: Option<bool>,
 
     /// Automatically open browser when starting server
-    #[default(false)]
-    pub auto_open_browser: bool,
+    #[default(Some(false))]
+    pub auto_open_browser: Option<bool>,
 
     /// The number of threads to use for loading your downloads
-    #[default(8)]
-    pub load_threads: usize,
+    #[default(Some(8))]
+    pub load_threads: Option<usize>,
 
     /// The colorscheme to use for the gallery
     ///
@@ -647,166 +663,306 @@ pub struct GalleryCfg {
     /// - catppuccin-frappe
     /// - catppuccin-macchiato
     /// - catppuccin-mocha
-    #[default("catppuccin-frappe".to_string())]
-    pub theme: String,
+    #[default(Some("catppuccin-frappe".to_string()))]
+    pub theme: Option<String>,
 }
 
 /// E62RS configuration options
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
-#[schemars(bound = "T: JsonSchema + Default")]
-#[schemars(default)]
+#[schemars(bound = "T: JsonSchema + Default", default)]
 pub struct E62Rs {
-    /// The format to display download progress in
-    #[default(SizeFormat::default())]
-    pub progress_format: SizeFormat,
+    /// Configuration file version (do not modify manually)
+    #[default(Some(1))]
+    pub version: Option<u32>,
 
     /// The amount of posts to show in a search
-    #[default(320)]
-    pub post_count: u64,
+    #[default(Some(320))]
+    pub results_limit: Option<u64>,
 
+    /// The base URL of the API (defaults to <https://e621.net>)
     #[schemars(url)]
-    /// The base URL of the API (defaults to https://e621.net)
-    #[default("https://e621.net".to_string())]
-    pub base_url: String,
+    #[default(Some("https://e621.net".to_string()))]
+    pub base_url: Option<String>,
 
     /// Post viewing settings
-    #[default(ImageDisplay::default())]
-    pub display: ImageDisplay,
+    #[default(Some(ImageDisplay::default()))]
+    pub display: Option<ImageDisplay>,
 
     /// HTTP client configuration
-    #[default(HttpConfig::default())]
-    pub http: HttpConfig,
+    #[default(Some(HttpConfig::default()))]
+    pub http: Option<HttpConfig>,
 
     /// Cache configuration
-    #[default(CacheConfig::default())]
-    pub cache: CacheConfig,
+    #[default(Some(CacheConfig::default()))]
+    pub cache: Option<CacheConfig>,
 
     /// Performance settings
-    #[default(PerformanceConfig::default())]
-    pub performance: PerformanceConfig,
+    #[default(Some(PerformanceConfig::default()))]
+    pub performance: Option<PerformanceConfig>,
 
     /// UI settings
-    #[default(UiConfig::default())]
-    pub ui: UiConfig,
+    #[default(Some(UiConfig::default()))]
+    pub ui: Option<UiConfig>,
 
     /// Search settings
-    #[default(SearchCfg::default())]
-    pub search: SearchCfg,
+    #[default(Some(SearchCfg::default()))]
+    pub search: Option<SearchCfg>,
 
     /// Login settings
-    #[default(LoginCfg::default())]
-    pub login: LoginCfg,
+    #[default(Some(LoginCfg::default()))]
+    pub login: Option<LoginCfg>,
 
     /// Completion settings
-    #[default(CompletionCfg::default())]
-    pub completion: CompletionCfg,
+    #[default(Some(CompletionCfg::default()))]
+    pub completion: Option<CompletionCfg>,
 
     /// Autoupdate settings
-    #[default(AutoUpdateCfg::default())]
-    pub autoupdate: AutoUpdateCfg,
+    #[default(Some(AutoUpdateCfg::default()))]
+    pub autoupdate: Option<AutoUpdateCfg>,
 
     /// Post download settings
-    #[default(DownloadCfg::default())]
-    pub download: DownloadCfg,
+    #[default(Some(DownloadCfg::default()))]
+    pub download: Option<DownloadCfg>,
 
     /// Blacklisted tags to filter out from all operations
-    #[default(vec!["young".to_string(), "rape".to_string(), "feral".to_string(), "bestiality".to_string()])]
-    pub blacklist: Vec<String>,
+    #[default(Some(vec!["young".to_string(), "rape".to_string(), "feral".to_string(), "bestiality".to_string()]))]
+    pub blacklist: Option<Vec<String>>,
 
     /// Downloads explorer settings
-    #[default(ExplorerCfg::default())]
-    pub explorer: ExplorerCfg,
+    #[default(Some(ExplorerCfg::default()))]
+    pub explorer: Option<ExplorerCfg>,
 
     /// Media server settings
-    #[default(GalleryCfg::default())]
-    pub gallery: GalleryCfg,
+    #[default(Some(GalleryCfg::default()))]
+    pub gallery: Option<GalleryCfg>,
 
     /// Logging settings
-    #[default(LoggingConfig::default())]
-    pub logging: LoggingConfig,
+    #[default(Some(LoggingConfig::default()))]
+    pub logging: Option<LoggingConfig>,
 }
 
-fn get_config_dir() -> String {
-    match dirs::config_dir() {
-        Some(path) => path.to_string_lossy().into_owned(),
-        None => format!(
-            "{}/.config/",
-            std::env::var("HOME").expect("Failed to get home dir")
-        ),
-    }
-}
+/// returns the path to the local config file if it exists
+fn _find_local_config_file() -> Result<Option<PathBuf>> {
+    let curr_dir = std::env::current_dir()
+        .wrap_err("failed to get current working directory")
+        .suggestion("ensure the current directory exists and is accessible")?;
 
-fn find_local_config_file() -> Option<String> {
-    let extensions = ["toml", "yaml", "yml", "json"];
-
-    for ext in &extensions {
-        let filename = format!("e62rs.{}", ext);
-        if Path::new(&filename).exists() {
-            return Some(filename);
+    for ancestor in curr_dir.ancestors() {
+        let config_path = ancestor.join("e62rs.toml");
+        if config_path.exists() {
+            return Ok(Some(config_path));
         }
     }
 
-    None
+    Ok(None)
 }
 
 impl E62Rs {
-    pub fn get() -> Result<Self> {
-        let global_config_path = format!("{}/e62rs.toml", get_config_dir());
+    /// load config from default locations
+    ///
+    /// load prio: local > global > defaults
+    pub fn load() -> Result<Self> {
+        let global_config_path = Self::global_config_path()?;
+        let defaults = Self::load_defaults()?;
+        let mut builder = Self::create_builder(defaults.clone())?;
 
-        let defaults = E62Rs::default();
-
-        let mut builder = Config::builder();
         builder = builder.add_source(
-            config::Config::try_from(&defaults).context("Failed to build default config source")?,
+            config::File::with_name(global_config_path.to_str().unwrap()).required(false),
         );
 
-        builder = builder.add_source(config::File::with_name(&global_config_path).required(false));
-
-        if let Some(local_config) = find_local_config_file() {
-            let local_config_name = local_config
-                .strip_suffix(&format!(
-                    ".{}",
-                    local_config.split('.').next_back().unwrap_or("toml")
-                ))
-                .unwrap_or(&local_config);
-
-            builder =
-                builder.add_source(config::File::with_name(local_config_name).required(false));
+        if let Some(local_config) = Self::find_local_config()? {
+            builder = builder.add_source(
+                config::File::with_name(local_config.to_str().unwrap()).required(false),
+            );
         }
 
         builder = builder.add_source(config::Environment::with_prefix("E62RS"));
 
-        let settings = builder.build()?;
+        let settings = builder.build().wrap_err("Failed to build configuration")?;
+        let cfg: E62Rs = settings
+            .try_deserialize::<E62Rs>()
+            .wrap_err("Failed to deserialize configuration")?;
 
-        let cfg = settings.try_deserialize::<E62Rs>().unwrap_or_else(|e| {
-            warn!("Failed to deserialize config, using defaults: {}", e);
-            defaults.clone()
-        });
-
-        if !Path::new(&global_config_path).exists() && find_local_config_file().is_none() {
-            info!(
-                "Creating default configuration file at {}",
-                global_config_path
-            );
-            if let Err(e) = defaults.save_to_file(&global_config_path) {
-                warn!("Failed to create default config file: {}", e);
+        match cfg.run_validation() {
+            Ok(_) => {
+                info!("Configuration validation successful");
             }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+
+        if !global_config_path.exists() {
+            Self::create_default_config(&global_config_path, &defaults)?;
         }
 
         Ok(cfg)
     }
 
-    pub fn save_to_file(&self, path: &str) -> Result<()> {
-        let toml_str =
-            toml::to_string_pretty(self).context("Failed to serialize config to TOML")?;
+    /// get the global config file path
+    fn global_config_path() -> Result<PathBuf> {
+        let config_dir = dirs::config_dir()
+            .ok_or_eyre("Unable to determine system config directory")
+            .suggestion("Ensure XDG_CONFIG_HOME or HOME environment variables are set")
+            .suggestion("On Windows, APPDATA should be set")?;
 
-        fs::write(path, toml_str)
-            .with_context(|| format!("Failed to write configuration to file: {}", path))?;
+        Ok(config_dir.join("e62rs.toml"))
+    }
+
+    /// load default config from embedded default config file
+    fn load_defaults() -> Result<Self> {
+        toml::from_str(include_str!("../../resources/e62rs.default.toml"))
+            .wrap_err("Failed to parse embedded default configuration")
+            .note("This is a bug - the embedded defaults are malformed")
+    }
+
+    /// create a config builder with defaults
+    fn create_builder(defaults: E62Rs) -> Result<ConfigBuilder<config::builder::DefaultState>> {
+        let builder = Config::builder();
+        let config_source = config::Config::try_from(&defaults)
+            .wrap_err("Failed to convert default E62Rs struct to config source")?;
+
+        Ok(builder.add_source(config_source))
+    }
+
+    /// run validation and return a pretty error if it fails
+    fn run_validation(&self) -> Result<()> {
+        self.validate()
+            .map_err(|errors| {
+                let formatted = format_validation_errors(&errors);
+                eyre!(formatted)
+            })
+            .wrap_err("config validation failed")
+            .suggestion("Check your e62rs.toml for invalid values")
+            .suggestion("Run with default config to see valid options")
+    }
+
+    /// find the local config file
+    fn find_local_config() -> Result<Option<PathBuf>> {
+        let curr_dir = std::env::current_dir()
+            .wrap_err("Failed to get current working directory")
+            .suggestion("Ensure the current directory exists and is accessible")?;
+
+        for ancestor in curr_dir.ancestors() {
+            let config_path = ancestor.join("e62rs.toml");
+            if config_path.exists() {
+                return Ok(Some(config_path));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// create the default config file
+    fn create_default_config(path: &Path, defaults: &E62Rs) -> Result<()> {
+        let config_dir = path
+            .parent()
+            .ok_or_eyre("Unable to determine parent directory of config path")?;
+
+        std::fs::create_dir_all(config_dir)
+            .wrap_err("Failed to create config directory")
+            .with_section(|| format!("{}", config_dir.display()).header("Directory:"))?;
+
+        defaults
+            .save_to_file(path)
+            .wrap_err("Failed to write default configuration file")?;
 
         Ok(())
     }
 
-    pub fn get_unsafe() -> Self {
-        Self::get().expect("Failed to get config")
+    /// save config to a file
+    pub fn save_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        let toml_str =
+            toml::to_string_pretty(self).wrap_err("Failed to serialize config to TOML")?;
+
+        std::fs::write(path, &toml_str)
+            .wrap_err_with(|| format!("Failed to write config file: {}", path.display()))
+            .with_section(|| path.display().to_string().header("File path"))
+            .with_section(|| format!("{} bytes", toml_str.len()).header("Content size:"))?;
+
+        Ok(())
     }
+
+    /// save config to the global config location
+    pub fn save(&self) -> Result<()> {
+        let path = Self::global_config_path()?;
+        self.save_to_file(path)
+    }
+}
+
+/// get the current value of a given setting
+#[macro_export]
+macro_rules! getopt {
+    () => {
+        $crate::config::instance::config()
+    };
+
+    ($field:ident) => {{
+        $crate::config::instance::get_or_default(
+            |c| c.$field.clone(),
+            $crate::config::options::E62Rs::default()
+                .$field
+                .expect(concat!("Default value missing for: ", stringify!($field))),
+        )
+    }};
+
+    ($lvl1:ident . $field:ident) => {{
+        $crate::config::instance::get_or_default(
+            |c| c.$lvl1.as_ref().and_then(|sub| sub.$field.clone()),
+            $crate::config::options::E62Rs::default()
+                .$lvl1
+                .and_then(|sub| sub.$field)
+                .expect(concat!(
+                    "Default value missing for: ",
+                    stringify!($lvl1),
+                    ".",
+                    stringify!($field)
+                )),
+        )
+    }};
+
+    ($lvl1:ident . $lvl2:ident . $field:ident) => {{
+        $crate::config::instance::get_or_default(
+            |c| {
+                c.$lvl1
+                    .as_ref()
+                    .and_then(|sub| sub.$lvl2.as_ref())
+                    .and_then(|sub| sub.$field.clone())
+            },
+            $crate::config::options::E62Rs::default()
+                .$lvl1
+                .and_then(|sub| sub.$lvl2)
+                .and_then(|sub| sub.$field)
+                .expect(concat!(
+                    "Default value missing for: ",
+                    stringify!($lvl1),
+                    ".",
+                    stringify!($lvl2),
+                    ".",
+                    stringify!($field)
+                )),
+        )
+    }};
+
+    (raw $field:ident) => {{
+        $crate::config::instance::config()
+            .ok()
+            .and_then(|c| c.$field.clone())
+    }};
+
+    (raw $lvl1:ident . $field:ident) => {{
+        $crate::config::instance::config()
+            .ok()
+            .and_then(|c| c.$lvl1.as_ref().and_then(|sub| sub.$field.clone()))
+    }};
+
+    (raw $lvl1:ident . $lvl2:ident . $field:ident) => {{
+        $crate::config::instance::config().ok().and_then(|c| {
+            c.$lvl1
+                .as_ref()
+                .and_then(|sub| sub.$lvl2.as_ref())
+                .and_then(|sub| sub.$field.clone())
+        })
+    }};
 }

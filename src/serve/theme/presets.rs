@@ -1,7 +1,11 @@
+//! theme presets
 use crate::serve::theme::{Theme, ThemeVariant, palette::*};
 
+/// make a theme
+#[macro_export]
 macro_rules! impl_theme {
     ($name:ident, $display_name:expr, $variant:expr, $colors:expr) => {
+        /// a theme preset
         #[derive(Clone, Default)]
         pub struct $name;
 

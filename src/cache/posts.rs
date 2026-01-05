@@ -1,63 +1,87 @@
+//! post cache management stuff
 use {
-    crate::{config::options::CacheConfig, models::E6Post},
-    bincode::config::standard,
+    crate::{cache::stats::PostCacheStats, getopt, mkvec, models::E6Post},
     color_eyre::eyre::{Context, Result, bail},
+    postcard::{from_bytes, to_allocvec},
     redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition},
-    std::{path::PathBuf, sync::Arc},
+    serde::{Deserialize, Serialize},
+    std::{fs::create_dir_all, path::PathBuf, sync::Arc},
     tokio::sync::RwLock,
     tracing::{debug, info, warn},
 };
 
+/// the table of cached posts
 const POSTS_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("posts");
 
+/// an entry in the post cache
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CacheEntry {
+    /// the cached data
+    pub data: Vec<u8>,
+    /// the timestamp of when the entry was created
+    pub timestamp: u64,
+    /// the timestamp of when the entry was last accessed
+    pub last_accessed: u64,
+    /// the etag of the entry (optional)
+    pub etag: Option<String>,
+    /// the amount of times the entry has been accessed
+    pub access_count: u64,
+    /// whether the entry is compressed
+    pub compressed: bool,
+}
+
 #[derive(Clone, Debug)]
+/// the post cache
 pub struct PostCache {
+    /// the database itself
     db: Arc<RwLock<Option<Database>>>,
+    /// the path to the cache file
     cache_path: PathBuf,
+    /// the maximum number of posts allowed in the cache
     max_posts: usize,
+    /// whether to automatically compact entries
     auto_compact: bool,
+    /// the threshold at which to compact an entry
     compact_threshold: u8,
 }
 
 impl PostCache {
-    pub fn new(cache_dir: &str, cache_config: &CacheConfig) -> Result<Self> {
-        let post_cache_config = cache_config.clone().post_cache;
+    /// initialize and/or load the post cache
+    pub fn new(cache_dir: &str) -> Result<Self> {
+        let cache_path = PathBuf::from(cache_dir).join("posts.redb");
 
-        if !post_cache_config.enabled {
-            info!("Post cache disabled by configuration");
+        if !getopt!(cache.posts.enabled) {
+            info!("Post cache disabled by config");
+
             return Ok(Self {
                 db: Arc::new(RwLock::new(None)),
-                cache_path: PathBuf::from(cache_dir).join("posts.redb"),
+                cache_path,
                 max_posts: 0,
                 auto_compact: false,
                 compact_threshold: 0,
             });
         }
 
-        let cache_path = PathBuf::from(cache_dir).join("posts.redb");
+        create_dir_all(cache_dir).context(format!("failed to make cache dir: {}", cache_dir))?;
 
-        std::fs::create_dir_all(cache_dir)
-            .with_context(|| format!("Failed to create cache directory: {}", cache_dir))?;
-
-        let cache_size_mb = cache_config.max_size_mb;
-        let cache_size_bytes = ((cache_size_mb / 4) * 1024 * 1024) as usize;
-
+        let cache_size_mb = getopt!(cache.max_size_mb);
+        let cahce_size_bytes = ((cache_size_mb / 4) * 1024 * 1024) as usize;
         let db = Database::builder()
-            .set_cache_size(cache_size_bytes)
+            .set_cache_size(cahce_size_bytes)
             .create(&cache_path)
-            .with_context(|| format!("Failed to create post cache database at {:?}", cache_path))?;
-
-        let max_posts = post_cache_config.max_posts;
-        let auto_compact = post_cache_config.auto_compact;
-        let compact_threshold = post_cache_config.compact_threshold_percent;
+            .context(format!("failed to make post cache db at {:?}", cache_path))?;
+        let db = Arc::new(RwLock::new(Some(db)));
+        let max_posts = getopt!(cache.posts.max_posts);
+        let auto_compact = getopt!(cache.posts.auto_compact);
+        let compact_threshold = getopt!(cache.posts.compact_threshold);
 
         info!(
-            "Initialized post cache at {:?} (max: {} posts, cache: {} MB)",
+            "initialized post cache at {:?} (max: {} posts, cache: {} MB)",
             cache_path, max_posts, cache_size_mb
         );
 
         Ok(Self {
-            db: Arc::new(RwLock::new(Some(db))),
+            db,
             cache_path,
             max_posts,
             auto_compact,
@@ -65,23 +89,22 @@ impl PostCache {
         })
     }
 
+    /// print a list of entries currently in the post cache
     pub async fn list_entries(&self) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
             Some(db) => db,
             None => {
-                println!("Post cache is not initialized.");
+                warn!("post cache is not initialized");
                 return Ok(());
             }
         };
 
-        let read_txn = db
-            .begin_read()
-            .context("Failed to begin read transaction")?;
+        let read_txn = db.begin_read().context("failed to start read")?;
         let table_db = match read_txn.open_table(POSTS_TABLE) {
             Ok(t) => t,
-            Err(_) => {
-                println!("No posts table found in cache.");
+            Err(_e) => {
+                warn!("no posts table found in cache");
                 return Ok(());
             }
         };
@@ -90,7 +113,8 @@ impl PostCache {
         println!("{}", "-".repeat(65));
 
         const CHUNK_SIZE: usize = 100;
-        let mut chunk: Vec<(i64, Vec<u8>)> = Vec::with_capacity(CHUNK_SIZE);
+
+        mkvec!(chunk, (i64, Vec<u8>), CHUNK_SIZE);
 
         for entry in table_db.iter()? {
             if let Ok((id, data)) = entry {
@@ -100,11 +124,10 @@ impl PostCache {
             if chunk.len() >= CHUNK_SIZE {
                 for (id, data) in chunk.drain(..) {
                     let size_kb = data.len() as f64 / 1024.0;
-                    let title =
-                        match bincode::serde::decode_from_slice::<E6Post, _>(&data, standard()) {
-                            Ok((post, _)) => post.description.clone(),
-                            Err(_) => "<Failed to decode>".to_string(),
-                        };
+                    let title = match from_bytes::<E6Post>(&data) {
+                        Ok(post) => post.description.clone(),
+                        Err(_) => "<Failed to decode>".to_string(),
+                    };
                     println!("{:<12} {:<40} {:>10.2}", id, title, size_kb);
                 }
             }
@@ -112,8 +135,8 @@ impl PostCache {
 
         for (id, data) in chunk.drain(..) {
             let size_kb = data.len() as f64 / 1024.0;
-            let title = match bincode::serde::decode_from_slice::<E6Post, _>(&data, standard()) {
-                Ok((post, _)) => post.description.clone(),
+            let title = match from_bytes::<E6Post>(&data) {
+                Ok(post) => post.description.clone(),
                 Err(_) => "<Failed to decode>".to_string(),
             };
             println!("{:<12} {:<40} {:>10.2}", id, title, size_kb);
@@ -122,6 +145,7 @@ impl PostCache {
         Ok(())
     }
 
+    /// get a post in the cache
     pub async fn get(&self, post_id: i64) -> Result<Option<E6Post>> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -131,7 +155,7 @@ impl PostCache {
 
         let read_txn = db
             .begin_read()
-            .context("Failed to begin read transaction")?;
+            .context("failed to begin read transaction")?;
 
         let table = match read_txn.open_table(POSTS_TABLE) {
             Ok(table) => table,
@@ -141,8 +165,8 @@ impl PostCache {
         match table.get(post_id) {
             Ok(Some(data)) => {
                 let bytes = data.value();
-                match bincode::serde::decode_from_slice::<E6Post, _>(bytes, standard()) {
-                    Ok((post, _)) => {
+                match from_bytes::<E6Post>(bytes) {
+                    Ok(post) => {
                         debug!("Post cache hit for {}", post_id);
                         Ok(Some(post))
                     }
@@ -163,6 +187,7 @@ impl PostCache {
         }
     }
 
+    /// insert a post into the cache
     pub async fn insert(&self, post: &E6Post) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -170,9 +195,7 @@ impl PostCache {
             None => bail!("Database not initialized"),
         };
 
-        let serialized =
-            bincode::serde::encode_to_vec(post, standard()).context("Failed to serialize post")?;
-
+        let serialized = to_allocvec(post).context("Failed to serialize post")?;
         let write_txn = db
             .begin_write()
             .context("Failed to begin write transaction")?;
@@ -197,6 +220,7 @@ impl PostCache {
         Ok(())
     }
 
+    /// insert multiple posts into the cache
     pub async fn insert_batch(&self, posts: &[E6Post]) -> Result<()> {
         if posts.is_empty() {
             return Ok(());
@@ -218,8 +242,7 @@ impl PostCache {
                 .context("Failed to open posts table")?;
 
             for post in posts {
-                let serialized = bincode::serde::encode_to_vec(post, standard())
-                    .context("Failed to serialize post")?;
+                let serialized = to_allocvec(post).context("Failed to serialize post")?;
 
                 table
                     .insert(post.id, serialized.as_slice())
@@ -237,6 +260,7 @@ impl PostCache {
         Ok(())
     }
 
+    /// try to evict old entries from the cache
     async fn maybe_evict_old_entries(&self) -> Result<()> {
         if self.max_posts == 0 {
             return Ok(());
@@ -251,15 +275,16 @@ impl PostCache {
         Ok(())
     }
 
+    /// evict the oldest entries from the cache
     async fn evict_oldest_entries(&self, count: usize) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
             Some(db) => db,
             None => return Ok(()),
         };
+
         let read_txn = db.begin_read()?;
         let table = read_txn.open_table(POSTS_TABLE)?;
-
         let mut entries: Vec<i64> = table
             .iter()?
             .filter_map(|result| result.ok())
@@ -267,6 +292,7 @@ impl PostCache {
             .collect();
 
         entries.sort_unstable();
+
         let keys_to_remove: Vec<i64> = entries.into_iter().take(count).collect();
 
         drop(table);
@@ -285,6 +311,7 @@ impl PostCache {
         Ok(())
     }
 
+    /// try to compact the cache
     async fn maybe_compact(&self) -> Result<()> {
         if !self.auto_compact {
             return Ok(());
@@ -318,6 +345,7 @@ impl PostCache {
         Ok(())
     }
 
+    /// forcefully compact the cache
     async fn compact(&self) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -349,6 +377,7 @@ impl PostCache {
         Ok(())
     }
 
+    /// get multiple posts by their ids
     pub async fn get_batch(&self, post_ids: &[i64]) -> Result<Vec<Option<E6Post>>> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -371,8 +400,8 @@ impl PostCache {
             let post = match table.get(post_id) {
                 Ok(Some(data)) => {
                     let bytes = data.value();
-                    match bincode::serde::decode_from_slice::<E6Post, _>(bytes, standard()) {
-                        Ok((post, _)) => Some(post),
+                    match from_bytes::<E6Post>(bytes) {
+                        Ok(post) => Some(post),
                         Err(e) => {
                             warn!("Failed to deserialize cached post {}: {}", post_id, e);
                             None
@@ -394,6 +423,7 @@ impl PostCache {
         Ok(results)
     }
 
+    /// return whether there's an entry for a given post id
     pub async fn contains(&self, post_id: i64) -> bool {
         self.get(post_id)
             .await
@@ -401,21 +431,18 @@ impl PostCache {
             .unwrap_or(false)
     }
 
+    /// clear the post cache
     pub async fn clear(&self) -> Result<()> {
         let mut db_guard = self.db.write().await;
         *db_guard = None;
-
         std::fs::remove_file(&self.cache_path).ok();
-
-        let new_db =
-            Database::create(&self.cache_path).context("Failed to recreate post cache database")?;
-
-        *db_guard = Some(new_db);
-
+        let new = Database::create(&self.cache_path).context("failed to recreate post cache db")?;
+        *db_guard = Some(new);
         info!("Post cache cleared");
         Ok(())
     }
 
+    /// get the stats of the post cache
     pub async fn get_stats(&self) -> Result<PostCacheStats> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -446,6 +473,7 @@ impl PostCache {
         })
     }
 
+    /// remove a post from the cache
     pub async fn remove(&self, post_id: i64) -> Result<bool> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -467,6 +495,7 @@ impl PostCache {
         Ok(removed)
     }
 
+    /// remove multiple posts from the cache
     pub async fn remove_batch(&self, post_ids: &[i64]) -> Result<usize> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -493,58 +522,5 @@ impl PostCache {
         }
 
         Ok(removed_count)
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct PostCacheStats {
-    pub entry_count: usize,
-    pub file_size_bytes: u64,
-    pub max_entries: usize,
-    pub auto_compact_enabled: bool,
-}
-
-impl PostCacheStats {
-    pub fn file_size_mb(&self) -> f64 {
-        self.file_size_bytes as f64 / (1024.0 * 1024.0)
-    }
-
-    pub fn usage_percent(&self) -> f64 {
-        if self.max_entries == 0 {
-            0.0
-        } else {
-            (self.entry_count as f64 / self.max_entries as f64) * 100.0
-        }
-    }
-
-    pub fn avg_entry_size_kb(&self) -> f64 {
-        if self.entry_count == 0 {
-            0.0
-        } else {
-            (self.file_size_bytes as f64 / self.entry_count as f64) / 1024.0
-        }
-    }
-}
-
-impl std::fmt::Display for PostCacheStats {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Post Cache Statistics:\n\
-             - Entries: {} / {} ({:.1}% full)\n\
-             - File Size: {:.2} MB\n\
-             - Avg Entry Size: {:.2} KB\n\
-             - Auto-Compact: {}",
-            self.entry_count,
-            self.max_entries,
-            self.usage_percent(),
-            self.file_size_mb(),
-            self.avg_entry_size_kb(),
-            if self.auto_compact_enabled {
-                "enabled"
-            } else {
-                "disabled"
-            }
-        )
     }
 }

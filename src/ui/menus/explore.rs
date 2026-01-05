@@ -1,54 +1,64 @@
+//! downloads explorer stuff
 use {
     crate::{
-        config::options::{E62Rs, ExplorerCfg},
-        display::image::display_image_from_path_as_sixel,
+        getopt,
         models::E6Post,
         ui::{
-            E6Ui, ROSE_PINE,
-            menus::{ExplorerMenu, ExplorerSortBy, view::print_post_to_terminal},
+            E6Ui,
+            menus::{
+                ExplorerMenu, ExplorerSortBy,
+                view::{print_dl_to_terminal, print_post_to_terminal},
+            },
             progress::ProgressManager,
+            themes::ROSE_PINE,
         },
     },
     color_eyre::eyre::{Context, Result, bail},
     demand::{Confirm, DemandOption, Input, Select},
+    futures::lock::Mutex,
+    hashbrown::HashMap,
     jwalk::WalkDir,
+    owo_colors::OwoColorize,
     std::{
-        collections::HashMap,
+        fs::OpenOptions,
         io::Read,
         path::{Path, PathBuf},
-        sync::{Arc, Mutex},
+        sync::Arc,
         thread::sleep,
         time::Duration,
     },
-    tracing::*,
+    tracing::warn,
 };
 
 lazy_static::lazy_static! {
+    /// the metadata cache for the explorer
     static ref METADATA_CACHE: Arc<Mutex<HashMap<PathBuf, E6Post>>> = Arc::new(Mutex::new(HashMap::new()));
 }
 
 #[derive(Debug, Clone)]
+/// a local post
 pub struct LocalPost {
+    /// the post metadata
     pub post: E6Post,
+    /// the path to the post
     pub file_path: PathBuf,
 }
 
 impl LocalPost {
+    /// make a LocalPost from a path
     pub fn from_file(file_path: PathBuf) -> Result<Self> {
         let post = Self::read_metadata(&file_path)?;
         Ok(Self { post, file_path })
     }
 
+    /// view a post
     pub fn view(&self) -> Result<()> {
-        display_image_from_path_as_sixel(self.file_path.as_path())?;
-
-        Ok(())
+        crate::ui::menus::view::print_dl_to_terminal(&self.file_path)
     }
 
     #[cfg(target_os = "windows")]
+    /// read post metadata (windows)
     fn read_metadata(file_path: &Path) -> Result<E6Post> {
-        use std::fs::OpenOptions;
-
         let ads_path = format!("{}:metadata", file_path.display());
         let mut file = OpenOptions::new()
             .read(true)
@@ -64,6 +74,7 @@ impl LocalPost {
     }
 
     #[cfg(not(target_os = "windows"))]
+    /// read post metadata (non-windows)
     fn read_metadata(file_path: &Path) -> Result<E6Post> {
         let json_path = file_path.with_extension(format!(
             "{}.json",
@@ -71,7 +82,9 @@ impl LocalPost {
         ));
 
         if !json_path.exists() {
-            anyhow::bail!("Metadata file not found: {}", json_path.display());
+            use color_eyre::eyre::bail;
+
+            bail!("Metadata file not found: {}", json_path.display());
         }
 
         let contents = fs::read_to_string(&json_path)
@@ -82,15 +95,22 @@ impl LocalPost {
     }
 }
 
+/// state of the explorer
 pub struct ExplorerState {
+    /// loaded posts
     pub posts: Vec<LocalPost>,
+    /// posts that match the current filters
     pub filtered_posts: Vec<LocalPost>,
+    /// the current sort mode
     pub current_sort: ExplorerSortBy,
+    /// the current search query (if any)
     pub search_query: Option<String>,
+    /// the current content rating filter (if any)
     pub rating_filter: Option<String>,
 }
 
 impl ExplorerState {
+    /// initialize the explorer state
     pub fn new(posts: Vec<LocalPost>) -> Self {
         let filtered_posts = posts.clone();
         Self {
@@ -102,6 +122,7 @@ impl ExplorerState {
         }
     }
 
+    /// sort the current loaded downloads
     pub fn sort(&mut self, sort_by: ExplorerSortBy) {
         self.current_sort = sort_by;
         match sort_by {
@@ -125,27 +146,34 @@ impl ExplorerState {
                 self.filtered_posts
                     .sort_by(|a, b| b.post.fav_count.cmp(&a.post.fav_count));
             }
-            ExplorerSortBy::IdAscending => {
+            ExplorerSortBy::FavoritesLowest => {
+                self.filtered_posts
+                    .sort_by(|a, b| a.post.fav_count.cmp(&b.post.fav_count));
+            }
+            ExplorerSortBy::IDAscending => {
                 self.filtered_posts
                     .sort_by(|a, b| a.post.id.cmp(&b.post.id));
             }
-            ExplorerSortBy::IdDescending => {
+            ExplorerSortBy::IDDescending => {
                 self.filtered_posts
                     .sort_by(|a, b| b.post.id.cmp(&a.post.id));
             }
         }
     }
 
+    /// filter posts by content rating
     pub fn filter_by_rating(&mut self, rating: Option<String>) {
         self.rating_filter = rating.clone();
         self.apply_filters();
     }
 
+    /// search for posts given a query
     pub fn search(&mut self, query: Option<String>) {
         self.search_query = query;
         self.apply_filters();
     }
 
+    /// apply the selected filters
     fn apply_filters(&mut self) {
         self.filtered_posts = self
             .posts
@@ -208,6 +236,7 @@ impl ExplorerState {
         self.sort(self.current_sort);
     }
 
+    /// get statistics based on the current filtered posts
     pub fn get_statistics(&self) -> ExplorerStatistics {
         let total_posts = self.posts.len();
         let filtered_posts = self.filtered_posts.len();
@@ -248,35 +277,39 @@ impl ExplorerState {
 }
 
 #[derive(Debug)]
+/// statistics for the explorer
 pub struct ExplorerStatistics {
+    /// total available posts
     pub total_posts: usize,
+    /// total filtered posts
     pub filtered_posts: usize,
+    /// total safe posts
     pub safe: usize,
+    /// total questionable posts
     pub questionable: usize,
+    /// total explicit posts
     pub explicit: usize,
+    /// total unknown posts
     pub unknown: usize,
+    /// the average score of loaded posts
     pub avg_score: f64,
+    /// the total favorites across all loaded posts
     pub total_favorites: i64,
 }
 
 impl E6Ui {
+    /// show downloads explorer
     pub async fn explore_downloads(&self) -> Result<()> {
-        println!("\n=== Downloads Explorer ===\n");
+        println!("\n{0} Downloads Explorer {0}\n", "===".green());
 
-        let cfg = E62Rs::get()?;
-        let dl_cfg = cfg.download;
-        let explorer_cfg = cfg.explorer;
-
-        let download_dir = dl_cfg.download_dir;
-
+        let download_dir: String = getopt!(download.path);
         let directory = Path::new(&download_dir);
+
         if !directory.exists() {
             bail!("Download directory does not exist: {}", directory.display());
         }
 
-        let local_posts = self
-            .scan_downloads_directory(directory, &explorer_cfg)
-            .await?;
+        let local_posts = self.scan_downloads_directory(directory).await?;
 
         if local_posts.is_empty() {
             println!("No posts with metadata found in {}", directory.display());
@@ -287,14 +320,15 @@ impl E6Ui {
 
         let mut state = ExplorerState::new(local_posts);
 
-        let default_sort = match explorer_cfg.default_sort.as_str() {
+        let default_sort_str: String = getopt!(explorer.default_sort);
+        let default_sort = match default_sort_str.as_str() {
             "date_newest" => ExplorerSortBy::DateNewest,
             "date_oldest" => ExplorerSortBy::DateOldest,
             "score_highest" => ExplorerSortBy::ScoreHighest,
             "score_lowest" => ExplorerSortBy::ScoreLowest,
             "favorites_highest" => ExplorerSortBy::FavoritesHighest,
-            "id_ascending" => ExplorerSortBy::IdAscending,
-            "id_descending" => ExplorerSortBy::IdDescending,
+            "id_ascending" => ExplorerSortBy::IDAscending,
+            "id_descending" => ExplorerSortBy::IDDescending,
             _ => ExplorerSortBy::DateNewest,
         };
         state.sort(default_sort);
@@ -308,16 +342,15 @@ impl E6Ui {
             .run()?;
 
             let should_break = match action {
-                ExplorerMenu::BrowsePosts => {
+                ExplorerMenu::Browse => {
                     if state.filtered_posts.is_empty() {
                         println!("No posts match the current filters.");
                     } else {
-                        self.browse_local_posts(&state.filtered_posts, &explorer_cfg)
-                            .await?;
+                        self.browse_local_posts(&state.filtered_posts).await?;
                     }
                     false
                 }
-                ExplorerMenu::SearchPosts => {
+                ExplorerMenu::Search => {
                     let query =
                         Input::new("Enter search query (tags, ID, uploader, or description):")
                             .run()?;
@@ -369,17 +402,15 @@ impl E6Ui {
         Ok(())
     }
 
-    pub async fn scan_downloads_directory(
-        &self,
-        directory: &Path,
-        explorer_cfg: &ExplorerCfg,
-    ) -> Result<Vec<LocalPost>> {
+    /// scan the downloads directory for posts
+    pub async fn scan_downloads_directory(&self, directory: &Path) -> Result<Vec<LocalPost>> {
         let mut local_posts = Vec::new();
         let mut skipped_count = 0;
-        let recursive = explorer_cfg.recursive_scan;
-        let show_progress = explorer_cfg.show_scan_progress;
-        let progress_threshold = explorer_cfg.progress_threshold;
-        let cache_enabled = explorer_cfg.cache_metadata;
+
+        let recursive: bool = getopt!(explorer.recursive);
+        let show_progress: bool = getopt!(explorer.show_progress);
+        let progress_threshold: usize = getopt!(explorer.progress_threshold);
+        let cache_enabled: bool = getopt!(explorer.cache_metadata);
 
         let walker = if recursive {
             WalkDir::new(directory).follow_links(false)
@@ -411,7 +442,7 @@ impl E6Ui {
         };
 
         let cache = if cache_enabled {
-            METADATA_CACHE.lock().ok()
+            Some(METADATA_CACHE.lock().await)
         } else {
             None
         };
@@ -473,9 +504,8 @@ impl E6Ui {
                 } else {
                     match LocalPost::from_file(path.to_path_buf()) {
                         Ok(local_post) => {
-                            if let Some(ref _cache) = cache
-                                && let Ok(mut cache_map) = METADATA_CACHE.lock()
-                            {
+                            if let Some(ref _cache) = cache {
+                                let mut cache_map = METADATA_CACHE.lock().await;
                                 cache_map.insert(path.to_path_buf(), local_post.post.clone());
                             }
                             local_post
@@ -510,8 +540,9 @@ impl E6Ui {
         Ok(local_posts)
     }
 
+    /// show a slideshow of filtered posts
     async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
-        let sleep_time = E62Rs::get()?.explorer.slideshow_wait_seconds;
+        let sleep_time: u64 = getopt!(explorer.slideshow_delay);
 
         for post in posts {
             post.view().ok();
@@ -521,12 +552,9 @@ impl E6Ui {
         Ok(())
     }
 
-    async fn browse_local_posts(
-        &self,
-        posts: &[LocalPost],
-        explorer_cfg: &ExplorerCfg,
-    ) -> Result<()> {
-        let posts_per_page = explorer_cfg.posts_per_page;
+    /// browse local downloads
+    async fn browse_local_posts(&self, posts: &[LocalPost]) -> Result<()> {
+        let posts_per_page: usize = getopt!(explorer.posts_per_page);
         let mut current_page = 0;
         let total_pages = posts.len().div_ceil(posts_per_page);
 
@@ -595,7 +623,7 @@ impl E6Ui {
                 });
 
                 if let Some(idx) = index {
-                    self.view_local_post(&page_posts[idx], explorer_cfg).await?;
+                    self.view_local_post(&page_posts[idx]).await?;
                 }
             } else {
                 break;
@@ -605,16 +633,12 @@ impl E6Ui {
         Ok(())
     }
 
-    async fn view_local_post(
-        &self,
-        local_post: &LocalPost,
-        explorer_cfg: &ExplorerCfg,
-    ) -> Result<()> {
+    /// print a local post
+    async fn view_local_post(&self, local_post: &LocalPost) -> Result<()> {
         self.display_post(&local_post.post);
 
-        if explorer_cfg.auto_display_image
-            && let Err(e) = display_image_from_path_as_sixel(&local_post.file_path)
-        {
+        let auto_display: bool = getopt!(explorer.auto_display_image);
+        if auto_display && let Err(e) = print_dl_to_terminal(&local_post.file_path) {
             warn!("Failed to auto-display image: {}", e);
         }
 
@@ -632,20 +656,18 @@ impl E6Ui {
                 .run()?;
 
             match *action {
-                "View image in terminal" => {
-                    match display_image_from_path_as_sixel(&local_post.file_path) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            eprintln!("Failed to display local image: {}", e);
-                            if let Some(ref _url) = local_post.post.file.url {
-                                println!("Trying to fetch from URL instead...");
-                                print_post_to_terminal(local_post.post.clone())
-                                    .await
-                                    .context("Failed to view image from URL")?;
-                            }
+                "View image in terminal" => match print_dl_to_terminal(&local_post.file_path) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("Failed to display local image: {}", e);
+                        if let Some(ref _url) = local_post.post.file.url {
+                            println!("Trying to fetch from URL instead...");
+                            print_post_to_terminal(local_post.post.clone())
+                                .await
+                                .context("Failed to view image from URL")?;
                         }
                     }
-                }
+                },
                 "Open in browser" => {
                     self.open_in_browser(&local_post.post)?;
                 }
@@ -675,6 +697,7 @@ impl E6Ui {
         Ok(())
     }
 
+    /// filter posts by content rating
     fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
         let options = ["All ratings", "Safe", "Questionable", "Explicit"];
         let selection = Select::new("Filter by rating:")
@@ -693,6 +716,7 @@ impl E6Ui {
         Ok(())
     }
 
+    /// sort posts
     fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
         let sort_by = ExplorerSortBy::select("Sort posts by:")
             .theme(&ROSE_PINE)
@@ -702,6 +726,7 @@ impl E6Ui {
         Ok(())
     }
 
+    /// display explorer stats
     fn display_statistics(&self, state: &ExplorerState) {
         let stats = state.get_statistics();
 

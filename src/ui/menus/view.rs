@@ -1,28 +1,77 @@
+//! post viewing stuff
 use {
     crate::{
-        display::{dtext::format_text, image::*},
+        display::{
+            dtext::parser::format_text,
+            image::{encoder::SixelEncoder, processor::ImageProcessor, source::ImageSource},
+        },
         models::E6Post,
         ui::E6Ui,
     },
-    color_eyre::{Result, eyre::Context},
+    color_eyre::eyre::{Context, Result, bail},
+    std::path::Path,
 };
 
+/// fetch a post image and display it in the terminal
 pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
     let post_url = post.file.url.unwrap();
-
-    fetch_and_display_image_as_sixel(&post_url)
+    let processor = ImageProcessor::new();
+    let encoder = SixelEncoder::new();
+    let source = ImageSource::from_url(&post_url)
         .await
-        .context("Failed to view image")
+        .context("failed to fetch image")?;
+    let image_data = processor
+        .process(source)
+        .context("failed to process image")?;
+    let sixel_str = encoder
+        .encode(&image_data)
+        .context("failed to encode image to sixel")?;
+
+    print!("{}", sixel_str);
+
+    Ok(())
+}
+
+/// print an image to the terminal
+pub fn print_dl_to_terminal(path: &Path) -> Result<()> {
+    let processor = ImageProcessor::new();
+    let encoder = SixelEncoder::new();
+    let source = ImageSource::from_path(path).context("failed to load image")?;
+    let image_data = processor
+        .process(source)
+        .context("failed to process image")?;
+    let sixel_str = encoder
+        .encode(&image_data)
+        .context("failed to encode to sixel")?;
+
+    print!("{}", sixel_str);
+
+    Ok(())
+}
+
+/// fetch multiple posts and display them in the terminal
+pub async fn print_posts_to_terminal(posts: Vec<E6Post>) -> Result<()> {
+    for post in posts {
+        print_post_to_terminal(post).await?;
+    }
+
+    Ok(())
 }
 
 impl E6Ui {
+    /// open a post in the users default browser
     pub fn open_in_browser(&self, post: &E6Post) -> Result<()> {
+        if post.id <= 0 {
+            bail!("invalid post id: {}", post.id);
+        }
+
         let url = format!("https://e621.net/posts/{}", post.id);
-        open::that(&url).context("Failed to open post in browser")?;
+        open::that(&url).context("failed to open post in browser")?;
         println!("Opened post in browser: {}", url);
         Ok(())
     }
 
+    /// open multiple posts in the users default browser
     pub fn open_posts_in_browser(&self, posts: &[E6Post]) -> Result<()> {
         println!("Opening {} posts in browser...", posts.len());
         for post in posts {
@@ -35,6 +84,7 @@ impl E6Ui {
         Ok(())
     }
 
+    /// display post info
     pub fn display_posts_row(&self, posts: &[E6Post], column_width: usize) {
         self.print_row_separator(posts.len(), column_width, "┌", "┬", "┐", "─");
         self.print_posts_field(posts, column_width, |post| format!("ID: {}", post.id));
@@ -44,14 +94,14 @@ impl E6Ui {
         });
         self.print_posts_field(posts, column_width, |post| {
             let uploader = self.truncate_string(&post.uploader_name, 15);
-            format!("❤️ {} | By: {}", post.fav_count, uploader)
+            format!(" {} | By: {}", post.fav_count, uploader)
         });
         self.print_posts_field(posts, column_width, |post| {
             if !post.tags.artist.is_empty() {
                 let artists = post.tags.artist.join(", ");
-                format!("🎨 {}", self.truncate_string(&artists, column_width - 4))
+                format!(" {}", self.truncate_string(&artists, column_width - 4))
             } else {
-                "🎨 Unknown artist".to_string()
+                "󰏫 Unknown artist".to_string()
             }
         });
 
@@ -64,12 +114,13 @@ impl E6Ui {
                 .cloned()
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("🏷️ {}", self.truncate_string(&tags, column_width - 4))
+            format!("󰓹 {}", self.truncate_string(&tags, column_width - 4))
         });
 
         self.print_row_separator(posts.len(), column_width, "└", "┴", "┘", "─");
     }
 
+    /// print a post field
     pub fn print_posts_field<F>(&self, posts: &[E6Post], column_width: usize, field_fn: F)
     where
         F: Fn(&E6Post) -> String,
@@ -85,6 +136,7 @@ impl E6Ui {
         println!();
     }
 
+    /// print a row separator
     pub fn print_row_separator(
         &self,
         count: usize,
@@ -105,6 +157,7 @@ impl E6Ui {
         println!();
     }
 
+    /// truncate a string
     pub fn truncate_string(&self, s: &str, max_width: usize) -> String {
         if s.len() <= max_width {
             format!("{:width$}", s, width = max_width)
@@ -113,6 +166,7 @@ impl E6Ui {
         }
     }
 
+    /// display multiple posts
     pub fn display_posts(&self, posts: &[E6Post]) {
         let posts_per_row = 3;
         let column_width = 28;
@@ -123,6 +177,7 @@ impl E6Ui {
         }
     }
 
+    /// display the latest posts
     pub async fn display_latest_posts(&self) -> Result<()> {
         let results = self
             .client
@@ -135,11 +190,12 @@ impl E6Ui {
             return Ok(());
         }
 
-        println!("\n📋 Latest Posts:");
+        println!("\n Latest Posts:");
         self.display_posts(&results.posts);
         Ok(())
     }
 
+    /// display an individual post
     pub fn display_post(&self, post: &E6Post) {
         println!("\n{}", "=".repeat(50));
         println!("Post ID: {}", post.id);

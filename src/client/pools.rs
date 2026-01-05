@@ -1,26 +1,29 @@
+//! client extensions for pool operations on the e6 api
 use {
     crate::{
         client::E6Client,
-        config::options::E62Rs,
+        getopt,
         models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
     },
-    chrono::{Datelike, Local},
+    chrono::{Datelike, Days, Local},
     color_eyre::eyre::{Context, Result, bail},
     flate2::read::GzDecoder,
     sha2::{Digest, Sha256},
     std::{io::Read, path::Path},
-    tokio::{fs, io::AsyncWriteExt},
-    tracing::{debug, info},
+    tokio::fs,
+    tracing::{debug, info, instrument},
 };
 
 impl E6Client {
+    #[instrument(skip(self), name = "update_pools")]
+    /// update the local pool database
     pub async fn update_pools(&self) -> Result<()> {
-        let cfg = E62Rs::get()?;
-        let local_file_cfg = cfg.completion.pools;
-        let local_file = local_file_cfg.as_str();
-        let local_hash_file: &str = &format!("{}.hash", local_file);
+        let local_file = getopt!(completion.pools);
+        let local_hash_file = format!("{}.hash", local_file);
 
-        let now = Local::now();
+        let now = Local::now()
+            .checked_sub_days(Days::new(1))
+            .unwrap_or(Local::now());
         let url = format!(
             "https://e621.net/db_export/pools-{:04}-{:02}-{:02}.csv.gz",
             now.year(),
@@ -28,151 +31,151 @@ impl E6Client {
             now.day()
         );
 
-        let response = self.update_client.get(&url).send().await?;
-        if !response.status().clone().is_success() {
-            bail!("Failed to download pools: {}", response.status());
+        self.download_and_update_file(&url, &local_file, &local_hash_file, "pools")
+            .await
+    }
+
+    /// generic file download with hash-based update check
+    async fn download_and_update_file(
+        &self,
+        url: &str,
+        local_file: &str,
+        hash_file: &str,
+        file_type: &str,
+    ) -> Result<()> {
+        let response = self
+            .client
+            .get(url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to fetch {}", file_type))?;
+
+        if !response.status().is_success() {
+            bail!(
+                "Failed to download {}: HTTP {}",
+                file_type,
+                response.status()
+            );
         }
 
         let remote_bytes = response.bytes().await?;
-        let mut hasher = Sha256::new();
-
-        hasher.update(&remote_bytes);
-
-        let remote_hash = hasher.finalize();
-        let remote_hash_hex = hex::encode(remote_hash);
-
-        let update_needed = if Path::new(local_hash_file).exists() {
-            let local_hash_hex = fs::read_to_string(local_hash_file).await?;
-            local_hash_hex.trim() != remote_hash_hex
-        } else {
-            true
+        let remote_hash_hex = {
+            let mut hasher = Sha256::new();
+            hasher.update(&remote_bytes);
+            hex::encode(hasher.finalize())
         };
 
-        if update_needed {
-            info!("Updating local pools snapshot...");
+        let update_needed = match fs::read_to_string(hash_file).await {
+            Ok(local_hash) => local_hash.trim() != remote_hash_hex,
+            Err(_) => true,
+        };
 
-            let mut gz = GzDecoder::new(&remote_bytes[..]);
-            let mut decompressed_data = Vec::new();
-            gz.read_to_end(&mut decompressed_data)?;
-
-            fs::create_dir_all("data").await?;
-            let mut file = fs::File::create(local_file).await?;
-            file.write_all(&decompressed_data).await?;
-
-            let mut hash_file = fs::File::create(local_hash_file).await?;
-            hash_file.write_all(remote_hash_hex.as_bytes()).await?;
-
-            info!("Updated local pools snapshot at {}", local_file);
-        } else {
-            info!("Local snapshot of `pools.csv` is up to date, continuing");
+        if !update_needed {
+            info!(file_type, "Local snapshot is up to date");
+            return Ok(());
         }
 
+        info!(file_type, "Updating local snapshot");
+
+        let mut gz = GzDecoder::new(&remote_bytes[..]);
+        let mut decompressed = Vec::new();
+        gz.read_to_end(&mut decompressed)
+            .with_context(|| format!("Failed to decompress {}", file_type))?;
+
+        if let Some(parent) = Path::new(local_file).parent() {
+            fs::create_dir_all(parent).await?;
+        }
+
+        let temp_file = format!("{}.tmp", local_file);
+
+        fs::write(&temp_file, &decompressed).await?;
+        fs::rename(&temp_file, local_file).await?;
+        fs::write(hash_file, remote_hash_hex.as_bytes()).await?;
+
+        info!(file_type, path = local_file, "Updated local snapshot");
         Ok(())
     }
 
+    #[instrument(skip(self), fields(limit))]
+    /// get n pools (default: 20)
     pub async fn get_pools(&self, limit: Option<u64>) -> Result<E6PoolsResponse> {
-        let limit = limit.unwrap_or(20);
-        let url = format!("{}/pools.json?limit={}", self.get_base_url(), limit);
+        let limit = limit.unwrap_or(20).min(320);
+        let url = format!("{}/pools.json?limit={}", self.base_url, limit);
+
         let bytes = self.get_cached_or_fetch(&url).await?;
-
-        let pools: E6PoolsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize pools response")?;
-
-        debug!("Successfully fetched {} pools", pools.pools.len());
-        Ok(pools)
+        serde_json::from_slice(&bytes).context("Failed to deserialize pools response")
     }
 
+    #[instrument(skip(self))]
+    /// get a pool by its id
     pub async fn get_pool_by_id(&self, id: i64) -> Result<E6PoolResponse> {
         let url = format!("{}/pools/{}.json", self.base_url, id);
         let bytes = self.get_cached_or_fetch(&url).await?;
 
-        let pool: E6PoolResponse = serde_json::from_slice(&bytes)
-            .with_context(|| format!("Failed to deserialize pool {}", id))?;
-
-        Ok(pool)
+        serde_json::from_slice(&bytes).with_context(|| format!("Failed to deserialize pool {}", id))
     }
 
+    #[instrument(skip(self))]
+    /// get all posts in a pool
     pub async fn get_pool_posts(&self, pool_id: i64) -> Result<E6PostsResponse> {
         let url = format!("{}/posts.json?tags=pool:{}", self.base_url, pool_id);
         let bytes = self.get_cached_or_fetch(&url).await?;
 
         let posts: E6PostsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize pool posts response")?;
+            serde_json::from_slice(&bytes).context("Failed to deserialize pool posts")?;
 
-        debug!(
-            "Successfully fetched {} posts from pool {}",
-            posts.posts.len(),
-            pool_id
-        );
+        debug!(pool_id, count = posts.posts.len(), "Fetched pool posts");
         Ok(posts)
     }
 
+    #[instrument(skip(self))]
+    /// search for pools
+    pub async fn search_pools(&self, query: &str, limit: Option<u64>) -> Result<E6PoolsResponse> {
+        self.search_pools_internal("name_matches", query, limit)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    /// search for pools by their creator
     pub async fn search_pools_by_creator(
         &self,
-        creator_name: String,
+        creator_name: &str,
         limit: Option<u64>,
     ) -> Result<E6PoolsResponse> {
-        let limit = limit.unwrap_or(20);
-
-        let query_url = format!(
-            "{}/pools.json?search[creator_name]={}&limit={}",
-            self.base_url,
-            urlencoding::encode(&creator_name),
-            limit
-        );
-
-        debug!("Searching pools by creator with URL: {}", query_url);
-        let bytes = self.get_cached_or_fetch(&query_url).await?;
-
-        let pools: E6PoolsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize pool search response")?;
-
-        Ok(pools)
+        self.search_pools_internal("creator_name", creator_name, limit)
+            .await
     }
 
+    #[instrument(skip(self))]
+    /// search for pools by their description
     pub async fn search_pools_by_description(
         &self,
-        query: String,
+        query: &str,
         limit: Option<u64>,
     ) -> Result<E6PoolsResponse> {
-        let limit = limit.unwrap_or(20);
-
-        let query_url = format!(
-            "{}/pools.json?search[description_matches]={}&limit={}",
-            self.base_url,
-            urlencoding::encode(&query),
-            limit
-        );
-
-        debug!("Searching pools by description with URL: {}", query_url);
-        let bytes = self.get_cached_or_fetch(&query_url).await?;
-
-        let pools: E6PoolsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize pool search response")?;
-
-        Ok(pools)
+        self.search_pools_internal("description_matches", query, limit)
+            .await
     }
 
-    pub async fn search_pools(&self, query: String, limit: Option<u64>) -> Result<E6PoolsResponse> {
-        let limit = limit.unwrap_or(20);
-
-        let query_url = format!(
-            "{}/pools.json?search[name_matches]={}&limit={}",
+    /// search for pools with a given search type
+    async fn search_pools_internal(
+        &self,
+        search_type: &str,
+        query: &str,
+        limit: Option<u64>,
+    ) -> Result<E6PoolsResponse> {
+        let limit = limit.unwrap_or(20).min(320);
+        let url = format!(
+            "{}/pools.json?search[{}]={}&limit={}",
             self.base_url,
-            urlencoding::encode(&query),
+            search_type,
+            urlencoding::encode(query),
             limit
         );
 
-        debug!("Searching pools with URL: {}", query_url);
-        let bytes = self.get_cached_or_fetch(&query_url).await?;
+        debug!(url, "Searching pools");
+        let bytes = self.get_cached_or_fetch(&url).await?;
 
-        let pools: E6PoolsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize pool search response")?;
-
-        debug!(
-            "Successfully searched and found {} pools",
-            pools.pools.len()
-        );
-        Ok(pools)
+        serde_json::from_slice(&bytes).context("Failed to deserialize pool search response")
     }
 }

@@ -1,3 +1,4 @@
+//! media discovery stuff
 pub mod filter;
 pub mod gallery;
 pub mod item;

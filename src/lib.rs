@@ -1,10 +1,12 @@
-#![allow(unused)]
-
-pub static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+//! e62rs is a CLI e621/926 client
+#![forbid(
+    clippy::missing_docs_in_private_items,
+    missing_docs,
+    rustdoc::missing_crate_level_docs
+)]
 
 pub mod app;
 pub mod cache;
-pub mod cli;
 pub mod client;
 pub mod config;
 pub mod data;

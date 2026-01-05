@@ -1,3 +1,6 @@
+//! configuration stuff
 pub mod blacklist;
-pub mod messages;
+pub mod format;
+pub mod instance;
 pub mod options;
+pub mod validate;

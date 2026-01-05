@@ -1,5 +1,6 @@
+//! utilities used across e62rs
 use {
-    crate::config::options::LoginCfg,
+    crate::getopt,
     base64::{Engine, engine::general_purpose},
     color_eyre::eyre::Result,
     reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue},
@@ -12,6 +13,7 @@ use {
     tracing::Level,
 };
 
+/// deserialize a string into a boolean
 pub fn deserialize_bool_from_str<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -20,6 +22,7 @@ where
     Ok(s == "t")
 }
 
+/// deserialize a string into a list of post ids
 pub fn deserialize_post_ids<'de, D>(deserializer: D) -> Result<Vec<i64>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -43,12 +46,9 @@ where
     }
 }
 
-pub fn create_auth_header(login_cfg: &LoginCfg) -> Result<HeaderMap> {
-    let auth_str = format!(
-        "{}:{}",
-        login_cfg.clone().username,
-        login_cfg.clone().api_key,
-    );
+/// make an auth header based on the loaded config
+pub fn create_auth_header() -> Result<HeaderMap> {
+    let auth_str = format!("{}:{}", getopt!(login.username), getopt!(login.api_key));
     let encoded = general_purpose::STANDARD.encode(&auth_str);
     let auth_value = format!("Basic {}", encoded);
     let mut headers = HeaderMap::new();
@@ -58,6 +58,7 @@ pub fn create_auth_header(login_cfg: &LoginCfg) -> Result<HeaderMap> {
     Ok(headers)
 }
 
+/// shorten a path to a given length
 pub fn shorten_path(path: &str, max_len: usize) -> String {
     let shortened = Path::new(path)
         .components()
@@ -76,6 +77,7 @@ pub fn shorten_path(path: &str, max_len: usize) -> String {
     shortened.replace("\\", "/")
 }
 
+/// create and write to an ADS stream (windows only)
 pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str) -> Result<usize> {
     let file_path = file_path.as_ref();
     let ads_path = format!("{}:{}", file_path.display(), stream_name);
@@ -90,6 +92,7 @@ pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str)
     Ok(data.len())
 }
 
+/// write some json data to a given file
 pub fn _write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> {
     let file_path = file_path.as_ref();
     let json_path = format!("{}.json", file_path.display());
@@ -104,6 +107,7 @@ pub fn _write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> 
     Ok(())
 }
 
+/// convert a string to a log level
 pub fn string_to_log_level(lvl: &str) -> tracing::Level {
     match lvl.to_lowercase().as_str() {
         "d" | "debug" | "dbg" => Level::DEBUG,
@@ -115,6 +119,63 @@ pub fn string_to_log_level(lvl: &str) -> tracing::Level {
     }
 }
 
+/// a repeatable function
+pub trait Repeat {
+    /// repeat n times
+    fn repeat(self, n: usize);
+}
+
+impl<F> Repeat for F
+where
+    F: Fn(),
+{
+    fn repeat(self, n: usize) {
+        for _ in 0..n {
+            self();
+        }
+    }
+}
+
+/// a repeatable function with collectable output
+pub trait RepeatCollect {
+    /// the type that'll be collected
+    type Output;
+    /// repeat n times and return the collected results
+    fn repeat_collect(self, n: usize) -> Vec<Self::Output>;
+}
+
+impl<F, R> RepeatCollect for F
+where
+    F: Fn() -> R,
+{
+    type Output = R;
+
+    fn repeat_collect(self, n: usize) -> Vec<R> {
+        (0..n).map(|_| self()).collect()
+    }
+}
+
+/// a repeatable function with arguments
+pub trait RepeatWith<Args> {
+    /// the type to return
+    type Output;
+    /// repeat n times with args
+    fn repeat_with(self, n: usize, args: Args) -> Self::Output;
+}
+
+impl<F, A, R> RepeatWith<A> for F
+where
+    F: Fn(A) -> R,
+    A: Clone,
+{
+    type Output = Vec<R>;
+
+    fn repeat_with(self, n: usize, args: A) -> Vec<R> {
+        (0..n).map(|_| self(args.clone())).collect()
+    }
+}
+
+/// implement display for a type
 #[macro_export]
 macro_rules! impl_display {
     ($type:ty, $name:expr, $color:ident, $($field:ident: $format:expr),*) => {
@@ -130,6 +191,68 @@ macro_rules! impl_display {
     };
 }
 
+/// iterator repetition utils
+pub trait IteratorRepeatExt: Iterator {
+    /// repeat n times, returning the collected outputs
+    fn repeat_next(&mut self, n: usize) -> Vec<Self::Item>;
+    /// repeat n times, ignoring the results
+    fn skip_n(&mut self, n: usize);
+}
+
+impl<I: Iterator> IteratorRepeatExt for I {
+    fn repeat_next(&mut self, n: usize) -> Vec<Self::Item> {
+        (0..n).filter_map(|_| self.next()).collect()
+    }
+
+    fn skip_n(&mut self, n: usize) {
+        for _ in 0..n {
+            self.next();
+        }
+    }
+}
+
+/// make a repeatable function
+pub fn repeatable<F, R>(f: F) -> RepeatableOp<F>
+where
+    F: FnMut() -> R,
+{
+    RepeatableOp { f }
+}
+
+/// a repeatable operation
+pub struct RepeatableOp<F> {
+    /// the repeatable item
+    f: F,
+}
+
+impl<F, R> RepeatableOp<F>
+where
+    F: FnMut() -> R,
+{
+    /// repeat n times
+    pub fn repeat(mut self, n: usize) {
+        for _ in 0..n {
+            (self.f)();
+        }
+    }
+
+    /// repeat n times, collecting the output
+    pub fn repeat_collect(mut self, n: usize) -> Vec<R> {
+        (0..n).map(|_| (self.f)()).collect()
+    }
+
+    /// repeat n times and return the last result
+    pub fn repeat_last(mut self, n: usize) -> R {
+        assert!(n > 0, "repeat_last requires n > 0");
+        let mut result = (self.f)();
+        for _ in 1..n {
+            result = (self.f)();
+        }
+        result
+    }
+}
+
+/// format a value (lol)
 #[macro_export]
 macro_rules! fmt_value {
     () => {
@@ -137,5 +260,64 @@ macro_rules! fmt_value {
     };
     (debug) => {
         |v| format!("{:?}", v)
+    };
+}
+
+/// implement Send + Sync for a type
+#[macro_export]
+macro_rules! sendsync {
+    ($ty:ty) => {
+        unsafe impl<T: $crate::data::Entry> Send for $ty {}
+        unsafe impl<T: $crate::data::Entry> Sync for $ty {}
+    };
+}
+
+/// repeat an expression n times
+#[macro_export]
+macro_rules! repeat {
+    ($n:expr, $body:expr) => {
+        for _ in 0..$n {
+            $body;
+        }
+    };
+}
+
+/// make a new `String`
+#[macro_export]
+macro_rules! mkstr {
+    ($n:ident) => {
+        let mut $n = String::new();
+    };
+
+    ($n:ident, $capacity:expr) => {
+        let mut $n = String::with_capacity($capacity);
+    };
+}
+
+/// make a new `Vec`
+#[macro_export]
+macro_rules! mkvec {
+    ($n:ident, $t:ty) => {
+        let mut $n: Vec<$t> = Vec::new();
+    };
+
+    ($n:ident, $t:ty, $c:expr) => {
+        let mut $n: Vec<$t> = Vec::with_capacity($c);
+    };
+}
+
+/// if an option is enabled, perform an expression
+#[macro_export]
+macro_rules! opt_and {
+    ($field:ident, $a:expr) => {
+        if $crate::getopt!($field) {
+            $a
+        }
+    };
+
+    ($lvl1:ident . $field:ident, $a:expr) => {
+        if $crate::getopt!($lvl1.$field) {
+            $a
+        }
     };
 }

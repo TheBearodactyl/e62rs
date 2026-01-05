@@ -1,36 +1,38 @@
+//! the actual media server
 use {
     crate::serve::{
         cfg::ServerConfig,
         media::gallery::MediaGallery,
-        routes::{AppState, index_handler, list_media_handler, stats_handler},
+        routes::{
+            AppState, css_handler, index_handler, js_handler, list_media_handler, stats_handler,
+        },
     },
-    axum::{Router, routing::get},
     color_eyre::eyre::Result,
+    rocket::{Config, figment::Figment, fs::FileServer, routes},
     std::sync::Arc,
-    tower_http::services::ServeDir,
     tracing::info,
 };
 
 #[derive(Clone)]
+/// the media server
 pub struct MediaServer {
+    /// the server config
     config: ServerConfig,
 }
 
 impl MediaServer {
+    /// initialize the media server
     pub fn new(config: ServerConfig) -> Self {
         Self { config }
     }
 
+    /// serve the media server
     pub async fn serve(self) -> Result<()> {
         let gallery = MediaGallery::new(
             self.config.media_directory.clone(),
             self.config.enable_metadata_filtering,
         );
         let state = Arc::new(AppState::new(gallery));
-
-        let app = self.build_router(state);
-
-        let listener = tokio::net::TcpListener::bind(self.config.bind_address).await?;
 
         info!("e6srv running at http://{}", self.config.bind_address);
         info!(
@@ -46,18 +48,26 @@ impl MediaServer {
             }
         );
 
-        axum::serve(listener, app).await?;
+        let figment = Figment::from(Config::default())
+            .merge(("address", self.config.bind_address.ip()))
+            .merge(("port", self.config.bind_address.port()));
+
+        let mut rocket = rocket::custom(figment)
+            .mount(
+                "/",
+                routes![
+                    index_handler,
+                    list_media_handler,
+                    stats_handler,
+                    css_handler,
+                    js_handler
+                ],
+            )
+            .mount("/files", FileServer::from(&self.config.media_directory));
+
+        rocket = rocket.manage(state);
+        rocket.launch().await?;
 
         Ok(())
-    }
-
-    fn build_router(&self, state: Arc<AppState>) -> Router {
-        Router::new()
-            .route("/", get(index_handler))
-            .route("/api/media", get(list_media_handler))
-            .route("/api/stats", get(stats_handler))
-            .nest_service("/files", ServeDir::new(&self.config.media_directory))
-            .nest_service("/static", ServeDir::new("public"))
-            .with_state(state)
     }
 }

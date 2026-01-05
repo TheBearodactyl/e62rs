@@ -1,237 +1,238 @@
+//! client extensions for post operations on the e6 api
 use {
     crate::{
         client::E6Client,
-        config::options::E62Rs,
+        getopt,
         models::{E6PostResponse, E6PostsResponse},
     },
-    chrono::{Datelike, Local},
+    chrono::{Datelike, Days, Local},
     color_eyre::eyre::{Context, Result, bail},
     flate2::read::GzDecoder,
-    futures::future::join_all,
     sha2::{Digest, Sha256},
-    std::{io::Read, path::Path, sync::Arc},
-    tokio::{fs, io::AsyncWriteExt},
-    tracing::{debug, info, warn},
+    std::{io::Read, path::Path},
+    tokio::{fs, sync::Semaphore},
+    tracing::{debug, info, instrument, warn},
 };
 
 impl E6Client {
+    /// try to get the latest posts
     pub async fn get_latest_posts(&self) -> Result<E6PostsResponse> {
-        let url = format!("{}/posts.json", self.get_base_url());
+        let url = format!("{}/posts.json", self.base_url);
         let bytes = self.get_cached_or_fetch(&url).await?;
         let mut posts: E6PostsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize posts response")?;
+            serde_json::from_slice(&bytes).context("failed to deser")?;
 
-        if !posts.posts.is_empty()
-            && let Err(e) = self.post_cache.insert_batch(&posts.posts).await
-        {
-            warn!("Failed to cache posts: {}", e);
+        if !posts.posts.is_empty() {
+            let cache = self.post_cache.clone();
+            let posts_clone = posts.posts.clone();
+
+            tokio::spawn(async move {
+                if let Err(e) = cache.insert_batch(&posts_clone).await {
+                    warn!(error = %e, "failed to cache posts");
+                }
+            });
         }
 
-        let cfg = E62Rs::get()?;
-        let apply_blacklist = !cfg.blacklist.is_empty();
-
-        if apply_blacklist {
+        if !getopt!(blacklist).is_empty() {
             posts = posts.filter_blacklisted(&[]);
         }
 
-        debug!("Successfully fetched {} posts", posts.posts.len());
+        debug!(count = posts.posts.len(), "fetched latest posts");
         Ok(posts)
     }
 
+    #[instrument(skip(self, tags))]
+    /// search posts with the given tags (paginated)
     pub async fn search_posts(
         &self,
-        tags: Vec<String>,
+        tags: &[String],
         limit: Option<u64>,
         page_before_id: Option<i64>,
     ) -> Result<E6PostsResponse> {
-        let url = format!("{}/posts.json", self.base_url);
-        let limit = limit.unwrap_or(20);
-
-        let mut query_url = format!(
-            "{}?tags={}&limit={}",
-            url,
+        let limit = limit.unwrap_or(20).min(320);
+        let mut url = format!(
+            "{}/posts.json?tags={}&limit={}",
+            self.base_url,
             urlencoding::encode(&tags.join(" ")),
             limit
         );
 
         if let Some(before_id) = page_before_id {
-            query_url.push_str(&format!("&page=b{}", before_id));
+            url.push_str(&format!("&page=b{}", before_id));
         }
 
-        debug!("Fetching posts from: {}", query_url);
-        let bytes = self.get_cached_or_fetch(&query_url).await?;
+        debug!(url, "Searching posts");
 
+        let bytes = self.get_cached_or_fetch(&url).await?;
         let mut posts: E6PostsResponse =
             serde_json::from_slice(&bytes).context("Failed to deserialize search response")?;
+        let count_before = posts.posts.len();
 
-        let count_before_filtering = posts.posts.len();
-
-        if !posts.posts.is_empty()
-            && let Err(e) = self.post_cache.insert_batch(&posts.posts).await
-        {
-            warn!("Failed to cache posts: {}", e);
+        if !posts.posts.is_empty() {
+            let cache = self.post_cache.clone();
+            let posts_clone = posts.posts.clone();
+            tokio::spawn(async move {
+                if let Err(e) = cache.insert_batch(&posts_clone).await {
+                    warn!(error = %e, "Failed to cache posts");
+                }
+            });
         }
 
-        posts = posts.filter_blacklisted(&tags);
+        posts = posts.filter_blacklisted(tags);
 
-        if posts.posts.len() < count_before_filtering {
+        if posts.posts.len() < count_before {
             info!(
-                "Filtered out {} blacklisted posts ({} remaining)",
-                count_before_filtering - posts.posts.len(),
-                posts.posts.len()
+                filtered = count_before - posts.posts.len(),
+                remaining = posts.posts.len(),
+                "Filtered blacklisted posts"
             );
         }
 
-        debug!(
-            "Successfully searched and found {} posts",
-            posts.posts.len()
-        );
         Ok(posts)
     }
 
+    #[instrument(skip(self))]
+    /// get a post by its id
     pub async fn get_post_by_id(&self, id: i64) -> Result<E6PostResponse> {
         if let Ok(Some(cached_post)) = self.post_cache.get(id).await {
-            debug!("Post {} retrieved from persistent cache", id);
+            debug!(id, "Post retrieved from cache");
             return Ok(E6PostResponse { post: cached_post });
         }
 
         let url = format!("{}/posts/{}.json", self.base_url, id);
         let bytes = self.get_cached_or_fetch(&url).await?;
+        let post: E6PostResponse =
+            serde_json::from_slice(&bytes).context(format!("Failed to deserialize post {}", id))?;
+        let cache = self.post_cache.clone();
+        let post_clone = post.post.clone();
 
-        let post: E6PostResponse = serde_json::from_slice(&bytes)
-            .with_context(|| format!("Failed to deserialize post {}", id))?;
-
-        if let Err(e) = self.post_cache.insert(&post.post).await {
-            warn!("Failed to cache post {}: {}", id, e);
-        }
+        tokio::spawn(async move {
+            if let Err(e) = cache.insert(&post_clone).await {
+                warn!(id, error = %e, "Failed to cache post");
+            }
+        });
 
         Ok(post)
     }
 
-    pub async fn get_posts_by_ids(&self, ids: Vec<i64>) -> Result<Vec<E6PostResponse>> {
-        let cached_results = self.post_cache.get_batch(&ids).await?;
-        let mut posts = Vec::new();
+    #[instrument(skip(self, ids), fields(count = ids.len()))]
+    /// get posts by their ids
+    pub async fn get_posts_by_ids(&self, ids: &[i64]) -> Result<Vec<E6PostResponse>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let cached_results = self.post_cache.get_batch(ids).await?;
+        let mut posts = Vec::with_capacity(ids.len());
         let mut missing_ids = Vec::new();
 
         for (i, cached_post) in cached_results.into_iter().enumerate() {
             match cached_post {
-                Some(post) => {
-                    if !post.is_blacklisted() {
-                        posts.push(E6PostResponse { post });
-                    }
+                Some(post) if !post.is_blacklisted() => {
+                    posts.push(E6PostResponse { post });
                 }
-                None => {
-                    missing_ids.push(ids[i]);
-                }
+                Some(_) => {}
+                None => missing_ids.push(ids[i]),
             }
         }
 
         info!(
-            "Retrieved {}/{} posts from cache, fetching {} from network",
-            posts.len(),
-            ids.len(),
-            missing_ids.len()
+            cached = posts.len(),
+            missing = missing_ids.len(),
+            "Cache lookup complete"
         );
 
-        if !missing_ids.is_empty() {
-            let config = E62Rs::get()?;
-            let concurrent_limit = config.performance.concurrent_downloads;
+        if missing_ids.is_empty() {
+            return Ok(posts);
+        }
 
-            let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
-            let futures: Vec<_> = missing_ids
-                .into_iter()
-                .map(|id| {
-                    let client = self.clone();
-                    let semaphore = semaphore.clone();
+        let concurrent_limit = getopt!(performance.concurrent_downloads);
+        let semaphore = std::sync::Arc::new(Semaphore::new(concurrent_limit));
+        let fetch_futures: Vec<_> = missing_ids
+            .into_iter()
+            .map(|id| {
+                let client = self.clone();
+                let permit = semaphore.clone();
 
-                    tokio::spawn(async move {
-                        let _permit = semaphore.acquire().await.unwrap();
-                        client.get_post_by_id(id).await
-                    })
-                })
-                .collect();
-
-            let results = join_all(futures).await;
-
-            for result in results {
-                match result {
-                    Ok(Ok(post)) => {
-                        if !post.post.is_blacklisted() {
-                            posts.push(post)
-                        }
-                    }
-                    Ok(Err(e)) => warn!("Failed to fetch post: {}", e),
-                    Err(e) => warn!("Task failed: {}", e),
+                async move {
+                    let _permit = permit.acquire().await.ok()?;
+                    client.get_post_by_id(id).await.ok()
                 }
+            })
+            .collect();
+
+        let results = futures::future::join_all(fetch_futures).await;
+
+        for result in results.into_iter().flatten() {
+            if !result.post.is_blacklisted() {
+                posts.push(result);
             }
         }
 
         Ok(posts)
     }
 
+    #[instrument(skip(self), name = "update_tags")]
+    /// update the local tag databases
     pub async fn update_tags(&self) -> Result<()> {
-        let cfg = E62Rs::get()?;
-        let now = Local::now();
+        let now = Local::now()
+            .checked_sub_days(Days::new(1))
+            .unwrap_or(Local::now());
         let date_str = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
-
-        let files_to_update = [
-            ("tags", &cfg.completion.tags),
-            ("tag_aliases", &cfg.completion.tag_aliases),
-            ("tag_implications", &cfg.completion.tag_implications),
+        let files = [
+            ("tags", getopt!(completion.tags)),
+            ("tag_aliases", getopt!(completion.aliases)),
+            ("tag_implications", getopt!(completion.implications)),
         ];
 
-        for (file_type, local_file_cfg) in files_to_update {
-            let local_file = local_file_cfg.as_str();
-            let local_hash_file = format!("{}.hash", local_file);
+        for (ty, local_file) in files {
+            let hash_file = format!("{}.hash", local_file);
+            let url = format!("https://e621.net/db_export/{}-{}.csv.gz", ty, date_str);
 
-            let url = format!(
-                "https://e621.net/db_export/{}-{}.csv.gz",
-                file_type, date_str
-            );
+            info!(ty, "checking for updates");
 
-            info!("Checking {}...", file_type);
-            info!("URL: {}", url);
-
-            let response = self.update_client.get(&url).send().await?;
+            let response = self.client.get(&url).send().await?;
             if !response.status().is_success() {
-                bail!("Failed to download {}: {}", file_type, response.status());
+                bail!("failed to download {}: http {}", ty, response.status());
             }
 
             let remote_bytes = response.bytes().await?;
-            let mut hasher = Sha256::new();
-            hasher.update(&remote_bytes);
-
-            let remote_hash = hasher.finalize();
-            let remote_hash_hex = hex::encode(remote_hash);
-
-            let update_needed = if Path::new(&local_hash_file).exists() {
-                let local_hash_hex = fs::read_to_string(&local_hash_file).await?;
-                local_hash_hex.trim() != remote_hash_hex
-            } else {
-                true
+            let remote_hash_hex = {
+                let mut hasher = Sha256::new();
+                hasher.update(&remote_bytes);
+                hex::encode(hasher.finalize())
             };
 
-            if update_needed {
-                info!("Updating local {} snapshot...", file_type);
+            let update_needed = match fs::read_to_string(&hash_file).await {
+                Ok(local_hash) => local_hash.trim() != remote_hash_hex,
+                Err(_) => true,
+            };
 
-                let mut gz = GzDecoder::new(&remote_bytes[..]);
-                let mut decompressed_data = Vec::new();
-                gz.read_to_end(&mut decompressed_data)?;
-
-                fs::create_dir_all("data").await?;
-                let mut file = fs::File::create(local_file).await?;
-                file.write_all(&decompressed_data).await?;
-
-                let mut hash_file = fs::File::create(&local_hash_file).await?;
-                hash_file.write_all(remote_hash_hex.as_bytes()).await?;
-
-                info!("✓ Updated local {} snapshot at {}", file_type, local_file);
-            } else {
-                info!("✓ Local snapshot of {} is up to date", file_type);
+            if !update_needed {
+                info!(ty, "✓ Already up to date");
+                continue;
             }
+
+            info!(ty, "Updating local snapshot");
+
+            let mut gz = GzDecoder::new(&remote_bytes[..]);
+            let mut decompressed = Vec::new();
+            gz.read_to_end(&mut decompressed)
+                .context(format!("failed to decompress {}", ty))?;
+
+            if let Some(parent) = Path::new(&local_file).parent() {
+                fs::create_dir_all(parent).await?;
+            }
+
+            let temp_file = format!("{}.tmp", local_file);
+            fs::write(&temp_file, &decompressed).await?;
+            fs::rename(&temp_file, &local_file).await?;
+            fs::write(&hash_file, remote_hash_hex.as_bytes()).await?;
+
+            info!(ty, path = %local_file, "✓ Updated");
         }
 
-        info!("All tag data files are up to date!");
+        info!("all tag dbs are up to date");
         Ok(())
     }
 }

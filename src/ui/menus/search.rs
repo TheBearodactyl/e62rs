@@ -1,46 +1,52 @@
+//! search ui stuff
 use {
     crate::{
-        config::options::E62Rs,
-        display::dtext::format_text,
+        display::dtext::parser::format_text,
+        getopt,
         models::*,
-        ui::{
-            E6Ui, ROSE_PINE, RosePineTheme, autocomplete::PoolAutocompleter, menus::AdvPoolSearch,
-        },
+        ui::{E6Ui, ROSE_PINE, autocomplete::PoolAutocompleter, menus::AdvPoolSearch},
     },
-    color_eyre::eyre::{Context, Error, Result},
+    color_eyre::eyre::{Context, Result, bail},
     demand::{Confirm, DemandOption, Input, Select},
     indicatif::{ProgressBar, ProgressStyle},
-    std::{collections::HashSet, fmt::Display, sync::Arc, time::Duration},
+    std::{collections::HashSet, sync::Arc, time::Duration},
+    tracing::{debug, warn},
 };
 
 impl E6Ui {
+    /// search for pools in an advanced way
     pub async fn search_pools_adv(&self) -> Result<()> {
         loop {
             let search_type = AdvPoolSearch::select("How would you like to search for pools")
                 .theme(&ROSE_PINE)
-                .run()?;
+                .run()
+                .context("Failed to get search type selection")?;
 
             let should_break = match search_type {
                 AdvPoolSearch::ByName => {
                     if let Err(e) = self.perform_pool_search().await {
+                        warn!("Pool name search error: {:#}", e);
                         eprintln!("Pool name search error: {}", e);
                     }
                     false
                 }
                 AdvPoolSearch::ByDesc => {
                     if let Err(e) = self.perform_pool_description_search().await {
+                        warn!("Pool description search error: {:#}", e);
                         eprintln!("Pool description search error: {}", e);
                     }
                     false
                 }
                 AdvPoolSearch::ByCreator => {
                     if let Err(e) = self.perform_pool_creator_search().await {
+                        warn!("Pool creator search error: {:#}", e);
                         eprintln!("Pool creator search error: {}", e);
                     }
                     false
                 }
                 AdvPoolSearch::BrowseLatest => {
                     if let Err(e) = self.browse_latest_pools().await {
+                        warn!("Error browsing pools: {:#}", e);
                         eprintln!("Error browsing pools: {}", e);
                     }
                     false
@@ -52,12 +58,7 @@ impl E6Ui {
                 break;
             }
 
-            if !Confirm::new("Would you like to perform another search?")
-                .theme(&ROSE_PINE)
-                .affirmative("Yes")
-                .negative("No")
-                .run()?
-            {
+            if !self.ask_continue("Would you like to perform another search?")? {
                 break;
             }
         }
@@ -65,10 +66,18 @@ impl E6Ui {
         Ok(())
     }
 
+    /// search pools by their description
     async fn perform_pool_description_search(&self) -> Result<()> {
         let query = Input::new("Enter pool description search:")
             .theme(&ROSE_PINE)
-            .run()?;
+            .run()
+            .context("Failed to get description search input")?;
+
+        let query = query.trim();
+        if query.is_empty() {
+            println!("Search query cannot be empty.");
+            return Ok(());
+        }
 
         let limit = self.get_pool_limit()?;
         let results = self
@@ -77,23 +86,21 @@ impl E6Ui {
             .await
             .context("Failed to search pools by description")?;
 
-        if results.pools.is_empty() {
-            println!("No pools found matching your description search.");
-            return Ok(());
-        }
-
-        let selected_pool = self.select_pool(&results.pools)?;
-        if let Some(pool) = selected_pool {
-            let fetched_pool = self.client.get_pool_by_id(pool.id).await?;
-            self.display_pool(&fetched_pool.pool);
-            self.pool_interaction_menu(fetched_pool.pool).await?;
-        }
-
-        Ok(())
+        self.handle_pool_results(results.pools).await
     }
 
+    /// search pools by creator
     async fn perform_pool_creator_search(&self) -> Result<()> {
-        let creator = Input::new("Enter creator name:").theme(&ROSE_PINE).run()?;
+        let creator = Input::new("Enter creator name:")
+            .theme(&ROSE_PINE)
+            .run()
+            .context("Failed to get creator name input")?;
+
+        let creator = creator.trim();
+        if creator.is_empty() {
+            println!("Creator name cannot be empty.");
+            return Ok(());
+        }
 
         let limit = self.get_pool_limit()?;
         let results = self
@@ -102,21 +109,10 @@ impl E6Ui {
             .await
             .context("Failed to search pools by creator")?;
 
-        if results.pools.is_empty() {
-            println!("No pools found by that creator.");
-            return Ok(());
-        }
-
-        let selected_pool = self.select_pool(&results.pools)?;
-        if let Some(pool) = selected_pool {
-            let fetched_pool = self.client.get_pool_by_id(pool.id).await?;
-            self.display_pool(&fetched_pool.pool);
-            self.pool_interaction_menu(fetched_pool.pool).await?;
-        }
-
-        Ok(())
+        self.handle_pool_results(results.pools).await
     }
 
+    /// browse the latest pools
     async fn browse_latest_pools(&self) -> Result<()> {
         let limit = self.get_pool_limit()?;
         let results = self
@@ -125,14 +121,24 @@ impl E6Ui {
             .await
             .context("Failed to fetch latest pools")?;
 
-        if results.pools.is_empty() {
-            println!("No pools found.");
+        self.handle_pool_results(results.pools).await
+    }
+
+    /// handle the results of a search
+    async fn handle_pool_results(&self, pools: Vec<E6Pool>) -> Result<()> {
+        if pools.is_empty() {
+            println!("No pools found matching your search criteria.");
             return Ok(());
         }
 
-        let selected_pool = self.select_pool(&results.pools)?;
+        let selected_pool = self.select_pool(&pools)?;
         if let Some(pool) = selected_pool {
-            let fetched_pool = self.client.get_pool_by_id(pool.id).await?;
+            let fetched_pool = self
+                .client
+                .get_pool_by_id(pool.id)
+                .await
+                .context("Failed to fetch pool details")?;
+
             self.display_pool(&fetched_pool.pool);
             self.pool_interaction_menu(fetched_pool.pool).await?;
         }
@@ -140,38 +146,57 @@ impl E6Ui {
         Ok(())
     }
 
+    /// get the search query for finding pools
     pub fn get_pool_search_query(&self) -> Result<String> {
         let autocompleter = PoolAutocompleter::new(self.pool_db.clone());
         let query = Input::new("Enter pool search query (leave empty for latest pools):")
             .autocomplete(autocompleter)
             .theme(&ROSE_PINE)
-            .run()?;
+            .run()
+            .context("Failed to get pool search query")?;
 
         Ok(query.trim().to_string())
     }
 
+    /// get the max number of pools to display
     pub fn get_pool_limit(&self) -> Result<u64> {
-        let settings = E62Rs::get()?;
-        let default_limit = settings.post_count;
+        let default_limit = getopt!(results_limit).min(getopt!(results_limit));
 
-        let prompt = Input::new("How many pools to return?")
+        let input = Input::new("How many pools to return?")
             .validation(|input| {
-                for c in input.chars() {
-                    if !c.is_numeric() {
-                        return Err("Only numbers allowed");
-                    }
+                let err_msg = "Please enter a number between 1 and 20";
+                if input.trim().is_empty() {
+                    return Ok(());
                 }
-
-                Ok(())
+                match input.parse::<u64>() {
+                    Ok(n) if n > 0 && n <= 100 => Ok(()),
+                    Ok(_) => Err(err_msg),
+                    Err(_) => Err("Please enter a valid number"),
+                }
             })
+            .placeholder(&default_limit.to_string())
             .theme(&ROSE_PINE)
-            .run()?
-            .parse::<u64>();
+            .run()
+            .context("Failed to get pool limit input")?;
 
-        Ok(prompt.unwrap_or(default_limit).min(100))
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return Ok(default_limit);
+        }
+
+        let limit = trimmed
+            .parse::<u64>()
+            .context("Failed to parse pool limit")?;
+
+        Ok(limit.clamp(1, 100))
     }
 
+    /// select a pool from a list
     pub fn select_pool<'a>(&self, pools: &'a [E6Pool]) -> Result<Option<&'a E6Pool>> {
+        if pools.is_empty() {
+            return Ok(None);
+        }
+
         let options: Vec<String> = pools
             .iter()
             .map(|pool| {
@@ -185,27 +210,26 @@ impl E6Ui {
             })
             .collect();
 
-        let selection = Some(
-            Select::new("Select a pool to view:")
-                .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
-                .theme(&ROSE_PINE)
-                .run()?,
-        );
+        let selection = Select::new("Select a pool to view:")
+            .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
+            .theme(&ROSE_PINE)
+            .run()
+            .context("Failed to get pool selection")?;
 
-        Ok(selection.and_then(|s| {
-            let index = pools.iter().position(|p| {
-                &format!(
-                    "ID: {} | {} | {} posts | {}",
-                    p.id,
-                    self.truncate_string(&p.name, 40),
-                    p.post_ids.len(),
-                    p.category
-                ) == s
-            });
-            index.map(|i| &pools[i])
-        }))
+        let index = pools.iter().position(|p| {
+            &format!(
+                "ID: {} | {} | {} posts | {}",
+                p.id,
+                self.truncate_string(&p.name, 40),
+                p.post_ids.len(),
+                p.category
+            ) == selection
+        });
+
+        Ok(index.map(|i| &pools[i]))
     }
 
+    /// convert a PoolEntry to an E6Pool
     pub fn pool_entry_to_e6pool(&self, entry: &PoolEntry) -> E6Pool {
         E6Pool {
             id: entry.id,
@@ -213,7 +237,7 @@ impl E6Ui {
             created_at: entry.created_at.clone(),
             updated_at: entry.updated_at.clone(),
             creator_id: entry.creator_id,
-            creator_name: self.pool_db.get_creator_name(entry.creator_id),
+            creator_name: entry.creator_id.to_string(),
             description: entry.description.clone(),
             is_active: entry.is_active,
             category: entry.category.clone(),
@@ -222,6 +246,7 @@ impl E6Ui {
         }
     }
 
+    /// search posts
     pub async fn search_posts(&self) -> Result<()> {
         loop {
             match self.perform_search().await {
@@ -231,8 +256,9 @@ impl E6Ui {
                     }
                 }
                 Err(e) => {
+                    warn!("Search error: {:#}", e);
                     eprintln!("Search error: {}", e);
-                    if !self.ask_retry()? {
+                    if !self.ask_continue("An error occurred. Would you like to try again?")? {
                         break;
                     }
                 }
@@ -241,6 +267,7 @@ impl E6Ui {
         Ok(())
     }
 
+    /// search pools
     pub async fn search_pools(&self) -> Result<()> {
         loop {
             match self.perform_pool_search().await {
@@ -250,8 +277,9 @@ impl E6Ui {
                     }
                 }
                 Err(e) => {
+                    warn!("Pool search error: {:#}", e);
                     eprintln!("Pool search error: {}", e);
-                    if !self.ask_retry()? {
+                    if !self.ask_continue("An error occurred. Would you like to try again?")? {
                         break;
                     }
                 }
@@ -260,13 +288,14 @@ impl E6Ui {
         Ok(())
     }
 
+    /// perform a pool search
     async fn perform_pool_search(&self) -> Result<bool> {
         let query = self.get_pool_search_query()?;
         let limit = self.get_pool_limit()? as usize;
 
         let pools = if query.is_empty() {
             let local_pools: Vec<PoolEntry> =
-                unsafe { self.pool_db.iter_pools().take(limit).cloned().collect() };
+                self.pool_db.iter_pools().take(limit).cloned().collect();
 
             local_pools
                 .iter()
@@ -278,21 +307,21 @@ impl E6Ui {
                 local_matches
                     .iter()
                     .filter_map(|name| self.pool_db.get_by_name(name))
-                    .map(|entry| self.pool_entry_to_e6pool(&entry))
+                    .map(|entry| self.pool_entry_to_e6pool(entry))
                     .collect()
             } else {
                 let results = self
                     .client
-                    .search_pools(query, Some(limit as u64))
+                    .search_pools(query.as_str(), Some(limit as u64))
                     .await
-                    .context("Failed to search pools")?;
+                    .context("Failed to search pools via API")?;
                 results.pools
             }
         };
 
         if pools.is_empty() {
             println!("No pools found matching your search criteria.");
-            return self.ask_retry();
+            return self.ask_continue("Would you like to perform another search?");
         }
 
         let selected_pool = self.select_pool(&pools)?;
@@ -300,133 +329,153 @@ impl E6Ui {
         if let Some(pool) = selected_pool {
             self.display_pool(pool);
             self.pool_interaction_menu(pool.clone()).await?;
-
-            Ok(true)
-        } else {
-            Ok(true)
         }
+
+        Ok(true)
     }
 
+    /// perform a post search
     pub async fn perform_search(&self) -> Result<bool> {
         let (include_tags, or_tags, exclude_tags) = self.collect_tags()?;
         let total_limit = self.get_post_limit()?;
-
-        let mut all_tags = Vec::new();
-
-        for include_tag in include_tags {
-            all_tags.push(include_tag);
+        if include_tags.is_empty() && or_tags.is_empty() && exclude_tags.is_empty() {
+            println!("Please specify at least one search tag.");
+            return Ok(true);
         }
 
-        for exclude_tag in exclude_tags {
-            all_tags.push(format!(" -{}", exclude_tag));
+        let mut all_tags =
+            Vec::with_capacity(include_tags.len() + or_tags.len() + exclude_tags.len());
+
+        all_tags.extend(include_tags);
+        all_tags.extend(exclude_tags.into_iter().map(|tag| format!("-{}", tag)));
+        all_tags.extend(or_tags.into_iter().map(|tag| format!("~{}", tag)));
+
+        debug!("Searching with tags: {:?}", all_tags);
+
+        let posts = self.fetch_posts_paginated(all_tags, total_limit).await?;
+
+        if posts.is_empty() {
+            println!("No posts found matching your search criteria.");
+            return self.ask_continue("Would you like to perform another search?");
         }
 
-        for inclusionary_tag in or_tags {
-            all_tags.push(format!(" ~{}", inclusionary_tag));
-        }
+        self.handle_post_interaction(posts).await
+    }
 
+    /// perform a paginated post search
+    async fn fetch_posts_paginated(
+        &self,
+        all_tags: Vec<String>,
+        total_limit: u64,
+    ) -> Result<Vec<E6Post>> {
         let mut all_fetched_posts: Vec<E6Post> = Vec::new();
-        let limit_per_page = 320;
         let mut before_id: Option<i64> = None;
         let mut seen = HashSet::new();
         let mut consecutive_empty_batches = 0;
-        let max_empty_batches = 3;
 
         println!("Fetching up to {} posts...", total_limit);
-        let pb = ProgressBar::new(total_limit);
-        pb.set_style(
-            ProgressStyle::with_template(
-                "{spinner:.bright_cyan} [{elapsed_precise}] [{bar:40.bright_cyan/blue}] \
-                 {pos}/{len} ({percent}%) {msg}",
-            )?
-            .progress_chars("█▓░"),
-        );
-        pb.enable_steady_tick(Duration::from_millis(100));
+        let pb = self.create_search_progress_bar(total_limit)?;
 
-        while (all_fetched_posts.len() as u64) < total_limit
-            && consecutive_empty_batches < max_empty_batches
-        {
-            let remaining = total_limit - all_fetched_posts.len() as u64;
-            let current_limit = (remaining * 2).min(limit_per_page).max(20);
+        while (all_fetched_posts.len() as u64) < total_limit && consecutive_empty_batches < 3 {
+            let remaining = total_limit.saturating_sub(all_fetched_posts.len() as u64);
+            let current_limit = (remaining * 2).min(getopt!(results_limit)).max(20);
 
             pb.set_message(format!(
-                "Fetching batch {} ({} total so far)",
-                (all_fetched_posts.len() / 320) + 1,
+                "fetching batch {} ({} total so far)",
+                (all_fetched_posts.len() / getopt!(results_limit) as usize) + 1,
                 all_fetched_posts.len()
             ));
 
-            let results = match self
+            let results = self
                 .client
-                .search_posts(all_tags.clone(), Some(current_limit), before_id)
+                .search_posts(&all_tags.clone(), Some(current_limit), before_id)
                 .await
-                .context("Failed to search posts")
-            {
-                Ok(response) => response,
-                Err(e) => {
-                    eprintln!("{}", e);
-                    return Err(e);
-                }
-            };
+                .context("Failed to search posts")?;
 
             let batch_size_before_filtering = results.posts.len();
 
             if results.posts.is_empty() {
                 consecutive_empty_batches += 1;
-                pb.println("No more posts available from API.");
-                if consecutive_empty_batches >= max_empty_batches {
-                    pb.println("Reached maximum consecutive empty batches, stopping.");
+                pb.println("no more posts available from api.");
+                if consecutive_empty_batches >= 3 {
+                    pb.println("reached maximum consecutive empty batches, stopping.");
                     break;
                 }
                 continue;
-            } else {
-                consecutive_empty_batches = 0;
             }
 
+            consecutive_empty_batches = 0;
+
             let mut new_posts = Vec::with_capacity(results.posts.len());
-            for p in results.posts {
-                if seen.insert(p.id) {
-                    new_posts.push(p);
+            let mut min_id: Option<i64> = None;
+
+            for post in results.posts {
+                if seen.insert(post.id) {
+                    if min_id.is_none() || post.id < min_id.unwrap() {
+                        min_id = Some(post.id);
+                    }
+                    new_posts.push(post);
                 }
             }
 
             let fetched_count = new_posts.len();
-            if let Some(min_id) = new_posts.iter().map(|p| p.id).min() {
-                before_id = Some(min_id);
+
+            if let Some(id) = min_id {
+                before_id = Some(id);
             }
 
             all_fetched_posts.extend(new_posts);
             pb.inc(fetched_count as u64);
 
-            if batch_size_before_filtering > fetched_count {
+            let filtered = batch_size_before_filtering.saturating_sub(fetched_count);
+            if filtered > 0 {
                 pb.println(format!(
-                    "Filtered out {} blacklisted posts from this batch",
-                    batch_size_before_filtering - fetched_count
+                    "filtered out {} blacklisted/duplicate posts from this batch",
+                    filtered
                 ));
             }
 
-            if fetched_count < current_limit as usize / 2 {
-                pb.println("Approaching end of available results.");
+            if fetched_count < 320 {
+                debug!("small batch received, approaching end of results");
+                pb.println("approaching end of available results.");
+            }
+
+            if all_fetched_posts.len() >= total_limit as usize {
+                break;
             }
         }
 
         all_fetched_posts.truncate(total_limit as usize);
+
         pb.set_length(all_fetched_posts.len() as u64);
         pb.finish_with_message(format!("✓ Fetched {} posts.", all_fetched_posts.len()));
 
-        if all_fetched_posts.is_empty() {
-            println!("No posts found matching your search criteria.");
-            return self.ask_retry();
-        }
-
-        self.handle_post_interaction(all_fetched_posts).await
+        Ok(all_fetched_posts)
     }
 
+    /// make a search progress bar
+    fn create_search_progress_bar(&self, total: u64) -> Result<ProgressBar> {
+        let pb = ProgressBar::new(total);
+        pb.set_style(
+            ProgressStyle::with_template(
+                "{spinner:.bright_cyan} [{elapsed_precise}] [{bar:40.bright_cyan/blue}] \
+                 {pos}/{len} ({percent}%) {msg}",
+            )
+            .context("Failed to create progress bar template")?
+            .progress_chars("█▓░"),
+        );
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Ok(pb)
+    }
+
+    /// handle a post interaction
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
         let use_multi_select = Confirm::new("Select multiple posts?")
             .theme(&ROSE_PINE)
             .affirmative("Yes")
             .negative("No")
-            .run()?;
+            .run()
+            .context("Failed to get multi-select confirmation")?;
 
         if use_multi_select {
             let selected_posts = self.select_multiple_posts(&posts)?;
@@ -439,88 +488,95 @@ impl E6Ui {
                 if !fetched_posts.is_empty() {
                     self.batch_interaction_menu(fetched_posts).await?;
                 } else {
+                    warn!("Failed to fetch any of the selected posts");
                     eprintln!("Failed to fetch any posts");
                 }
             }
 
-            self.ask_retry()
+            self.ask_continue("Would you like to perform another search?")
         } else {
             let selected_post = self.select_post(&posts)?;
 
             if let Some(post) = selected_post {
-                let fetched_post = self.client.get_post_by_id(post.id).await?;
+                let fetched_post = self
+                    .client
+                    .get_post_by_id(post.id)
+                    .await
+                    .context("Failed to fetch post details")?;
+
                 self.display_post(&fetched_post.post);
                 self.interaction_menu(fetched_post.post).await?;
-
-                self.ask_retry()
-            } else {
-                Ok(true)
             }
+
+            self.ask_continue("Would you like to perform another search?")
         }
     }
 
+    /// fetch posts selected in list of results
     async fn fetch_selected_posts(&self, selected_posts: Vec<&E6Post>) -> Result<Vec<E6Post>> {
-        let search_cfg = E62Rs::get()?.search;
-        let concurrent_limit = search_cfg.fetch_threads;
+        let concurrent_limit = getopt!(search.fetch_threads).max(1);
         let post_ids: Vec<i64> = selected_posts.iter().map(|post| post.id).collect();
         let total_count = post_ids.len();
 
-        let pb = ProgressBar::new(total_count as u64);
-        pb.set_style(
-            ProgressStyle::with_template(
-                "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
-                 {pos}/{len} ({percent}%) {msg}",
-            )?
-            .with_key(
-                "eta",
-                |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
-                    write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap_or(())
-                },
-            )
-            .progress_chars("━╸─"),
-        );
-        pb.set_message("Fetching posts...");
-        pb.enable_steady_tick(Duration::from_millis(100));
+        if total_count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let pb = self.create_fetch_progress_bar(total_count)?;
 
         let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
         let pb_arc = Arc::new(pb);
 
-        let tasks = post_ids.into_iter().map(|post_id| {
-            let client = self.client.clone();
-            let semaphore = Arc::clone(&semaphore);
-            let pb = Arc::clone(&pb_arc);
+        let tasks: Vec<_> = post_ids
+            .into_iter()
+            .map(|post_id| {
+                let client = self.client.clone();
+                let semaphore = Arc::clone(&semaphore);
+                let pb = Arc::clone(&pb_arc);
 
-            tokio::task::spawn(async move {
-                let _permit = semaphore.acquire().await.unwrap();
+                tokio::task::spawn(async move {
+                    let _permit = semaphore
+                        .acquire()
+                        .await
+                        .map_err(|e| {
+                            warn!("Failed to acquire semaphore: {}", e);
+                            e
+                        })
+                        .ok()?;
 
-                let result = match client.get_post_by_id(post_id).await {
-                    Ok(fetched) => {
-                        pb.inc(1);
-                        Some(fetched.post)
+                    let result = match client.get_post_by_id(post_id).await {
+                        Ok(fetched) => {
+                            pb.inc(1);
+                            Some(fetched.post)
+                        }
+                        Err(e) => {
+                            pb.inc(1);
+                            let err_msg = format!("Failed to fetch post {}: {}", post_id, e);
+                            warn!("{}", err_msg);
+                            pb.println(err_msg);
+                            None
+                        }
+                    };
+
+                    let pos = pb.position();
+                    let len = pb.length().unwrap_or(0);
+                    if pos % 10 == 0 || pos == len {
+                        pb.set_message(format!("Fetching posts... ({}/{})", pos, len));
                     }
-                    Err(e) => {
-                        pb.inc(1);
-                        pb.println(format!("Failed to fetch post {}: {}", post_id, e));
-                        None
-                    }
-                };
 
-                let pos = pb.position();
-                let len = pb.length().unwrap_or(0);
-                if pos.is_multiple_of(10) || pos == len {
-                    pb.set_message(format!("Fetching posts... ({}/{})", pos, len));
-                }
-
-                result
+                    result
+                })
             })
-        });
+            .collect();
 
-        let mut all_fetched_posts = Vec::new();
+        let mut all_fetched_posts = Vec::with_capacity(total_count);
+
         for task in tasks {
             match task.await {
                 Ok(Some(post)) => all_fetched_posts.push(post),
                 Ok(None) => {}
                 Err(e) => {
+                    warn!("Task failed: {}", e);
                     pb_arc.println(format!("Task failed: {}", e));
                 }
             }
@@ -532,44 +588,83 @@ impl E6Ui {
             total_count
         ));
 
+        if all_fetched_posts.is_empty() {
+            bail!("Failed to fetch any posts");
+        }
+
         Ok(all_fetched_posts)
     }
 
+    /// make a progress bar for fetching
+    fn create_fetch_progress_bar(&self, total: usize) -> Result<ProgressBar> {
+        let pb = ProgressBar::new(total as u64);
+        pb.set_style(
+            ProgressStyle::with_template(
+                "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
+                 {pos}/{len} ({percent}%) {msg}",
+            )
+            .context("Failed to create fetch progress bar template")?
+            .with_key(
+                "eta",
+                |state: &indicatif::ProgressState, w: &mut dyn std::fmt::Write| {
+                    write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap_or(())
+                },
+            )
+            .progress_chars("━╸─"),
+        );
+        pb.set_message("Fetching posts...");
+        pb.enable_steady_tick(Duration::from_millis(100));
+        Ok(pb)
+    }
+
+    /// get the limit of posts to return
     fn get_post_limit(&self) -> Result<u64> {
-        let settings = E62Rs::get()?;
+        let default_limit = getopt!(results_limit);
 
-        if settings.post_count.eq(&32) {
-            let prompt = Input::new("How many posts to return?")
+        if default_limit == 32 {
+            let input = Input::new("How many posts to return?")
                 .validation(|input| {
-                    for c in input.chars() {
-                        if !c.is_numeric() {
-                            return Err("Please enter a valid number");
-                        }
+                    if input.trim().is_empty() {
+                        return Ok(());
                     }
-
-                    Ok(())
+                    match input.parse::<u64>() {
+                        Ok(n) if n > 0 => Ok(()),
+                        Ok(_) => Err("Please enter a positive number"),
+                        Err(_) => Err("Please enter a valid number"),
+                    }
                 })
-                .default_value(32.to_string())
+                .placeholder("32")
                 .theme(&ROSE_PINE)
-                .run()?
-                .parse::<u64>();
+                .run()
+                .context("Failed to get post limit input")?;
 
-            Ok(prompt.unwrap_or(32))
+            let trimmed = input.trim();
+            if trimmed.is_empty() {
+                return Ok(32);
+            }
+
+            trimmed.parse::<u64>().context("Failed to parse post limit")
         } else {
-            Ok(settings.post_count)
+            Ok(default_limit)
         }
     }
 
-    fn ask_retry(&self) -> Result<bool> {
-        Confirm::new("Would you like to perform another search?")
+    /// ask whether to continue
+    fn ask_continue(&self, message: &str) -> Result<bool> {
+        Confirm::new(message)
             .affirmative("Yes")
             .negative("No")
             .theme(&ROSE_PINE)
             .run()
-            .map_err(|e| color_eyre::Report::new(e))
+            .context("Failed to get user confirmation")
     }
 
+    /// select a post from a list of posts
     fn select_post<'a>(&self, posts: &'a [E6Post]) -> Result<Option<&'a E6Post>> {
+        if posts.is_empty() {
+            return Ok(None);
+        }
+
         let options: Vec<String> = posts
             .iter()
             .map(|post| {
@@ -580,24 +675,23 @@ impl E6Ui {
             })
             .collect();
 
-        let selection = Some(
-            Select::new("Select a post to view:")
-                .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
-                .theme(&ROSE_PINE)
-                .run()?,
-        );
+        let selection = Select::new("Select a post to view:")
+            .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
+            .theme(&ROSE_PINE)
+            .run()
+            .context("Failed to get post selection")?;
 
-        Ok(selection.and_then(|s| {
-            let index = posts.iter().position(|p| {
-                &format!(
-                    "ID: {} | Score: {} | Rating: {}",
-                    p.id, p.score.total, p.rating
-                ) == s
-            });
-            index.map(|i| &posts[i])
-        }))
+        let index = posts.iter().position(|p| {
+            &format!(
+                "ID: {} | Score: {} | Rating: {}",
+                p.id, p.score.total, p.rating
+            ) == selection
+        });
+
+        Ok(index.map(|i| &posts[i]))
     }
 
+    /// display a pools info
     pub fn display_pool(&self, pool: &E6Pool) {
         println!("\n{}", "=".repeat(70));
         println!("Pool: {}", pool.name);

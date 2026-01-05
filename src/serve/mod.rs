@@ -1,4 +1,4 @@
-pub mod api;
+//! the browser frontend service
 pub mod cfg;
 pub mod media;
 pub mod routes;

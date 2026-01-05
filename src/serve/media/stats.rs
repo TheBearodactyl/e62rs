@@ -1,20 +1,33 @@
-use {serde::Serialize, std::collections::HashMap};
+//! media statistics stuff
+use {
+    crate::serve::media::{item::MediaItem, types::MediaType},
+    hashbrown::{HashMap, HashSet},
+    serde::Serialize,
+};
 
-use crate::serve::media::{item::MediaItem, types::MediaType};
-
+/// filter stats
 #[derive(Debug, Default, Serialize)]
 pub struct FilterStats {
+    /// total number of images
     pub total_images: usize,
+    /// total number of videos
     pub total_videos: usize,
+    /// the number of safe items
     pub safe_count: usize,
+    /// the number of questionable items
     pub questionable_count: usize,
+    /// the number of explicit items
     pub explicit_count: usize,
-    pub unique_artists: std::collections::HashSet<String>,
-    pub unique_tags: std::collections::HashSet<String>,
+    /// a list of unique artists
+    pub unique_artists: HashSet<String>,
+    /// a list of unique tags
+    pub unique_tags: HashSet<String>,
+    /// a list of extensions
     pub extensions: HashMap<String, usize>,
 }
 
 impl FilterStats {
+    /// make filter stats based on an array of media items
     pub fn from_items(items: &[MediaItem]) -> Self {
         let mut stats = Self::default();
 

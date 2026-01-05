@@ -1,79 +1,84 @@
+//! reorganization stuff
 use {
     crate::{
-        config::options::E62Rs,
+        config::format::FormatTemplate,
+        getopt,
         models::E6Post,
-        ui::{E6Ui, ROSE_PINE, progress::ProgressManager},
+        ui::{E6Ui, progress::ProgressManager, themes::ROSE_PINE},
     },
     color_eyre::eyre::{Context, Result, bail},
     demand::{Confirm, DemandOption, Input, Select},
+    hashbrown::HashMap,
+    smart_default::SmartDefault,
     std::{
         fs::{self, OpenOptions},
         io::Read,
         path::{Path, PathBuf},
         sync::Arc,
     },
-    tracing::*,
+    tracing::{debug, warn},
     url::Url,
 };
 
 #[derive(Debug, Clone, Copy)]
+/// methods for conflict resolution
 pub enum ConflictResolution {
+    /// skip conflicts
     Skip,
+    /// overwrite conflicts
     Overwrite,
+    /// auto-rename to bypass conflicts
     AutoRename,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SmartDefault)]
+/// options for reorganization
 pub struct ReorganizeOptions {
+    #[default(false)]
+    /// whether to just do a dry-run (only show what would change)
     pub dry_run: bool,
+
+    #[default(ConflictResolution::Skip)]
+    /// the conflict resolution method
     pub conflict_resolution: ConflictResolution,
+
+    #[default(None)]
+    /// the output format to use
     pub output_format: Option<String>,
 }
 
-impl Default for ReorganizeOptions {
-    fn default() -> Self {
-        Self {
-            dry_run: false,
-            conflict_resolution: ConflictResolution::Skip,
-            output_format: None,
-        }
-    }
-}
-
 #[derive(Debug)]
+/// the results of running a reorganization
 pub struct ReorganizeResult {
+    /// total files moved
     pub total_files: usize,
+    /// total successful moves
     pub successful: usize,
+    /// total skipped moves
     pub skipped: usize,
+    /// total failed moves
     pub failed: usize,
+    /// errors
     pub errors: Vec<(PathBuf, String)>,
 }
 
 #[derive(Default)]
+/// the reorganizer
 pub struct FileReorganizer {
+    /// the progress bar manager
     progress_manager: Arc<ProgressManager>,
 }
 
 impl FileReorganizer {
+    /// make a new reorganizer
     pub fn new() -> Self {
         Self {
             progress_manager: Arc::new(ProgressManager::new()),
         }
     }
 
-    fn read_metadata(&self, file_path: &Path) -> Result<E6Post> {
-        #[cfg(target_os = "windows")]
-        {
-            self.read_metadata_from_ads(file_path)
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            self.read_metadata_from_json(file_path)
-        }
-    }
-
     #[cfg(target_os = "windows")]
+    /// read file metadata into an E6Post
     fn read_metadata_from_ads(&self, file_path: &Path) -> Result<E6Post> {
         let ads_path = format!("{}:metadata", file_path.display());
 
@@ -91,6 +96,7 @@ impl FileReorganizer {
     }
 
     #[cfg(not(target_os = "windows"))]
+    /// read file metadata into an E6Post
     fn read_metadata_from_json(&self, file_path: &Path) -> Result<E6Post> {
         let json_path = file_path.with_extension(format!(
             "{}.json",
@@ -98,7 +104,7 @@ impl FileReorganizer {
         ));
 
         if !json_path.exists() {
-            anyhow::bail!("Metadata file not found: {}", json_path.display());
+            bail!("Metadata file not found: {}", json_path.display());
         }
 
         let contents = fs::read_to_string(&json_path)
@@ -108,6 +114,7 @@ impl FileReorganizer {
             .with_context(|| format!("Failed to parse metadata for {}", file_path.display()))
     }
 
+    /// search a directory for any files with valid metadata
     pub fn find_files_with_metadata(&self, directory: &Path) -> Result<Vec<PathBuf>> {
         let mut files_with_metadata = Vec::new();
 
@@ -146,6 +153,7 @@ impl FileReorganizer {
         Ok(files_with_metadata)
     }
 
+    /// recursively find files
     pub fn find_files_recursive(&self, directory: &Path) -> Result<Vec<PathBuf>> {
         let mut all_files = Vec::new();
 
@@ -157,6 +165,7 @@ impl FileReorganizer {
         Ok(all_files)
     }
 
+    /// recursively find files (internal)
     fn find_files_recursive_impl(&self, directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
         for entry in fs::read_dir(directory)
             .with_context(|| format!("Failed to read directory {}", directory.display()))?
@@ -191,122 +200,33 @@ impl FileReorganizer {
         Ok(())
     }
 
-    fn format_filename(&self, post: &E6Post, out_fmt: &str) -> Result<String> {
+    /// read a file into an E6Post (cross-plat)
+    fn read_metadata(&self, file_path: &Path) -> Result<E6Post> {
+        #[cfg(target_os = "windows")]
+        {
+            self.read_metadata_from_ads(file_path)
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            self.read_metadata_from_json(file_path)
+        }
+    }
+
+    /// build placeholder context from post metadata
+    fn build_post_context(
+        &self,
+        post: &E6Post,
+    ) -> (HashMap<String, String>, HashMap<String, Vec<String>>) {
+        let mut simple = HashMap::new();
+        let mut arrays = HashMap::new();
+
         let artist = post
             .tags
             .artist
             .first()
             .map(|s| s.as_str())
             .unwrap_or("unknown");
-
-        let tags_re = regex::Regex::new(r"\$tags\[(\d+)\]").unwrap();
-        let artists_re = regex::Regex::new(r"\$artists\[(\d+)\]").unwrap();
-        let characters_re = regex::Regex::new(r"\$characters\[(\d+)\]").unwrap();
-        let species_re = regex::Regex::new(r"\$species\[(\d+)\]").unwrap();
-        let copyright_re = regex::Regex::new(r"\$copyright\[(\d+)\]").unwrap();
-        let sources_re = regex::Regex::new(r"\$sources\[(\d+)\]").unwrap();
-
-        let mut formatted = out_fmt.to_string();
-
-        for cap in tags_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_tags) = num_match.as_str().parse::<usize>()
-            {
-                let tags = post
-                    .tags
-                    .general
-                    .iter()
-                    .take(num_tags)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &tags);
-            }
-        }
-
-        for cap in artists_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_artists) = num_match.as_str().parse::<usize>()
-            {
-                let artists = post
-                    .tags
-                    .artist
-                    .iter()
-                    .take(num_artists)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &artists);
-            }
-        }
-
-        for cap in characters_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_chars) = num_match.as_str().parse::<usize>()
-            {
-                let characters = post
-                    .tags
-                    .character
-                    .iter()
-                    .take(num_chars)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &characters);
-            }
-        }
-
-        for cap in species_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_species) = num_match.as_str().parse::<usize>()
-            {
-                let species = post
-                    .tags
-                    .species
-                    .iter()
-                    .take(num_species)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &species);
-            }
-        }
-
-        for cap in copyright_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_copyright) = num_match.as_str().parse::<usize>()
-            {
-                let copyright = post
-                    .tags
-                    .copyright
-                    .iter()
-                    .take(num_copyright)
-                    .cloned()
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &copyright);
-            }
-        }
-
-        for cap in sources_re.captures_iter(out_fmt) {
-            if let Some(num_match) = cap.get(1)
-                && let Ok(num_sources) = num_match.as_str().parse::<usize>()
-            {
-                let sources = post
-                    .sources
-                    .iter()
-                    .take(num_sources)
-                    .map(|source| {
-                        Url::parse(source)
-                            .ok()
-                            .and_then(|u| u.domain().map(String::from))
-                            .unwrap_or_else(|| "unknown".to_string())
-                    })
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                formatted = formatted.replace(&cap[0], &sources);
-            }
-        }
 
         let aspect_ratio = if post.file.height > 0 {
             post.file.width as f64 / post.file.height as f64
@@ -422,115 +342,170 @@ impl FileReorganizer {
             .map(|id| id.to_string())
             .collect::<Vec<_>>()
             .join(",");
+
         let approver_id = post
             .approver_id
             .map(|id| id.to_string())
             .unwrap_or_else(|| "none".to_string());
 
-        let formatted = formatted
-            .replace("$id", &post.id.to_string())
-            .replace("$rating", rating_full)
-            .replace("$rating_first", &rating_first)
-            .replace("$score", &post.score.total.to_string())
-            .replace("$score_up", &post.score.up.to_string())
-            .replace("$score_down", &post.score.down.to_string())
-            .replace("$fav_count", &post.fav_count.to_string())
-            .replace("$comment_count", &post.comment_count.to_string())
-            .replace("$md5", &post.file.md5)
-            .replace("$ext", &post.file.ext)
-            .replace("$width", &post.file.width.to_string())
-            .replace("$height", &post.file.height.to_string())
-            .replace("$aspect_ratio", &format!("{:.2}", aspect_ratio))
-            .replace("$orientation", orientation)
-            .replace("$resolution", resolution)
-            .replace("$megapixels", &format!("{:.1}", megapixels))
-            .replace("$size", &post.file.size.to_string())
-            .replace("$size_mb", &format!("{:.2}", size_mb))
-            .replace("$size_kb", &format!("{:.2}", size_kb))
-            .replace("$artist", artist)
-            .replace("$artist_count", &post.tags.artist.len().to_string())
-            .replace("$tag_count", &tag_count.to_string())
-            .replace("$tag_count_general", &post.tags.general.len().to_string())
-            .replace(
-                "$tag_count_character",
-                &post.tags.character.len().to_string(),
-            )
-            .replace("$tag_count_species", &post.tags.species.len().to_string())
-            .replace(
-                "$tag_count_copyright",
-                &post.tags.copyright.len().to_string(),
-            )
-            .replace("$pool_ids", &pool_ids)
-            .replace("$pool_count", &post.pools.len().to_string())
-            .replace("$uploader", &post.uploader_name)
-            .replace("$uploader_id", &post.uploader_id.to_string())
-            .replace("$approver_id", &approver_id)
-            .replace(
-                "$has_children",
-                if post.relationships.has_children {
-                    "yes"
-                } else {
-                    "no"
-                },
-            )
-            .replace(
-                "$parent_id",
-                &post
-                    .relationships
-                    .parent_id
-                    .map(|id| id.to_string())
-                    .unwrap_or_else(|| "none".to_string()),
-            )
-            .replace("$year", &year)
-            .replace("$month", &month)
-            .replace("$day", &day)
-            .replace("$hour", &hour)
-            .replace("$minute", &minute)
-            .replace("$second", &second)
-            .replace("$date", &format!("{}-{}-{}", year, month, day))
-            .replace("$time", &format!("{}-{}-{}", hour, minute, second))
-            .replace(
-                "$datetime",
-                &format!("{}-{}-{} {}-{}-{}", year, month, day, hour, minute, second),
-            )
-            .replace("$timestamp", &timestamp)
-            .replace("$year_updated", &year_updated)
-            .replace("$month_updated", &month_updated)
-            .replace("$day_updated", &day_updated)
-            .replace(
-                "$date_updated",
-                &format!("{}-{}-{}", year_updated, month_updated, day_updated),
-            )
-            .replace("$now_year", &now.format("%Y").to_string())
-            .replace("$now_month", &now.format("%m").to_string())
-            .replace("$now_day", &now.format("%d").to_string())
-            .replace("$now_hour", &now.format("%H").to_string())
-            .replace("$now_minute", &now.format("%M").to_string())
-            .replace("$now_second", &now.format("%S").to_string())
-            .replace("$now_date", &now.format("%Y-%m-%d").to_string())
-            .replace("$now_time", &now.format("%H-%M-%S").to_string())
-            .replace(
-                "$now_datetime",
-                &now.format("%Y-%m-%d %H-%M-%S").to_string(),
-            )
-            .replace("$now_timestamp", &now.timestamp().to_string())
-            .replace("$is_pending", if post.flags.pending { "yes" } else { "no" })
-            .replace("$is_flagged", if post.flags.flagged { "yes" } else { "no" })
-            .replace("$is_deleted", if post.flags.deleted { "yes" } else { "no" })
-            .replace("$has_notes", if post.has_notes { "yes" } else { "no" })
-            .replace(
-                "$duration",
-                &post
-                    .duration
-                    .map(|d| d.to_string())
-                    .unwrap_or_else(|| "0".to_string()),
-            )
-            .replace("$duration_formatted", &duration_formatted)
-            .replace("$file_type", file_type);
+        // Simple placeholders
+        simple.insert("id".to_string(), post.id.to_string());
+        simple.insert("rating".to_string(), rating_full.to_string());
+        simple.insert("rating_first".to_string(), rating_first);
+        simple.insert("score".to_string(), post.score.total.to_string());
+        simple.insert("score_up".to_string(), post.score.up.to_string());
+        simple.insert("score_down".to_string(), post.score.down.to_string());
+        simple.insert("fav_count".to_string(), post.fav_count.to_string());
+        simple.insert("comment_count".to_string(), post.comment_count.to_string());
+        simple.insert("md5".to_string(), post.file.md5.clone());
+        simple.insert("ext".to_string(), post.file.ext.clone());
+        simple.insert("width".to_string(), post.file.width.to_string());
+        simple.insert("height".to_string(), post.file.height.to_string());
+        simple.insert("aspect_ratio".to_string(), format!("{:.2}", aspect_ratio));
+        simple.insert("orientation".to_string(), orientation.to_string());
+        simple.insert("resolution".to_string(), resolution.to_string());
+        simple.insert("megapixels".to_string(), format!("{:.1}", megapixels));
+        simple.insert("size".to_string(), post.file.size.to_string());
+        simple.insert("size_mb".to_string(), format!("{:.2}", size_mb));
+        simple.insert("size_kb".to_string(), format!("{:.2}", size_kb));
+        simple.insert("artist".to_string(), artist.to_string());
+        simple.insert(
+            "artist_count".to_string(),
+            post.tags.artist.len().to_string(),
+        );
+        simple.insert("tag_count".to_string(), tag_count.to_string());
+        simple.insert(
+            "tag_count_general".to_string(),
+            post.tags.general.len().to_string(),
+        );
+        simple.insert(
+            "tag_count_character".to_string(),
+            post.tags.character.len().to_string(),
+        );
+        simple.insert(
+            "tag_count_species".to_string(),
+            post.tags.species.len().to_string(),
+        );
+        simple.insert(
+            "tag_count_copyright".to_string(),
+            post.tags.copyright.len().to_string(),
+        );
+        simple.insert("pool_ids".to_string(), pool_ids);
+        simple.insert("pool_count".to_string(), post.pools.len().to_string());
+        simple.insert("uploader".to_string(), post.uploader_name.clone());
+        simple.insert("uploader_id".to_string(), post.uploader_id.to_string());
+        simple.insert("approver_id".to_string(), approver_id);
+        simple.insert(
+            "has_children".to_string(),
+            if post.relationships.has_children {
+                "yes"
+            } else {
+                "no"
+            }
+            .to_string(),
+        );
+        simple.insert(
+            "parent_id".to_string(),
+            post.relationships
+                .parent_id
+                .map(|id| id.to_string())
+                .unwrap_or_else(|| "none".to_string()),
+        );
+        simple.insert("year".to_string(), year.clone());
+        simple.insert("month".to_string(), month.clone());
+        simple.insert("day".to_string(), day.clone());
+        simple.insert("hour".to_string(), hour.clone());
+        simple.insert("minute".to_string(), minute.clone());
+        simple.insert("second".to_string(), second.clone());
+        simple.insert("date".to_string(), format!("{}-{}-{}", year, month, day));
+        simple.insert(
+            "time".to_string(),
+            format!("{}-{}-{}", hour, minute, second),
+        );
+        simple.insert(
+            "datetime".to_string(),
+            format!("{}-{}-{} {}-{}-{}", year, month, day, hour, minute, second),
+        );
+        simple.insert("timestamp".to_string(), timestamp);
+        simple.insert("year_updated".to_string(), year_updated.clone());
+        simple.insert("month_updated".to_string(), month_updated.clone());
+        simple.insert("day_updated".to_string(), day_updated.clone());
+        simple.insert(
+            "date_updated".to_string(),
+            format!("{}-{}-{}", year_updated, month_updated, day_updated),
+        );
+        simple.insert("now_year".to_string(), now.format("%Y").to_string());
+        simple.insert("now_month".to_string(), now.format("%m").to_string());
+        simple.insert("now_day".to_string(), now.format("%d").to_string());
+        simple.insert("now_hour".to_string(), now.format("%H").to_string());
+        simple.insert("now_minute".to_string(), now.format("%M").to_string());
+        simple.insert("now_second".to_string(), now.format("%S").to_string());
+        simple.insert("now_date".to_string(), now.format("%Y-%m-%d").to_string());
+        simple.insert("now_time".to_string(), now.format("%H-%M-%S").to_string());
+        simple.insert(
+            "now_datetime".to_string(),
+            now.format("%Y-%m-%d %H-%M-%S").to_string(),
+        );
+        simple.insert("now_timestamp".to_string(), now.timestamp().to_string());
+        simple.insert(
+            "is_pending".to_string(),
+            if post.flags.pending { "yes" } else { "no" }.to_string(),
+        );
+        simple.insert(
+            "is_flagged".to_string(),
+            if post.flags.flagged { "yes" } else { "no" }.to_string(),
+        );
+        simple.insert(
+            "is_deleted".to_string(),
+            if post.flags.deleted { "yes" } else { "no" }.to_string(),
+        );
+        simple.insert(
+            "has_notes".to_string(),
+            if post.has_notes { "yes" } else { "no" }.to_string(),
+        );
+        simple.insert(
+            "duration".to_string(),
+            post.duration
+                .map(|d| d.to_string())
+                .unwrap_or_else(|| "0".to_string()),
+        );
+        simple.insert("duration_formatted".to_string(), duration_formatted);
+        simple.insert("file_type".to_string(), file_type.to_string());
 
-        Ok(formatted)
+        arrays.insert("tags".to_string(), post.tags.general.clone());
+        arrays.insert("artists".to_string(), post.tags.artist.clone());
+        arrays.insert("characters".to_string(), post.tags.character.clone());
+        arrays.insert("species".to_string(), post.tags.species.clone());
+        arrays.insert("copyright".to_string(), post.tags.copyright.clone());
+        arrays.insert(
+            "sources".to_string(),
+            post.sources
+                .iter()
+                .map(|source| {
+                    Url::parse(source)
+                        .ok()
+                        .and_then(|u| u.domain().map(String::from))
+                        .unwrap_or_else(|| "unknown".to_string())
+                })
+                .collect(),
+        );
+
+        (simple, arrays)
     }
 
+    /// format a filename based on a format template
+    fn format_filename(&self, post: &E6Post, out_fmt: &str) -> Result<String> {
+        let template = FormatTemplate::parse(out_fmt)
+            .with_context(|| format!("Failed to parse output format: {}", out_fmt))?;
+
+        let (simple_ctx, array_ctx) = self.build_post_context(post);
+
+        template
+            .render_with_arrays(&simple_ctx, &array_ctx)
+            .with_context(|| format!("Failed to render filename for post {}", post.id))
+    }
+
+    /// move a file based on its metadata
     fn move_file_with_metadata(
         &self,
         old_path: &Path,
@@ -570,8 +545,6 @@ impl FileReorganizer {
 
         #[cfg(target_os = "windows")]
         {
-            use std::fs::OpenOptions;
-
             let new_ads_path = format!("{}:metadata", final_path.display());
             if OpenOptions::new().read(true).open(&new_ads_path).is_err() {
                 warn!(
@@ -597,7 +570,7 @@ impl FileReorganizer {
             ));
 
             if old_json.exists() {
-                if let Err(_) = fs::rename(&old_json, &new_json) {
+                if fs::rename(&old_json, &new_json).is_err() {
                     fs::copy(&old_json, &new_json)?;
                     fs::remove_file(&old_json)?;
                 }
@@ -607,6 +580,7 @@ impl FileReorganizer {
         Ok(final_path)
     }
 
+    /// find a unique path using incrementation
     fn find_unique_path(&self, path: &Path) -> Result<PathBuf> {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
         let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
@@ -628,6 +602,7 @@ impl FileReorganizer {
         bail!("Could not find unique filename for {}", path.display())
     }
 
+    /// reorganize a directory
     pub async fn reorganize_directory(
         &self,
         directory: &Path,
@@ -653,10 +628,9 @@ impl FileReorganizer {
 
         println!("Found {} files with metadata", files.len());
 
-        let cfg = E62Rs::get()?;
-        let dl_cfg = cfg.download;
-        let output_format = options.clone().output_format;
-        let download_dir = dl_cfg.download_dir;
+        let download_dir: String = getopt!(download.path);
+        let default_format: String = getopt!(download.format);
+        let output_format = options.output_format.clone().unwrap_or(default_format);
         let base_path = Path::new(&download_dir);
 
         let pb = self
@@ -675,20 +649,14 @@ impl FileReorganizer {
         for file_path in files {
             pb.set_message(format!("Processing {}", file_path.display()));
 
-            match self.process_file(
-                &file_path,
-                base_path,
-                output_format
-                    .clone()
-                    .unwrap_or("$id.$ext".to_owned())
-                    .as_str(),
-                &options,
-            ) {
+            match self.process_file(&file_path, base_path, &output_format, &options) {
                 Ok(_) => {
                     result.successful += 1;
                 }
                 Err(e) => {
-                    if e.to_string().contains("already exists") {
+                    if e.to_string().contains("already exists")
+                        || e.to_string().contains("already in correct location")
+                    {
                         result.skipped += 1;
                         debug!("Skipped {}: {}", file_path.display(), e);
                     } else {
@@ -710,6 +678,7 @@ impl FileReorganizer {
         Ok(result)
     }
 
+    /// process and move a file
     fn process_file(
         &self,
         file_path: &Path,
@@ -734,14 +703,14 @@ impl FileReorganizer {
 }
 
 impl E6Ui {
+    /// downloads reorganizer
     pub async fn reorganize_downloads(&self) -> Result<()> {
         println!("\n=== Downloads Reorganizer ===\n");
         println!("This will reorganize your downloaded files based on the current output format.");
         println!("Files will be moved to match the format specified in your config.\n");
 
-        let cfg = E62Rs::get()?;
-        let dl_cfg = cfg.download;
-        let download_dir = dl_cfg.download_dir;
+        let download_dir: String = getopt!(download.path);
+        let default_format: String = getopt!(download.format);
 
         let directory = Input::new("Enter directory to reorganize:")
             .theme(&ROSE_PINE)
@@ -768,7 +737,7 @@ impl E6Ui {
         let output_format = if !use_current_format {
             Some(
                 Input::new("Enter output format:")
-                    .default_value(dl_cfg.output_format.as_str())
+                    .default_value(&default_format)
                     .theme(&ROSE_PINE)
                     .run()?,
             )

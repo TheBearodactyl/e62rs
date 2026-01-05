@@ -1,26 +1,29 @@
+//! media scanning stuff
 use {
-    crate::{
-        models::E6Post,
-        serve::media::{item::MediaItem, metadata::PostMetadata, types::MediaType},
-    },
+    crate::serve::media::{item::MediaItem, metadata::PostMetadata, types::MediaType},
     jwalk::WalkDir,
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
-    serde_json::Value,
-    std::path::Path,
+    std::{fs::OpenOptions, io::Read, path::Path},
     tracing::info,
 };
 
+/// a media scanner
 #[async_trait::async_trait]
 pub trait MediaScanner: Send + Sync {
-    async fn scan(&self, directory: &Path) -> Result<Vec<MediaItem>, std::io::Error>;
+    /// scan a directory
+    async fn scan(&self, dir: &Path) -> Result<Vec<MediaItem>, std::io::Error>;
 }
 
-pub struct FileSystemScanner {
+/// a filesystem scanner
+pub struct FsScanner {
+    /// whether to load post metadata
     load_metadata: bool,
+    /// how many threads to load with
     num_threads: usize,
 }
 
-impl FileSystemScanner {
+impl FsScanner {
+    /// make a new filesystem scanner
     pub fn new(load_metadata: bool) -> Self {
         Self {
             load_metadata,
@@ -28,6 +31,7 @@ impl FileSystemScanner {
         }
     }
 
+    /// make a new filesystem scanner with a custom thread count
     pub fn with_threads(load_metadata: bool, num_threads: usize) -> Self {
         Self {
             load_metadata,
@@ -35,9 +39,8 @@ impl FileSystemScanner {
         }
     }
 
+    /// read a files metadata from JSON
     fn read_metadata_from_json(&self, file_path: &Path) -> Option<PostMetadata> {
-        use std::fs;
-
         let json_path = file_path.with_extension(format!(
             "{}.json",
             file_path.extension().and_then(|e| e.to_str()).unwrap_or("")
@@ -47,14 +50,13 @@ impl FileSystemScanner {
             return None;
         }
 
-        let contents = fs::read_to_string(&json_path).ok()?;
+        let contents = std::fs::read_to_string(&json_path).ok()?;
         self.parse_metadata(&contents)
     }
 
+    /// read a files metadata from an NTFS ADS stream
     #[cfg(target_os = "windows")]
     fn read_metadata_from_ads(&self, file_path: &Path) -> Option<PostMetadata> {
-        use std::{fs::OpenOptions, io::Read};
-
         let ads_path = format!("{}:metadata", file_path.display());
         let mut file = OpenOptions::new().read(true).open(&ads_path).ok()?;
 
@@ -64,8 +66,9 @@ impl FileSystemScanner {
         self.parse_metadata(&contents)
     }
 
+    /// parse a JSON string into PostMetadata
     fn parse_metadata(&self, contents: &str) -> Option<PostMetadata> {
-        let post: E6Post = serde_json::from_str(contents).ok()?;
+        let post = serde_json::from_str::<crate::models::E6Post>(contents).ok()?;
 
         Some(PostMetadata {
             id: post.id,
@@ -80,29 +83,16 @@ impl FileSystemScanner {
             pools: post.pools,
         })
     }
-
-    fn read_metadata(&self, file_path: &Path) -> Option<PostMetadata> {
-        #[cfg(target_os = "windows")]
-        {
-            self.read_metadata_from_ads(file_path)
-                .or_else(|| self.read_metadata_from_json(file_path))
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            self.read_metadata_from_json(file_path)
-        }
-    }
 }
 
-impl Default for FileSystemScanner {
+impl Default for FsScanner {
     fn default() -> Self {
         Self::new(true)
     }
 }
 
 #[async_trait::async_trait]
-impl MediaScanner for FileSystemScanner {
+impl MediaScanner for FsScanner {
     async fn scan(&self, directory: &Path) -> Result<Vec<MediaItem>, std::io::Error> {
         let directory = directory.to_path_buf();
         let load_meta = self.load_metadata;
@@ -150,8 +140,9 @@ impl MediaScanner for FileSystemScanner {
     }
 }
 
-impl FileSystemScanner {
+impl FsScanner {
     #[cfg(target_os = "windows")]
+    /// read a files metadata into a PostMetadata
     fn read_metadata_static(file_path: &Path) -> Option<PostMetadata> {
         let scanner = Self::new(true);
         scanner
@@ -160,6 +151,7 @@ impl FileSystemScanner {
     }
 
     #[cfg(not(target_os = "windows"))]
+    /// read a files metadata into a PostMetadata
     fn read_metadata_static(file_path: &Path) -> Option<PostMetadata> {
         let scanner = Self::new(true);
         scanner.read_metadata_from_json(file_path)

@@ -1,10 +1,11 @@
+//! media gallery stuff
 use {
     crate::{
-        config::options::E62Rs,
+        getopt,
         serve::media::{
             filter::MediaFilter,
             item::MediaItem,
-            scanner::{FileSystemScanner, MediaScanner},
+            scanner::{FsScanner, MediaScanner},
             stats::FilterStats,
             types::MediaType,
         },
@@ -12,26 +13,30 @@ use {
     std::path::{Path, PathBuf},
 };
 
+/// the media gallery
 pub struct MediaGallery {
+    /// the media scanner
     scanner: Box<dyn MediaScanner>,
+    /// the directory to make a gallery from
     directory: PathBuf,
+    /// the cached items
     cached_items: Option<Vec<MediaItem>>,
 }
 
 impl MediaGallery {
+    /// initialize the media gallery
     pub fn new(directory: PathBuf, load_metadata: bool) -> Self {
-        let gallery_cfg = E62Rs::get_unsafe().gallery;
-
         Self {
-            scanner: Box::new(FileSystemScanner::with_threads(
+            scanner: Box::new(FsScanner::with_threads(
                 load_metadata,
-                gallery_cfg.load_threads,
+                getopt!(gallery.load_threads),
             )),
             directory,
             cached_items: None,
         }
     }
 
+    /// initialize the media gallery with a custom scanner
     pub fn with_scanner(directory: PathBuf, scanner: Box<dyn MediaScanner>) -> Self {
         Self {
             scanner,
@@ -40,32 +45,37 @@ impl MediaGallery {
         }
     }
 
+    /// get all media items
     pub async fn get_items(&mut self) -> Result<&[MediaItem], std::io::Error> {
         if self.cached_items.is_none() {
             let items = self.scanner.scan(&self.directory).await?;
             self.cached_items = Some(items);
         }
+
         Ok(self.cached_items.as_ref().unwrap())
     }
 
+    /// get all media items with the given filters applied
     pub async fn get_filtered_items(
         &mut self,
         filter: &MediaFilter,
     ) -> Result<Vec<MediaItem>, std::io::Error> {
-        let items = self.get_items().await?;
-        Ok(items
+        Ok(self
+            .get_items()
+            .await?
             .iter()
             .filter(|item| filter.matches(item))
             .cloned()
             .collect())
     }
 
+    /// refresh the gallery
     pub async fn refresh(&mut self) -> Result<&[MediaItem], std::io::Error> {
-        let items = self.scanner.scan(&self.directory).await?;
-        self.cached_items = Some(items);
+        self.cached_items = Some(self.scanner.scan(&self.directory).await?);
         Ok(self.cached_items.as_ref().unwrap())
     }
 
+    /// filter media items by type
     pub fn filter_by_type(&self, media_type: &MediaType) -> Vec<MediaItem> {
         self.cached_items
             .as_ref()
@@ -79,6 +89,7 @@ impl MediaGallery {
             .unwrap_or_default()
     }
 
+    /// search all media items based on a given query
     pub fn search(&self, query: &str) -> Vec<MediaItem> {
         self.cached_items
             .as_ref()
@@ -92,12 +103,13 @@ impl MediaGallery {
             .unwrap_or_default()
     }
 
+    /// get the directory being used for the gallery
     pub fn directory(&self) -> &Path {
         &self.directory
     }
 
+    /// get the filter stats of the current loaded items
     pub fn get_filter_stats(&self) -> FilterStats {
-        let items = self.cached_items.as_deref().unwrap_or(&[]);
-        FilterStats::from_items(items)
+        FilterStats::from_items(self.cached_items.as_deref().unwrap_or(&[]))
     }
 }

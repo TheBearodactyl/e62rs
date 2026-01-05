@@ -1,30 +1,43 @@
-use {crate::serve::media::item::MediaItem, serde::Deserialize};
+//! media filtering stuff
+use {crate::serve::media::item::MediaItem, rocket::FromForm, serde::Deserialize};
 
-#[derive(Debug, Clone, Deserialize)]
+/// a media filter
+#[derive(Debug, Clone, Deserialize, FromForm, Default)]
 pub struct MediaFilter {
     #[serde(default)]
+    /// filter by generic fuzzy search
     pub search: Option<String>,
     #[serde(default)]
+    /// filter by media type
     pub media_type: Option<String>,
     #[serde(default)]
+    /// filter by content rating
     pub rating: Option<String>,
     #[serde(default)]
+    /// filter by artist
     pub artist: Option<String>,
     #[serde(default)]
+    /// filter by tag
     pub tag: Option<String>,
     #[serde(default)]
+    /// filter by minimum score
     pub min_score: Option<i64>,
     #[serde(default)]
+    /// filter by maximum score
     pub max_score: Option<i64>,
     #[serde(default)]
+    /// filter by file extension
     pub extension: Option<String>,
     #[serde(default)]
+    /// filter by post id
     pub post_id: Option<i64>,
     #[serde(default)]
+    /// filter by pool id
     pub pool_id: Option<i64>,
 }
 
 impl MediaFilter {
+    /// return whether a media item matches the current filters
     pub fn matches(&self, item: &MediaItem) -> bool {
         if let Some(ref media_type_filter) = self.media_type
             && media_type_filter != item.media_type().as_str()
