@@ -32,6 +32,6 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 ## Code Stuff
 
 - [x] Refactor the whole thing into something that isn't held together with duct tape and a dream
-- Add unit tests and documentation for like... everything
+- [ ] Add unit tests and documentation for like... everything
   - [ ] Unit tests
   - [x] Documentation
