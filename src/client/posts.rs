@@ -146,7 +146,7 @@ impl E6Client {
             return Ok(posts);
         }
 
-        let concurrent_limit = getopt!(performance.concurrent_downloads);
+        let concurrent_limit = getopt!(download.threads);
         let semaphore = std::sync::Arc::new(Semaphore::new(concurrent_limit));
         let fetch_futures: Vec<_> = missing_ids
             .into_iter()

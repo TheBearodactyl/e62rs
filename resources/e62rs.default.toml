@@ -1,4 +1,3 @@
-post_count = 320
 base_url = "https://e621.net"
 blacklist = [
     "young",
@@ -20,10 +19,10 @@ pool_idle_timeout_secs = 90
 timeout_secs = 30
 connect_timeout_secs = 10
 max_connections = 15
-http2_prior_knowledge = true
+http2 = false
 tcp_keepalive = true
 tcp_keepalive_secs = 60
-user_agent = "e62rs/v0.8.1 (by bearodactyl on e621)"
+user_agent = "e62rs/v1.0.0 (by bearodactyl on e621)"
 
 [cache]
 enabled = true
@@ -34,7 +33,7 @@ max_size_mb = 500
 max_entries = 10000
 use_lru_policy = false
 enable_stats = true
-cleanup_interval_secs = 300
+cleanup_interval = 300
 enable_compression = false
 compression_level = 6
 
@@ -44,10 +43,9 @@ max_posts = 50000000
 wal = true
 page_size_kb = 4
 auto_compact = true
-compact_threshold_percent = 25
+compact_threshold = 25
 
 [performance]
-concurrent_downloads = 15
 prefetch_enabled = true
 prefetch_batch_size = 10
 preload_images = true
@@ -59,10 +57,10 @@ detailed_progress = true
 auto_clear_progress = true
 pagination_size = 20
 colored_output = true
-sfx = false
 progress_format = "MegaBytes"
 
 [search]
+results = 320
 min_posts_on_tag = 2
 min_posts_on_pool = 2
 show_inactive_pools = true
@@ -90,7 +88,9 @@ tags = true
 pools = true
 
 [download]
-download_dir = "downloads"
+path = "downloads"
+pools_path = "downloads/pools"
+threads = 15
 save_metadata = true
 format = "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
 
@@ -106,10 +106,10 @@ slideshow_delay = 5
 
 [gallery]
 enabled = true
-enable_metadata_filtering = true
+metadata_filtering = true
 port = 23794
 cache_metadata = true
-auto_open_browser = false
+auto_open = false
 load_threads = 8
 theme = "catppuccin-frappe"
 
@@ -120,4 +120,3 @@ format = "Pretty"
 asni = true
 event_targets = false
 line_numbers = false
-

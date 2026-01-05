@@ -160,7 +160,7 @@ impl E6Ui {
 
     /// get the max number of pools to display
     pub fn get_pool_limit(&self) -> Result<u64> {
-        let default_limit = getopt!(results_limit).min(getopt!(results_limit));
+        let default_limit = getopt!(search.results).min(getopt!(search.results));
 
         let input = Input::new("How many pools to return?")
             .validation(|input| {
@@ -378,11 +378,11 @@ impl E6Ui {
 
         while (all_fetched_posts.len() as u64) < total_limit && consecutive_empty_batches < 3 {
             let remaining = total_limit.saturating_sub(all_fetched_posts.len() as u64);
-            let current_limit = (remaining * 2).min(getopt!(results_limit)).max(20);
+            let current_limit = (remaining * 2).min(getopt!(search.results)).max(20);
 
             pb.set_message(format!(
                 "fetching batch {} ({} total so far)",
-                (all_fetched_posts.len() / getopt!(results_limit) as usize) + 1,
+                (all_fetched_posts.len() / getopt!(search.results) as usize) + 1,
                 all_fetched_posts.len()
             ));
 
@@ -619,7 +619,7 @@ impl E6Ui {
 
     /// get the limit of posts to return
     fn get_post_limit(&self) -> Result<u64> {
-        let default_limit = getopt!(results_limit);
+        let default_limit = getopt!(search.results);
 
         if default_limit == 32 {
             let input = Input::new("How many posts to return?")

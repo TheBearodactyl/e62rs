@@ -535,7 +535,7 @@ impl E6Ui {
     /// serve all downloaded files
     pub async fn serve_downloads(&self) -> Result<()> {
         let downloads_dir = getopt!(download.path);
-        let enable_metadata = getopt!(gallery.enable_metadata_filtering);
+        let enable_metadata = getopt!(gallery.metadata_filtering);
         let cache_metadata = getopt!(gallery.cache_metadata);
 
         let srv_cfg = ServerConfig::builder()
@@ -549,7 +549,7 @@ impl E6Ui {
 
         let srv = MediaServer::new(srv_cfg);
 
-        if getopt!(gallery.auto_open_browser) {
+        if getopt!(gallery.auto_open) {
             let url = format!("http://localhost:{}", getopt!(gallery.port));
             let _ = open::that(&url);
             println!("Opening browser at {}", url);

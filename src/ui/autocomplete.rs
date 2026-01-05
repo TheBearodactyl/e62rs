@@ -1,9 +1,10 @@
 //! autocompleters for demand
-use std::sync::Arc;
-
-use {demand::Autocomplete, owo_colors::OwoColorize};
-
-use crate::data::{pools::PoolDb, tags::TagDb};
+use {
+    crate::data::{pools::PoolDb, tags::TagDb},
+    demand::Autocomplete,
+    owo_colors::OwoColorize,
+    std::sync::Arc,
+};
 
 /// the prefix of an inputted tag
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -21,6 +22,10 @@ enum PrefixChar {
 impl PrefixChar {
     #[inline]
     /// find the prefix symbol of a string
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - the tag string
     fn from_str(s: &str) -> (Self, &str) {
         match s.as_bytes().first() {
             Some(b'-') => (Self::Exclude, &s[1..]),
@@ -42,6 +47,10 @@ impl PrefixChar {
     }
 
     /// colors text based on the given prefix
+    ///
+    /// # Arguments
+    ///
+    /// * `formatted` - the formatted string
     fn apply_color(self, formatted: String) -> String {
         match self {
             Self::Exclude => format!("{}{}", "-".red().bold(), formatted),
@@ -54,12 +63,20 @@ impl PrefixChar {
 
 #[inline]
 /// extract the last token from the given input
+///
+/// # Arguments
+///
+/// * `input` - the string to extract from
 fn get_current_token(input: &str) -> &str {
     input.rsplit(char::is_whitespace).next().unwrap_or("")
 }
 
 #[inline]
 /// get the prefix of the given token
+///
+/// # Arguments
+///
+/// * `input` - the string to get the prefix of
 fn get_prefix(input: &str) -> &str {
     match input.rfind(char::is_whitespace) {
         Some(idx) => &input[..=idx],
@@ -69,6 +86,10 @@ fn get_prefix(input: &str) -> &str {
 
 #[inline]
 /// strip ansi from a str
+///
+/// # Arguments
+///
+/// * `s` - the string to strip
 fn strip_ansi(s: &str) -> String {
     strip_ansi_escapes::strip_str(s)
 }

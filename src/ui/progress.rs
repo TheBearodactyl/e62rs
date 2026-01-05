@@ -34,11 +34,18 @@ impl ProgressManager {
     }
 
     /// make a progress bar for a download
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - a key for the bar to be able to access it later
+    /// * `len` - the length of the bar
+    /// * `msg` - a message to show to the right of the bar
     pub async fn mk_dl_bar(&self, key: &str, len: u64, msg: &str) -> Result<ProgressBar> {
         let size_fmt = getopt!(ui.progress_format);
         let detailed = getopt!(ui.detailed_progress);
         let template = if detailed {
-            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] {pos_size:>10}/{len_size} ({percent}%) {msg}"
+            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
+             {pos_size:>10}/{len_size} ({percent}%) {msg}"
         } else {
             "{spinner:.bright_cyan} [{wide_bar:.bright_cyan/blue}] {pos_size:>10}/{len_size} {msg}"
         };
@@ -82,6 +89,12 @@ impl ProgressManager {
     }
 
     /// make a new progress bar for a countdown
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - a key for the bar to be able to access it later
+    /// * `len` - the length of the bar
+    /// * `msg` - a message to show to the right of the bar
     pub async fn create_count_bar(
         &self,
         key: &str,
@@ -90,7 +103,8 @@ impl ProgressManager {
     ) -> Result<ProgressBar> {
         let detailed = getopt!(ui.detailed_progress);
         let template = if detailed {
-            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] {pos}/{len} ({percent}%) {msg}"
+            "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] {pos}/{len} \
+             ({percent}%) {msg}"
         } else {
             "{spinner:.bright_cyan} [{wide_bar:.bright_cyan/blue}] {pos}/{len} {msg}"
         };
@@ -118,17 +132,31 @@ impl ProgressManager {
     }
 
     /// make a new bar
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - a key for the bar to be able to access it later
+    /// * `len` - the length of the bar
+    /// * `msg` - a message to show to the right of the bar
     pub async fn create_bar(&self, key: &str, len: u64, message: &str) -> Result<ProgressBar> {
         self.create_count_bar(key, len, message).await
     }
 
     /// get one of the bars in the multi
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - the key of the bar to search for
     pub async fn get_bar(&self, key: &str) -> Result<Option<ProgressBar>> {
         let bars = self.bars.read().await;
         Ok(bars.get(key).cloned())
     }
 
     /// remove a bar from the multi
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - the key of the bar to remove
     pub async fn remove_bar(&self, key: &str) {
         let mut bars = self.bars.write().await;
 
@@ -138,6 +166,10 @@ impl ProgressManager {
     }
 
     /// make a spinner progress bar
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - a message to go along with the spinner
     pub fn create_spinner(&self, message: &str) -> ProgressBar {
         let style = ProgressStyle::with_template("{spinner:.bright_cyan} {msg}")
             .unwrap()

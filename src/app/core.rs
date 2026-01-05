@@ -2,6 +2,7 @@
 use {
     super::{handlers::Handlers, interrupt::InterruptHandler, logging},
     crate::{
+        app::cli::Cli,
         client::E6Client,
         config::instance::reload_config,
         data::{pools::PoolDb, tags::TagDb},
@@ -23,6 +24,7 @@ impl E6App {
     /// init e62rs
     pub async fn init() -> color_eyre::Result<Self> {
         color_eyre::install()?;
+        Cli::run().await?;
         Self::clear_screen();
 
         if getopt!(logging.enable) {

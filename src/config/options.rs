@@ -78,8 +78,8 @@ pub struct HttpConfig {
     pub max_connections: Option<usize>,
 
     /// Enable HTTP/2
-    #[default(Some(true))]
-    pub http2_prior_knowledge: Option<bool>,
+    #[default(Some(false))]
+    pub http2: Option<bool>,
 
     /// Enable keep-alive
     #[default(Some(true))]
@@ -194,11 +194,6 @@ pub struct PostCacheConfig {
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
 pub struct PerformanceConfig {
-    #[schemars(range(min = 1, max = 15))]
-    /// Number of concurrent downloads
-    #[default(Some(15))]
-    pub concurrent_downloads: Option<usize>,
-
     /// Prefetch next batch of posts
     #[default(Some(true))]
     pub prefetch_enabled: Option<bool>,
@@ -319,6 +314,10 @@ pub struct ImageDisplay {
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
 pub struct SearchCfg {
+    /// The amount of posts to show in a search
+    #[default(Some(320))]
+    pub results: Option<u64>,
+
     /// The minimum amount of posts on a tag for it to show up in tag selection
     #[default(Some(2))]
     pub min_posts_on_tag: Option<u64>,
@@ -465,6 +464,11 @@ pub struct DownloadCfg {
     #[default(Some("downloads/pools".to_string()))]
     pub pools_path: Option<String>,
 
+    /// Number of threads to use when downloading
+    #[default(Some(15))]
+    #[schemars(range(min = 1, max = 15))]
+    pub threads: Option<usize>,
+
     /// Save the data of downloaded posts
     ///
     /// This is used in the auto-reorganizer to enable
@@ -480,7 +484,7 @@ pub struct DownloadCfg {
 
     /// ## Filename Formatting
     ///
-    /// The `output_format` setting controls how filenames are generated when saving posts. Forward slashes denote subfolders.
+    /// The `format` setting controls how filenames are generated when saving posts. Forward slashes denote subfolders.
     ///
     /// ### Simple Placeholders
     ///
@@ -635,7 +639,7 @@ pub struct GalleryCfg {
 
     /// Enable metadata-based filtering (requires saved post metadata)
     #[default(Some(true))]
-    pub enable_metadata_filtering: Option<bool>,
+    pub metadata_filtering: Option<bool>,
 
     /// Port to run the gallery server on
     #[default(Some(23794))]
@@ -647,7 +651,7 @@ pub struct GalleryCfg {
 
     /// Automatically open browser when starting server
     #[default(Some(false))]
-    pub auto_open_browser: Option<bool>,
+    pub auto_open: Option<bool>,
 
     /// The number of threads to use for loading your downloads
     #[default(Some(8))]
@@ -671,14 +675,6 @@ pub struct GalleryCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default", default)]
 pub struct E62Rs {
-    /// Configuration file version (do not modify manually)
-    #[default(Some(1))]
-    pub version: Option<u32>,
-
-    /// The amount of posts to show in a search
-    #[default(Some(320))]
-    pub results_limit: Option<u64>,
-
     /// The base URL of the API (defaults to <https://e621.net>)
     #[schemars(url)]
     #[default(Some("https://e621.net".to_string()))]

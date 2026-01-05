@@ -139,10 +139,10 @@ impl FormatTemplate {
     fn parse_index_spec(spec: &str) -> Result<IndexSpec> {
         let spec = spec.trim();
 
-        let (spec, reverse) = if spec.ends_with('r') {
-            (&spec[..spec.len() - 1], true)
-        } else {
+        let (spec, reverse) = if !spec.ends_with('r') {
             (spec, false)
+        } else {
+            (&spec[..spec.len() - 1], true)
         };
 
         let selection = if let Some(stripped) = spec.strip_prefix('l') {

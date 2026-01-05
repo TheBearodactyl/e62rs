@@ -131,8 +131,6 @@ validator_nested! { CacheConfig,
 }
 
 validator! { PerformanceConfig,
-    concurrent_downloads => |v: &usize| *v >= 1 && *v <= 15,
-        "must be between 1 and 15";
     prefetch_batch_size => |v: &usize| *v > 0,
         "must be greater than 0";
     max_preload_size_mb => |v: &u64| *v > 0,
@@ -171,6 +169,12 @@ validator! { ImageDisplay,
 impl Validate for SearchCfg {
     fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors: Vec<String> = Vec::new();
+
+        if let Some(v) = self.results
+            && v == 0
+        {
+            errors.push("results_limit: must be greater than 0".to_string());
+        }
 
         if let Some(v) = self.fetch_threads
             && v == 0
@@ -260,6 +264,8 @@ validator! { DownloadCfg,
         "must not be empty";
     pools_path => |v: &String| !v.trim().is_empty(),
         "must not be empty";
+    threads => |v: &usize| *v >= 1 && *v <= 15,
+        "must be between 1 and 15";
     format => |v: &String| !v.trim().is_empty() && v.contains("$id"),
         "must not be empty and must contain $id placeholder";
 }
@@ -287,12 +293,6 @@ validator! { GalleryCfg,
 impl Validate for E62Rs {
     fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors: Vec<String> = Vec::new();
-
-        if let Some(v) = self.results_limit
-            && v == 0
-        {
-            errors.push("results_limit: must be greater than 0".to_string());
-        }
 
         if let Some(ref v) = self.base_url
             && !v.starts_with("http://")

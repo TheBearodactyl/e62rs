@@ -107,7 +107,7 @@ impl PostDownloader {
 
     /// download multiple posts
     pub async fn download_posts(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
-        let concurrent_limit = getopt!(performance.concurrent_downloads);
+        let concurrent_limit = getopt!(download.threads);
 
         let total_pb = self
             .progress_manager
@@ -301,7 +301,7 @@ impl PostDownloader {
 
     /// download pool posts with sequential naming based on pool order
     pub async fn download_pool_posts(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
-        let concurrent_limit = getopt!(performance.concurrent_downloads);
+        let concurrent_limit = getopt!(download.threads);
         let total = posts.len();
         let pad_width = total.to_string().len().max(3);
 

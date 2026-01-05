@@ -92,7 +92,7 @@ impl E6Client {
             .pool_idle_timeout(Duration::from_secs(getopt!(http.pool_idle_timeout_secs)));
 
         opt_and!(
-            http.http2_prior_knowledge,
+            http.http2,
             client_builder = client_builder.http2_prior_knowledge()
         );
 
@@ -107,8 +107,11 @@ impl E6Client {
                 client_builder.tcp_keepalive(Duration::from_secs(getopt!(http.tcp_keepalive_secs)))
         );
 
+        if !getopt!(http.http2) {
+            client_builder = client_builder.http1_only();
+        }
+
         client_builder
-            .http1_only()
             .build()
             .context("failed to build http client")
     }

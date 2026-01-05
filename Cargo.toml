@@ -14,6 +14,7 @@ keywords = ["e621", "e926", "tui", "browser"]
 async-trait = "0.1.89"
 base64 = "0.22.1"
 chrono = "0.4.42"
+clap = { version = "4.5.54", features = ["derive"] }
 color-eyre = "0.6.5"
 config = "0.15.19"
 csv = "1.4.0"
