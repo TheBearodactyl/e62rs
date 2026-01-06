@@ -36,7 +36,7 @@ impl E6Client {
     }
 
     /// generic file download with hash-based update check
-    async fn download_and_update_file(
+    pub async fn download_and_update_file(
         &self,
         url: &str,
         local_file: &str,
@@ -157,7 +157,7 @@ impl E6Client {
     }
 
     /// search for pools with a given search type
-    async fn search_pools_internal(
+    pub async fn search_pools_internal(
         &self,
         search_type: &str,
         query: &str,

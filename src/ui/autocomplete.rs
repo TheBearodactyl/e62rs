@@ -26,7 +26,7 @@ impl PrefixChar {
     /// # Arguments
     ///
     /// * `s` - the tag string
-    pub fn from_str(s: &str) -> (Self, &str) {
+    pub fn find_from_str(s: &str) -> (Self, &str) {
         match s.as_bytes().first() {
             Some(b'-') => (Self::Exclude, &s[1..]),
             Some(b'~') => (Self::Wildcard, &s[1..]),
@@ -95,6 +95,10 @@ pub fn strip_ansi(s: &str) -> String {
 }
 
 /// extract tag/pool name from a formatted suggestion
+///
+/// # Arguments
+///
+/// * `suggestion` - the suggestion string to extract from
 pub fn extract_name_from_suggestion(suggestion: &str) -> String {
     let stripped = strip_ansi(suggestion);
     let cleaned = stripped.trim_start_matches(&['-', '~', '+'][..]);
@@ -109,10 +113,25 @@ pub fn extract_name_from_suggestion(suggestion: &str) -> String {
 /// an autocompleter for a db
 pub trait AutocompleteDatabase {
     /// provide autocompletions based on a query
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - the query to base completions off of
+    /// * `limit` - the max amount of completions to provide
     fn autocomplete(&self, query: &str, limit: usize) -> Vec<String>;
+
     /// resolve an entry based on the name
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the entry
     fn resolve_name(&self, name: &str) -> String;
+
     /// format an entry for display
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the entry
     fn format_entry(&self, name: &str) -> String;
 }
 
@@ -126,17 +145,26 @@ pub struct GenericAutocompleter<T: AutocompleteDatabase> {
 
 impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
     /// make a new autocompleter
+    ///
+    /// # Arguments
+    ///
+    /// * `db` - the database to derive completions from
+    /// * `limit` - the max amount of completions to show at a time
     pub fn new(db: Arc<T>, limit: usize) -> Self {
         Self { db, limit }
     }
 
     /// get suggestions based on input
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - the input to base suggestions off of
     pub fn get_suggestions_impl(
         &self,
         input: &str,
     ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let current_token = get_current_token(input);
-        let (prefix_char, search_query) = PrefixChar::from_str(current_token);
+        let (prefix_char, search_query) = PrefixChar::find_from_str(current_token);
 
         if search_query.is_empty() {
             return Ok(Vec::new());
@@ -155,6 +183,11 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
     }
 
     /// get completions based on input
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - the input to base suggestions off of
+    /// * `highlighted_suggestion` - the current highlighted suggestion
     pub fn get_completion_impl(
         &self,
         input: &str,
@@ -166,7 +199,7 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
 
         let prefix = get_prefix(input);
         let current_token = get_current_token(input);
-        let (prefix_char, _) = PrefixChar::from_str(current_token);
+        let (prefix_char, _) = PrefixChar::find_from_str(current_token);
         let name = extract_name_from_suggestion(suggestion);
         let canonical_name = self.db.resolve_name(name.as_str());
         let mut completion = String::with_capacity(
@@ -216,11 +249,20 @@ pub struct TagAutocompleter {
 
 impl TagAutocompleter {
     /// make a new tag autocompleter
+    ///
+    /// # Arguments
+    ///
+    /// * `tag_db` - a loaded tag database
     pub fn new(tag_db: Arc<TagDb>) -> Self {
         Self::with_limit(tag_db, 10)
     }
 
     /// make a new tag autocompleter with the given tag limit
+    ///
+    /// # Arguments
+    ///
+    /// * `tag_db` - a loaded tag database
+    /// * `limit` - the limit of completions to show at a time
     pub fn with_limit(tag_db: Arc<TagDb>, limit: usize) -> Self {
         Self {
             inner: Arc::new(GenericAutocompleter::new(tag_db, limit)),
@@ -266,11 +308,20 @@ pub struct PoolAutocompleter {
 
 impl PoolAutocompleter {
     /// make a new pool autocompleter
+    ///
+    /// # Arguments
+    ///
+    /// * `pool_db` - a loaded pool database
     pub fn new(pool_db: Arc<PoolDb>) -> Self {
         Self::with_limit(pool_db, 10)
     }
 
     /// make a new pool autocompleter with a given result limit
+    ///
+    /// # Arguments
+    ///
+    /// * `pool_db` - a loaded pool database
+    /// * `limit` - the limit of completions to show at a time
     pub fn with_limit(pool_db: Arc<PoolDb>, limit: usize) -> Self {
         Self {
             inner: Arc::new(GenericAutocompleter::new(pool_db, limit)),

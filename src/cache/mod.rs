@@ -22,6 +22,7 @@ impl E6Client {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs())
+                .wrap_err("couldn't get current time")
                 .unwrap_or(0);
 
             let cached_data = {

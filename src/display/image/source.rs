@@ -96,7 +96,7 @@ impl ImageSource {
 }
 
 /// fetch a file from a remote url
-async fn fetch_remote_file(url: &str) -> Result<Vec<u8>> {
+pub async fn fetch_remote_file(url: &str) -> Result<Vec<u8>> {
     let response = reqwest::get(url)
         .await
         .with_context(|| format!("Failed to fetch {}", url))?;

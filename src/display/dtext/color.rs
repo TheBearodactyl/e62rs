@@ -31,7 +31,7 @@ pub fn parse_color(color_str: &str) -> Option<DynColors> {
 }
 
 /// parse a hex code into a `DynColors`
-fn parse_hex_color(color_str: &str) -> Option<DynColors> {
+pub fn parse_hex_color(color_str: &str) -> Option<DynColors> {
     let hex = color_str.strip_prefix('#')?;
 
     match hex.len() {

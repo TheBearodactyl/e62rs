@@ -34,6 +34,10 @@ pub struct AppState {
 
 impl AppState {
     /// initialize a new AppState
+    ///
+    /// # Arguments
+    ///
+    /// * `gallery` - a loaded gallery
     pub fn new(gallery: MediaGallery) -> Self {
         Self {
             gallery: Arc::new(RwLock::new(gallery)),
@@ -43,7 +47,7 @@ impl AppState {
 
 #[get("/")]
 /// the main gallery page
-pub async fn index_handler(_state: &State<Arc<AppState>>) -> RawHtml<String> {
+pub async fn index_handler() -> RawHtml<String> {
     RawHtml(HTML_TEMPLATE.to_string())
 }
 
@@ -65,6 +69,11 @@ pub async fn js_handler() -> RawJavaScript<String> {
 
 #[get("/api/media?<filter..>")]
 /// handler for listing media
+///
+/// # Arguments
+///
+/// * `state` - the current state of the app
+/// * `filter` - any active filters
 pub async fn list_media_handler(
     state: &State<Arc<AppState>>,
     filter: Option<MediaFilter>,
@@ -82,6 +91,10 @@ pub async fn list_media_handler(
 
 #[get("/api/stats")]
 /// handler for getting current filter stats
+///
+/// # Arguments
+///
+/// * `state` - the current state of the app
 pub async fn stats_handler(state: &State<Arc<AppState>>) -> Result<Json<FilterStats>, Status> {
     let gallery = state.gallery.read().await;
     let stats = gallery.get_filter_stats();

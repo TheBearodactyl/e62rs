@@ -289,7 +289,7 @@ where
 /// a repeatable operation
 pub struct RepeatableOp<F> {
     /// the repeatable item
-    f: F,
+    pub f: F,
 }
 
 impl<F, R> RepeatableOp<F>

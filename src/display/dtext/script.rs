@@ -118,6 +118,11 @@ static SUBSCRIPT_MAP: Lazy<HashMap<char, char>> = Lazy::new(|| {
 });
 
 /// convert between super/subscript
+///
+/// # Arguments
+///
+/// * `text` - the text to convert
+/// * `mode` - the mode to convert to (superscript/subscript)
 pub fn convert_script(text: &str, mode: ScriptMode) -> String {
     let map = match mode {
         ScriptMode::Superscript => &SUPERSCRIPT_MAP,

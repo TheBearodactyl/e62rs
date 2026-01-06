@@ -66,7 +66,7 @@ pub struct ReorganizeResult {
 /// the reorganizer
 pub struct FileReorganizer {
     /// the progress bar manager
-    progress_manager: Arc<ProgressManager>,
+    pub progress_manager: Arc<ProgressManager>,
 }
 
 impl FileReorganizer {
@@ -79,7 +79,7 @@ impl FileReorganizer {
 
     #[cfg(target_os = "windows")]
     /// read file metadata into an E6Post
-    fn read_metadata_from_ads(&self, file_path: &Path) -> Result<E6Post> {
+    pub fn read_metadata_from_ads(&self, file_path: &Path) -> Result<E6Post> {
         let ads_path = format!("{}:metadata", file_path.display());
 
         let mut file = OpenOptions::new()
@@ -97,7 +97,7 @@ impl FileReorganizer {
 
     #[cfg(not(target_os = "windows"))]
     /// read file metadata into an E6Post
-    fn read_metadata_from_json(&self, file_path: &Path) -> Result<E6Post> {
+    pub fn read_metadata_from_json(&self, file_path: &Path) -> Result<E6Post> {
         let json_path = file_path.with_extension(format!(
             "{}.json",
             file_path.extension().and_then(|e| e.to_str()).unwrap_or("")
@@ -166,7 +166,11 @@ impl FileReorganizer {
     }
 
     /// recursively find files (internal)
-    fn find_files_recursive_impl(&self, directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    pub fn find_files_recursive_impl(
+        &self,
+        directory: &Path,
+        files: &mut Vec<PathBuf>,
+    ) -> Result<()> {
         for entry in fs::read_dir(directory)
             .with_context(|| format!("Failed to read directory {}", directory.display()))?
         {
@@ -201,7 +205,7 @@ impl FileReorganizer {
     }
 
     /// read a file into an E6Post (cross-plat)
-    fn read_metadata(&self, file_path: &Path) -> Result<E6Post> {
+    pub fn read_metadata(&self, file_path: &Path) -> Result<E6Post> {
         #[cfg(target_os = "windows")]
         {
             self.read_metadata_from_ads(file_path)
@@ -214,7 +218,7 @@ impl FileReorganizer {
     }
 
     /// build placeholder context from post metadata
-    fn build_post_context(
+    pub fn build_post_context(
         &self,
         post: &E6Post,
     ) -> (HashMap<String, String>, HashMap<String, Vec<String>>) {
@@ -348,7 +352,6 @@ impl FileReorganizer {
             .map(|id| id.to_string())
             .unwrap_or_else(|| "none".to_string());
 
-        // Simple placeholders
         simple.insert("id".to_string(), post.id.to_string());
         simple.insert("rating".to_string(), rating_full.to_string());
         simple.insert("rating_first".to_string(), rating_first);
@@ -494,7 +497,7 @@ impl FileReorganizer {
     }
 
     /// format a filename based on a format template
-    fn format_filename(&self, post: &E6Post, out_fmt: &str) -> Result<String> {
+    pub fn format_filename(&self, post: &E6Post, out_fmt: &str) -> Result<String> {
         let template = FormatTemplate::parse(out_fmt)
             .with_context(|| format!("Failed to parse output format: {}", out_fmt))?;
 
@@ -506,7 +509,7 @@ impl FileReorganizer {
     }
 
     /// move a file based on its metadata
-    fn move_file_with_metadata(
+    pub fn move_file_with_metadata(
         &self,
         old_path: &Path,
         new_path: &Path,
@@ -581,7 +584,7 @@ impl FileReorganizer {
     }
 
     /// find a unique path using incrementation
-    fn find_unique_path(&self, path: &Path) -> Result<PathBuf> {
+    pub fn find_unique_path(&self, path: &Path) -> Result<PathBuf> {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
         let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         let parent = path.parent().unwrap_or(Path::new("."));
@@ -679,7 +682,7 @@ impl FileReorganizer {
     }
 
     /// process and move a file
-    fn process_file(
+    pub fn process_file(
         &self,
         file_path: &Path,
         base_path: &Path,
