@@ -79,7 +79,7 @@ impl E6App {
             "Starting {} v{} using {}",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
-            getopt!(base_url)
+            getopt!(http.api_url)
         );
 
         Ok(E6Ui::new(client, tag_db, pool_db))

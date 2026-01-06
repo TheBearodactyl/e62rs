@@ -6,12 +6,12 @@ use {
         models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
     },
     chrono::{Datelike, Days, Local},
-    color_eyre::eyre::{Context, Result, bail},
+    color_eyre::eyre::{Context, Result},
     flate2::read::GzDecoder,
     sha2::{Digest, Sha256},
     std::{io::Read, path::Path},
     tokio::fs,
-    tracing::{debug, info, instrument},
+    tracing::{debug, info, instrument, warn},
 };
 
 impl E6Client {
@@ -43,20 +43,19 @@ impl E6Client {
         hash_file: &str,
         file_type: &str,
     ) -> Result<()> {
-        let response = self
+        let response = match self
             .client
             .get(url)
             .send()
             .await
-            .with_context(|| format!("Failed to fetch {}", file_type))?;
-
-        if !response.status().is_success() {
-            bail!(
-                "Failed to download {}: HTTP {}",
-                file_type,
-                response.status()
-            );
-        }
+            .context(format!("failed to fetch {}", file_type))
+        {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("couldn't download the update: {}", e);
+                return Ok(());
+            }
+        };
 
         let remote_bytes = response.bytes().await?;
         let remote_hash_hex = {

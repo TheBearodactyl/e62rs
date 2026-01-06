@@ -8,7 +8,7 @@ use {
 
 /// the prefix of an inputted tag
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum PrefixChar {
+pub enum PrefixChar {
     /// no prefix
     None,
     /// exclude (-)
@@ -26,7 +26,7 @@ impl PrefixChar {
     /// # Arguments
     ///
     /// * `s` - the tag string
-    fn from_str(s: &str) -> (Self, &str) {
+    pub fn from_str(s: &str) -> (Self, &str) {
         match s.as_bytes().first() {
             Some(b'-') => (Self::Exclude, &s[1..]),
             Some(b'~') => (Self::Wildcard, &s[1..]),
@@ -37,7 +37,7 @@ impl PrefixChar {
 
     #[inline]
     /// converts self to a string
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "",
             Self::Exclude => "-",
@@ -51,7 +51,7 @@ impl PrefixChar {
     /// # Arguments
     ///
     /// * `formatted` - the formatted string
-    fn apply_color(self, formatted: String) -> String {
+    pub fn apply_color(self, formatted: String) -> String {
         match self {
             Self::Exclude => format!("{}{}", "-".red().bold(), formatted),
             Self::Wildcard => format!("{}{}", "~".yellow().bold(), formatted),
@@ -67,7 +67,7 @@ impl PrefixChar {
 /// # Arguments
 ///
 /// * `input` - the string to extract from
-fn get_current_token(input: &str) -> &str {
+pub fn get_current_token(input: &str) -> &str {
     input.rsplit(char::is_whitespace).next().unwrap_or("")
 }
 
@@ -77,7 +77,7 @@ fn get_current_token(input: &str) -> &str {
 /// # Arguments
 ///
 /// * `input` - the string to get the prefix of
-fn get_prefix(input: &str) -> &str {
+pub fn get_prefix(input: &str) -> &str {
     match input.rfind(char::is_whitespace) {
         Some(idx) => &input[..=idx],
         None => "",
@@ -90,12 +90,12 @@ fn get_prefix(input: &str) -> &str {
 /// # Arguments
 ///
 /// * `s` - the string to strip
-fn strip_ansi(s: &str) -> String {
+pub fn strip_ansi(s: &str) -> String {
     strip_ansi_escapes::strip_str(s)
 }
 
 /// extract tag/pool name from a formatted suggestion
-fn extract_name_from_suggestion(suggestion: &str) -> String {
+pub fn extract_name_from_suggestion(suggestion: &str) -> String {
     let stripped = strip_ansi(suggestion);
     let cleaned = stripped.trim_start_matches(&['-', '~', '+'][..]);
 
@@ -107,7 +107,7 @@ fn extract_name_from_suggestion(suggestion: &str) -> String {
 }
 
 /// an autocompleter for a db
-trait AutocompleteDatabase {
+pub trait AutocompleteDatabase {
     /// provide autocompletions based on a query
     fn autocomplete(&self, query: &str, limit: usize) -> Vec<String>;
     /// resolve an entry based on the name
@@ -117,21 +117,24 @@ trait AutocompleteDatabase {
 }
 
 /// a generic autocompleter
-struct GenericAutocompleter<T: AutocompleteDatabase> {
+pub struct GenericAutocompleter<T: AutocompleteDatabase> {
     /// the db
-    db: Arc<T>,
+    pub db: Arc<T>,
     /// the limit of autocompletions to display at a tme
-    limit: usize,
+    pub limit: usize,
 }
 
 impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
     /// make a new autocompleter
-    fn new(db: Arc<T>, limit: usize) -> Self {
+    pub fn new(db: Arc<T>, limit: usize) -> Self {
         Self { db, limit }
     }
 
     /// get suggestions based on input
-    fn get_suggestions_impl(&self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    pub fn get_suggestions_impl(
+        &self,
+        input: &str,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let current_token = get_current_token(input);
         let (prefix_char, search_query) = PrefixChar::from_str(current_token);
 
@@ -152,7 +155,7 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
     }
 
     /// get completions based on input
-    fn get_completion_impl(
+    pub fn get_completion_impl(
         &self,
         input: &str,
         highlighted_suggestion: Option<&str>,
@@ -208,7 +211,7 @@ impl AutocompleteDatabase for TagDb {
 /// a tag autocompleter
 pub struct TagAutocompleter {
     /// the inner generic completer
-    inner: Arc<GenericAutocompleter<TagDb>>,
+    pub inner: Arc<GenericAutocompleter<TagDb>>,
 }
 
 impl TagAutocompleter {
@@ -258,7 +261,7 @@ impl AutocompleteDatabase for PoolDb {
 /// a pool autocompleter
 pub struct PoolAutocompleter {
     /// the inner generic completer for the pools db
-    inner: Arc<GenericAutocompleter<PoolDb>>,
+    pub inner: Arc<GenericAutocompleter<PoolDb>>,
 }
 
 impl PoolAutocompleter {

@@ -1,11 +1,13 @@
 //! logging stuff
 use {
     crate::{config::options::LoggingFormat, getopt, utils::string_to_log_level},
+    color_eyre::Result,
+    tracing::{info, subscriber},
     tracing_subscriber::FmtSubscriber,
 };
 
 /// setup logging
-pub fn setup() -> color_eyre::Result<()> {
+pub fn setup() -> Result<()> {
     let max_level = string_to_log_level(&getopt!(logging.level));
     let enabled = getopt!(logging.enable);
 
@@ -21,13 +23,13 @@ pub fn setup() -> color_eyre::Result<()> {
 
     match getopt!(logging.format) {
         LoggingFormat::Pretty => {
-            tracing::subscriber::set_global_default(subscriber.pretty().finish())?;
+            subscriber::set_global_default(subscriber.pretty().finish())?;
         }
         LoggingFormat::Compact => {
-            tracing::subscriber::set_global_default(subscriber.compact().finish())?;
+            subscriber::set_global_default(subscriber.compact().finish())?;
         }
     }
 
-    tracing::info!("Logging setup successfully");
+    info!("Logging setup successfully");
     Ok(())
 }

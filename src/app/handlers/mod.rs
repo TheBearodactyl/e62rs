@@ -1,8 +1,8 @@
 //! logic handler stuff
-mod main_menu;
-mod search;
-
 use {super::interrupt::InterruptHandler, crate::ui::E6Ui};
+
+pub mod main_menu;
+pub mod search;
 
 /// logic handlers
 pub struct Handlers {
@@ -14,6 +14,10 @@ pub struct Handlers {
 
 impl Handlers {
     /// make a new set of handlers
+    ///
+    /// # Arguments
+    ///
+    /// * `interrupt` - the interruption handler to use
     pub fn new(ui: E6Ui, interrupt: InterruptHandler) -> Self {
         Self { ui, interrupt }
     }

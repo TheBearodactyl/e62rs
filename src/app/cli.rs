@@ -51,6 +51,11 @@ impl Cli {
     }
 
     /// save a string to a file
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - the path to the file being written
+    /// * `contents` - the data to write to the file
     fn write_to_file(path: &str, contents: &str) -> Result<()> {
         let file = OpenOptions::new()
             .write(true)
@@ -62,6 +67,10 @@ impl Cli {
     }
 
     /// generate/save the config schema
+    ///
+    /// # Arguments
+    ///
+    /// * `save` - save instead of printing
     fn gen_schema(save: bool) -> Result<()> {
         let settings = SchemaSettings::draft2020_12().for_serialize();
         let generator = settings.into_generator();
@@ -78,6 +87,10 @@ impl Cli {
     }
 
     /// generate/save the default config file
+    ///
+    /// # Arguments
+    ///
+    /// * `save` - save instead of printing
     fn gen_defaults(save: bool) -> Result<()> {
         let defaults = toml::to_string_pretty(&E62Rs::default())?;
 

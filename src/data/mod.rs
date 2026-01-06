@@ -1,5 +1,4 @@
 //! db mangament stuff
-
 use {
     crate::{getopt, sendsync},
     color_eyre::Result,
@@ -59,6 +58,7 @@ impl<T: Entry> Buffer<T> {
     /// returns an iterator over the entries
     ///
     /// # Safety
+    ///
     /// caller needs to make sure the buffer isn't modified/dropped while iterating
     pub unsafe fn iter(&self) -> impl Iterator<Item = &T> {
         unsafe { slice::from_raw_parts(self.ptr, self.len).iter() }
@@ -85,6 +85,10 @@ impl<T: Entry> Default for Db<T> {
 
 impl<T: Entry> Db<T> {
     /// load a db from a csv file
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - the path to the CSV file to load
     pub fn from_csv(file_path: &str) -> Result<Self> {
         let file = File::open(file_path)?;
         let mut rdr = csv::Reader::from_reader(file);
@@ -108,6 +112,10 @@ impl<T: Entry> Db<T> {
 
     #[inline(always)]
     /// make a string lowercase
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - the string to make lowercase
     fn lowercase(s: &str) -> String {
         if s.is_ascii() {
             let mut out = String::with_capacity(s.len());
@@ -132,6 +140,12 @@ impl<T: Entry> Db<T> {
     }
 
     /// searches for entries matching the given query (fuzz: name and desc apply)
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - the search query
+    /// * `limit` - the max amount of entries to return
+    /// * `sim_threshold` - the similarity threshold for matching an entry against a search
     pub fn search(&self, query: &str, limit: usize, sim_threshold: f64) -> Vec<String> {
         let query_lower = Self::lowercase(query);
         let mut matches: Vec<(f64, String)> = Vec::new();
@@ -165,6 +179,11 @@ impl<T: Entry> Db<T> {
     }
 
     /// returns autocompletions for the query (fuzzy: name and desc apply)
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - the search query
+    /// * `limit` - the max amount of completions to return
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
         let query_lower = Self::lowercase(query);
         let mut results = Vec::new();
@@ -188,11 +207,19 @@ impl<T: Entry> Db<T> {
     }
 
     /// checks if an entry exists with the given name
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the entry to check for
     pub fn exists(&self, name: &str) -> bool {
         unsafe { self.buf.iter().any(|entry| entry.name() == name) }
     }
 
     /// retrieves an entry by exact name match (returns None if none exists)
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name to get
     pub fn get_by_name(&self, name: &str) -> Option<T> {
         unsafe { self.buf.iter().find(|entry| entry.name() == name).cloned() }
     }

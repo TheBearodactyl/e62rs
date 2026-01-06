@@ -97,6 +97,8 @@ validator! { HttpConfig,
         "must be greater than 0";
     user_agent => |v: &String| !v.trim().is_empty(),
         "must not be empty";
+    api_url => |v: &String| v.starts_with("http://") || v.starts_with("https://"),
+        "must be a valid url and not link to e6ai";
 }
 
 validator! { PostCacheConfig,
@@ -178,6 +180,12 @@ impl Validate for SearchCfg {
             && v == 0
         {
             errors.push("results_limit: must be greater than 0".to_string());
+        }
+
+        if let Some(ref v) = self.blacklist
+            && v.iter().any(|tag| tag.trim().is_empty())
+        {
+            errors.push("blacklist: tags must not be empty strings".to_string());
         }
 
         if let Some(v) = self.fetch_threads
@@ -297,19 +305,6 @@ validator! { GalleryCfg,
 impl Validate for E62Rs {
     fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors: Vec<String> = Vec::new();
-
-        if let Some(ref v) = self.base_url
-            && !v.starts_with("http://")
-            && !v.starts_with("https://")
-        {
-            errors.push("base_url: must be a valid HTTP(S) URL".to_string());
-        }
-
-        if let Some(ref v) = self.blacklist
-            && v.iter().any(|tag| tag.trim().is_empty())
-        {
-            errors.push("blacklist: tags must not be empty strings".to_string());
-        }
 
         macro_rules! validate_nested {
             ($($field:ident),* $(,)?) => {

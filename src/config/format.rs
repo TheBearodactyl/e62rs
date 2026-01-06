@@ -44,15 +44,15 @@ pub struct IndexSpec {
 pub enum IndexSelection {
     /// first n items (e.g. $tags\[5\])
     First(usize),
-    /// range from items l to r (e.g. $tags[2..5])
+    /// range from items l to r (e.g. $tags\[2..5\])
     Range(usize, usize),
-    /// from n onwards (e.g. $tags[1..])
+    /// from n onwards (e.g. $tags\[1..\])
     From(usize),
-    /// up to n (e.g. $tags[..3])
+    /// up to n (e.g. $tags\[..3\])
     To(usize),
-    /// last n items (e.g. $tags[l5])
+    /// last n items (e.g. $tags\[l5\])
     Last(usize),
-    /// random n items (e.g. $tags[r3])
+    /// random n items (e.g. $tags\[r3\])
     Random(usize),
 }
 

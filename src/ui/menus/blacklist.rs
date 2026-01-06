@@ -21,7 +21,7 @@ use crate::{
 impl E6Ui {
     /// show info about the blacklist
     pub fn show_blacklist_info(&self) -> Result<()> {
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
 
         if blacklist.is_empty() {
             println!("blacklist is empty.");
@@ -33,8 +33,7 @@ impl E6Ui {
             println!("  {}. {}", i + 1, tag);
         }
         println!(
-            "\nNote: Posts with these tags will be filtered out unless explicitly \
-             searched for."
+            "\nNote: Posts with these tags will be filtered out unless explicitly searched for."
         );
 
         Ok(())
@@ -107,7 +106,7 @@ impl E6Ui {
         }
 
         let tag = tag.to_string();
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
 
         if blacklist.contains(&tag) {
             println!("Tag '{}' is already in the blacklist.", tag);
@@ -171,7 +170,7 @@ impl E6Ui {
 
     /// remove a tag from the blacklist
     async fn remove_tag_from_blacklist(&self) -> Result<()> {
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
 
         if blacklist.is_empty() {
             println!("Blacklist is empty. Nothing to remove.");
@@ -203,8 +202,7 @@ impl E6Ui {
         match remove_from_blacklist(tag_to_remove.clone().as_str()) {
             Ok(true) => {
                 println!(
-                    "Successfully removed '{}' from blacklist and saved \
-                     configuration.",
+                    "Successfully removed '{}' from blacklist and saved configuration.",
                     tag_to_remove
                 );
             }
@@ -223,7 +221,7 @@ impl E6Ui {
 
     /// clear all tags from the blacklist
     async fn clear_blacklist(&self) -> Result<()> {
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
         let blacklist_count = blacklist.len();
 
         if blacklist_count == 0 {
@@ -253,12 +251,9 @@ impl E6Ui {
 
     /// import tags from a search to the blacklist
     async fn import_tags_to_blacklist(&self) -> Result<()> {
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
 
-        println!(
-            "This will allow you to search for posts and add their tags to the \
-             blacklist."
-        );
+        println!("This will allow you to search for posts and add their tags to the blacklist.");
 
         let (include_tags, _, exclude_tags) = self
             .collect_tags()

@@ -499,7 +499,11 @@ pub struct TagImplicationEntry {
 }
 
 impl E6Post {
-    /// parses a blacklist rule string into included and excluded tags
+    /// parses a blacklist rule string into included, excluded, and wildcard tags
+    ///
+    /// # Arguments
+    ///
+    /// * `rule` - the rule to parse
     pub fn parse_blacklist_rule(rule: &str) -> (Vec<String>, Vec<String>) {
         let mut includes = Vec::new();
         let mut excludes = Vec::new();
@@ -518,10 +522,14 @@ impl E6Post {
     }
 
     /// checks if this post matches a given blacklist rule
+    ///
+    /// # Arguments
+    ///
+    /// * `rule` - check if a given post matches a rule in the blacklist
     pub fn matches_blacklist_rule(&self, rule: &str) -> bool {
-        let (include_tags, exclude_tags) = Self::parse_blacklist_rule(rule);
+        let (includes, excludes) = Self::parse_blacklist_rule(rule);
 
-        let all_tags: HashSet<&String> = self
+        let all: HashSet<&String> = self
             .tags
             .general
             .iter()
@@ -534,12 +542,10 @@ impl E6Post {
             .chain(self.tags.lore.iter())
             .collect();
 
-        let includes_matched =
-            include_tags.is_empty() || include_tags.iter().all(|tag| all_tags.contains(tag));
+        let includes_matched = includes.is_empty() || includes.iter().all(|tag| all.contains(tag));
+        let excludes_matched = excludes.iter().any(|tag| all.contains(tag));
 
-        let excludes_matched = exclude_tags.iter().any(|tag| all_tags.contains(tag));
-
-        if include_tags.is_empty() && !exclude_tags.is_empty() {
+        if includes.is_empty() && !excludes.is_empty() {
             !excludes_matched
         } else {
             includes_matched && !excludes_matched
@@ -548,7 +554,7 @@ impl E6Post {
 
     /// checks if this post is blacklisted
     pub fn is_blacklisted(&self) -> bool {
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
         if blacklist.is_empty() {
             return false;
         }
@@ -563,8 +569,12 @@ impl E6Post {
     }
 
     /// checks if any of the search tags are blacklisted
+    ///
+    /// # Arguments
+    ///
+    /// * `search_tags` - a list of tags to compare to the blacklist
     pub fn search_includes_blacklisted(search_tags: &[String]) -> bool {
-        let blacklist = getopt!(blacklist);
+        let blacklist = getopt!(search.blacklist);
         for search_tag in search_tags {
             for rule in &blacklist {
                 let (include_tags, exclude_tags) = Self::parse_blacklist_rule(rule);
@@ -591,6 +601,10 @@ impl E6Post {
 
 impl E6PostsResponse {
     /// filter blacklisted posts from the api response unless explicitly searched for
+    ///
+    /// # Arguments
+    ///
+    /// * `search_tags` - the tags included in the search
     pub fn filter_blacklisted(mut self, search_tags: &[String]) -> Self {
         if E6Post::search_includes_blacklisted(search_tags) {
             return self;

@@ -19,7 +19,7 @@ pub fn format_text(input: &str) -> String {
 }
 
 /// parse a character stream into formatted output
-fn parse(chars: &mut Peekable<Chars>) -> String {
+pub fn parse(chars: &mut Peekable<Chars>) -> String {
     mkstr!(result, chars.size_hint().0);
 
     while let Some(&c) = chars.peek() {
@@ -56,7 +56,7 @@ fn parse(chars: &mut Peekable<Chars>) -> String {
 }
 
 /// checks if the next characters match a pattern
-fn matches_ahead(chars: &Peekable<Chars>, pattern: &str) -> bool {
+pub fn matches_ahead(chars: &Peekable<Chars>, pattern: &str) -> bool {
     let mut lookahead = chars.clone();
     pattern
         .chars()
@@ -64,7 +64,7 @@ fn matches_ahead(chars: &Peekable<Chars>, pattern: &str) -> bool {
 }
 
 /// check if the current pos is the start of a header
-fn is_header_start(chars: &Peekable<Chars>) -> bool {
+pub fn is_header_start(chars: &Peekable<Chars>) -> bool {
     let mut lookahead = chars.clone();
     matches!(lookahead.next(), Some('h'))
         && matches!(lookahead.next(), Some(c) if c.is_ascii_digit())
@@ -72,12 +72,12 @@ fn is_header_start(chars: &Peekable<Chars>) -> bool {
 }
 
 /// check if the current pos is the start of a list
-fn is_list_start(chars: &Peekable<Chars>) -> bool {
+pub fn is_list_start(chars: &Peekable<Chars>) -> bool {
     chars.clone().nth(1).is_some_and(|c| c == ' ' || c == '*')
 }
 
 /// handle wiki-style links
-fn handle_wiki_link(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_wiki_link(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.skip_n(2);
 
     mkstr!(link_text);
@@ -110,7 +110,7 @@ fn handle_wiki_link(chars: &mut Peekable<Chars>, result: &mut String) {
 }
 
 /// handles dtext tags
-fn handle_tag(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_tag(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.next();
 
     mkstr!(tag);
@@ -143,7 +143,7 @@ fn handle_tag(chars: &mut Peekable<Chars>, result: &mut String) {
 }
 
 /// apply formatting based on the tag type
-fn apply_tag_formatting(tag: &str, param: Option<&str>, content: &str) -> String {
+pub fn apply_tag_formatting(tag: &str, param: Option<&str>, content: &str) -> String {
     match tag {
         "b" => content.bold().to_string(),
         "i" => content.italic().to_string(),
@@ -180,7 +180,7 @@ fn apply_tag_formatting(tag: &str, param: Option<&str>, content: &str) -> String
 }
 
 /// parse content until a closing tag
-fn parse_until(chars: &mut Peekable<Chars>, closing_tag: &str) -> String {
+pub fn parse_until(chars: &mut Peekable<Chars>, closing_tag: &str) -> String {
     mkstr!(buffer);
     let tag_len = closing_tag.len();
 
@@ -213,7 +213,7 @@ fn parse_until(chars: &mut Peekable<Chars>, closing_tag: &str) -> String {
 }
 
 /// handle inline code blocks
-fn handle_inline_code(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_inline_code(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.next();
 
     let mut code = String::new();
@@ -230,7 +230,7 @@ fn handle_inline_code(chars: &mut Peekable<Chars>, result: &mut String) {
 }
 
 /// handle hyperlinks
-fn handle_link(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_link(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.next();
 
     mkstr!(text);
@@ -267,7 +267,7 @@ fn handle_link(chars: &mut Peekable<Chars>, result: &mut String) {
 }
 
 /// extract a url from the char stream
-fn extract_url(chars: &mut Peekable<Chars>) -> String {
+pub fn extract_url(chars: &mut Peekable<Chars>) -> String {
     mkstr!(url);
 
     if chars.peek() == Some(&'[') {
@@ -294,7 +294,7 @@ fn extract_url(chars: &mut Peekable<Chars>) -> String {
 }
 
 /// handles search syntax
-fn handle_search(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_search(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.skip_n(2);
 
     mkstr!(search);
@@ -324,7 +324,7 @@ fn handle_search(chars: &mut Peekable<Chars>, result: &mut String) {
 }
 
 /// handles headers
-fn handle_header(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_header(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.next();
     let level = chars.next().unwrap();
     chars.next();
@@ -356,7 +356,7 @@ fn handle_header(chars: &mut Peekable<Chars>, result: &mut String) {
 }
 
 /// handle list items
-fn handle_list(chars: &mut Peekable<Chars>, result: &mut String) {
+pub fn handle_list(chars: &mut Peekable<Chars>, result: &mut String) {
     let mut level: usize = 0;
 
     while chars.peek() == Some(&'*') {

@@ -9,7 +9,10 @@ use {
     schemars::JsonSchema,
     serde::{Deserialize, Serialize},
     smart_default::SmartDefault,
-    std::path::{Path, PathBuf},
+    std::{
+        path::{Path, PathBuf},
+        time::Duration,
+    },
     tracing::info,
 };
 
@@ -56,6 +59,11 @@ impl SizeFormat {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 pub struct HttpConfig {
+    /// The base URL of the API (defaults to <https://e621.net>)
+    #[schemars(url)]
+    #[default(Some("https://e621.net".to_string()))]
+    pub api_url: Option<String>,
+
     /// Connection pool size per host
     #[default(Some(32))]
     pub pool_max_idle_per_host: Option<usize>,
@@ -321,6 +329,10 @@ pub struct SearchCfg {
     /// The amount of posts to show in a search
     #[default(Some(320))]
     pub results: Option<u64>,
+
+    /// Blacklisted tags to filter out from all operations
+    #[default(Some(vec!["young".to_string(), "rape".to_string(), "feral".to_string(), "bestiality".to_string()]))]
+    pub blacklist: Option<Vec<String>>,
 
     /// The minimum amount of posts on a tag for it to show up in tag selection
     #[default(Some(2))]
@@ -679,11 +691,6 @@ pub struct GalleryCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default", default)]
 pub struct E62Rs {
-    /// The base URL of the API (defaults to <https://e621.net>)
-    #[schemars(url)]
-    #[default(Some("https://e621.net".to_string()))]
-    pub base_url: Option<String>,
-
     /// Post viewing settings
     #[default(Some(ImageDisplay::default()))]
     pub display: Option<ImageDisplay>,
@@ -723,10 +730,6 @@ pub struct E62Rs {
     /// Post download settings
     #[default(Some(DownloadCfg::default()))]
     pub download: Option<DownloadCfg>,
-
-    /// Blacklisted tags to filter out from all operations
-    #[default(Some(vec!["young".to_string(), "rape".to_string(), "feral".to_string(), "bestiality".to_string()]))]
-    pub blacklist: Option<Vec<String>>,
 
     /// Downloads explorer settings
     #[default(Some(ExplorerCfg::default()))]
@@ -786,6 +789,9 @@ impl E62Rs {
         match cfg.run_validation() {
             Ok(_) => {
                 info!("Configuration validation successful");
+                std::thread::sleep(Duration::from_secs(2));
+                print!("\x1B[2J\x1B[3J\x1B[H");
+                std::io::Write::flush(&mut std::io::stdout())?;
             }
             Err(e) => {
                 return Err(e);

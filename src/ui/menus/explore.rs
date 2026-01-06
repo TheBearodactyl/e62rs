@@ -60,12 +60,12 @@ impl LocalPost {
     /// read post metadata (windows)
     fn read_metadata(file_path: &Path) -> Result<E6Post> {
         let ads_path = format!("{}:metadata", file_path.display());
+        let mut contents = String::new();
         let mut file = OpenOptions::new()
             .read(true)
             .open(&ads_path)
             .with_context(|| format!("Failed to open ADS metadata for {}", file_path.display()))?;
 
-        let mut contents = String::new();
         file.read_to_string(&mut contents)
             .with_context(|| format!("Failed to read ADS metadata for {}", file_path.display()))?;
 
@@ -82,8 +82,6 @@ impl LocalPost {
         ));
 
         if !json_path.exists() {
-            use color_eyre::eyre::bail;
-
             bail!("Metadata file not found: {}", json_path.display());
         }
 
@@ -593,6 +591,7 @@ impl E6Ui {
                 Select::new("Select a post to view:")
                     .options(options.iter().map(DemandOption::new).collect())
                     .description("Use arrow keys to navigate, Enter to select, Esc to cancel")
+                    .filterable(true)
                     .run()?,
             );
 
@@ -685,7 +684,11 @@ impl E6Ui {
                     );
                     println!("{}", "=".repeat(70));
                 }
-                "Back to list" => break,
+                "Back to list" => {
+                    print!("\x1B[2J\x1B[3J\x1B[H");
+                    std::io::Write::flush(&mut std::io::stdout()).unwrap();
+                    break;
+                }
                 _ => {}
             }
 

@@ -33,7 +33,7 @@ impl E6Client {
             });
         }
 
-        if !getopt!(blacklist).is_empty() {
+        if !getopt!(search.blacklist).is_empty() {
             posts = posts.filter_blacklisted(&[]);
         }
 
@@ -115,8 +115,8 @@ impl E6Client {
         Ok(post)
     }
 
-    #[instrument(skip(self, ids), fields(count = ids.len()))]
     /// get posts by their ids
+    #[instrument(skip(self, ids), fields(count = ids.len()))]
     pub async fn get_posts_by_ids(&self, ids: &[i64]) -> Result<Vec<E6PostResponse>> {
         if ids.is_empty() {
             return Ok(Vec::new());
@@ -191,7 +191,14 @@ impl E6Client {
 
             info!(ty, "checking for updates");
 
-            let response = self.client.get(&url).send().await?;
+            let response = match self.client.get(&url).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    warn!("couldn't download the update: {}", e);
+                    return Ok(());
+                }
+            };
+
             if !response.status().is_success() {
                 bail!("failed to download {}: http {}", ty, response.status());
             }

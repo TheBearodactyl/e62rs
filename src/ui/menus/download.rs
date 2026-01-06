@@ -32,7 +32,7 @@ pub struct PostDownloader {
 }
 
 /// sanitize a value for use in filenames (before template substitution)
-fn sanitize_value<S: AsRef<str>>(input: S) -> String {
+pub fn sanitize_value<S: AsRef<str>>(input: S) -> String {
     let s = input.as_ref();
     let mut sanitized = String::with_capacity(s.len());
 
@@ -62,7 +62,7 @@ fn sanitize_value<S: AsRef<str>>(input: S) -> String {
 }
 
 /// sanitize a path for fs compatibility (only OS-specific issues, not `/`)
-fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
+pub fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
     let s = input.as_ref();
 
     #[cfg(target_os = "windows")]
@@ -398,7 +398,7 @@ impl PostDownloader {
 }
 
 /// build template context based on post metadata
-fn build_context_from_post(
+pub fn build_context_from_post(
     post: &E6Post,
 ) -> (HashMap<String, String>, HashMap<String, Vec<String>>) {
     let mut simple = HashMap::new();
