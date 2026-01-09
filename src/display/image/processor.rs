@@ -61,7 +61,7 @@ impl ImageProcessor {
         let target_dimensions = self.target_dimensions.compute_target(original_dimensions);
 
         let resized_img = if original_dimensions != target_dimensions {
-            img.resize(target_dimensions.0, target_dimensions.1, self.filter)
+            img.resize_exact(target_dimensions.0, target_dimensions.1, self.filter)
         } else {
             img
         };
@@ -94,7 +94,8 @@ impl ImageProcessor {
                         .expect("invalid frame data"),
                     );
 
-                    let resized = img.resize(target_dimensions.0, target_dimensions.1, self.filter);
+                    let resized =
+                        img.resize_exact(target_dimensions.0, target_dimensions.1, self.filter);
                     let rgba8 = resized.to_rgba8();
                     let rgba_data = rgba8.into_raw();
 
@@ -135,7 +136,7 @@ impl ImageProcessor {
                 .expect("invalid frame data"),
             );
 
-            let resized = img.resize(target_dimensions.0, target_dimensions.1, self.filter);
+            let resized = img.resize_exact(target_dimensions.0, target_dimensions.1, self.filter);
             Ok(ImageData::from_dynamic_image(resized))
         } else {
             Ok(frame.data.clone())

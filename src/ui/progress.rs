@@ -20,7 +20,7 @@ pub struct ProgressManager {
 impl ProgressManager {
     /// make a new progress bar manager
     pub fn new() -> Self {
-        let refresh_rate = getopt!(ui.progress_refresh_rate);
+        let refresh_rate = getopt!(ui.progress.refresh_rate);
         let multi = MultiProgress::new();
 
         multi.set_draw_target(ProgressDrawTarget::stderr_with_hz(
@@ -41,8 +41,8 @@ impl ProgressManager {
     /// * `len` - the length of the bar
     /// * `msg` - a message to show to the right of the bar
     pub async fn mk_dl_bar(&self, key: &str, len: u64, msg: &str) -> Result<ProgressBar> {
-        let size_fmt = getopt!(ui.progress_format);
-        let detailed = getopt!(ui.detailed_progress);
+        let size_fmt = getopt!(ui.progress.format);
+        let detailed = getopt!(ui.progress.detailed);
         let template = if detailed {
             "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] \
              {pos_size:>10}/{len_size} ({percent}%) {msg}"
@@ -101,7 +101,7 @@ impl ProgressManager {
         len: u64,
         message: &str,
     ) -> Result<ProgressBar> {
-        let detailed = getopt!(ui.detailed_progress);
+        let detailed = getopt!(ui.progress.detailed);
         let template = if detailed {
             "{spinner:.bright_cyan} [{elapsed_precise}] [{wide_bar:.bright_cyan/blue}] {pos}/{len} \
              ({percent}%) {msg}"

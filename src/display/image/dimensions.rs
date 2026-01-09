@@ -59,17 +59,28 @@ impl ImageDimensions {
         let (orig_width, orig_height) = original;
 
         match (self.width, self.height) {
-            (Some(width), Some(height)) => (width, height),
+            (Some(width), Some(height)) => {
+                let width_ratio = width as f64 / orig_width as f64;
+                let height_ratio = height as f64 / orig_height as f64;
+                let scale = width_ratio.min(height_ratio);
+                let new_width = (orig_width as f64 * scale).round() as u32;
+                let new_height = (orig_height as f64 * scale).round() as u32;
+
+                (new_width, new_height)
+            }
+
             (Some(width), None) => {
                 let aspect_ratio = orig_height as f64 / orig_width as f64;
                 let new_height = (width as f64 * aspect_ratio).round() as u32;
                 (width, new_height)
             }
+
             (None, Some(height)) => {
                 let aspect_ratio = orig_width as f64 / orig_height as f64;
                 let new_width = (height as f64 * aspect_ratio).round() as u32;
                 (new_width, height)
             }
+
             (None, None) => (orig_width, orig_height),
         }
     }

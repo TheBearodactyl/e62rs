@@ -1,61 +1,61 @@
-language = "English"
-
 [display]
 width = 800
 height = 600
-image_when_info = true
-sixel_quality = 100
-resize_method = "lanczos3"
+image-when-info = true
+sixel-quality = 100
+resize-method = "lanczos3"
 
 [http]
-api_url = "https://e621.net"
-pool_max_idle_per_host = 32
-pool_idle_timeout_secs = 90
-timeout_secs = 30
-connect_timeout_secs = 10
-max_connections = 15
+api = "https://e621.net"
+pool-max-idle-per-host = 32
+pool-idle-timeout = 90
+timeout = 30
+connect-timeout = 10
+max-connections = 15
 http2 = false
-tcp_keepalive = true
-tcp_keepalive_secs = 60
-user_agent = "e62rs/v1.0.1 (by bearodactyl on e621)"
+tcp-keepalive = true
+tcp-keepalive-secs = 60
+user-agent = "e62rs/v1.0.2 (by bearodactyl on e621)"
 
 [cache]
 enabled = true
-cache_dir = ".cache"
-ttl_secs = 3600
-tti_secs = 1800
-max_size_mb = 500
-max_entries = 10000
-use_lru_policy = false
-enable_stats = true
-cleanup_interval = 300
-enable_compression = false
-compression_level = 6
+cache-dir = ".cache"
+ttl-secs = 3600
+tti-secs = 1800
+max-size-mb = 500
+max-entries = 10000
+use-lru-policy = false
+enable-stats = true
+cleanup-interval = 300
+enable-compression = false
+compression-level = 6
 
 [cache.posts]
 enabled = true
-max_posts = 50000000
+max-posts = 50000000
 wal = true
-page_size_kb = 4
-auto_compact = true
-compact_threshold = 25
+page-size-kb = 4
+auto-compact = true
+compact-threshold = 25
 
 [performance]
-prefetch_enabled = true
-prefetch_batch_size = 10
-preload_images = true
-max_preload_size_mb = 100
+prefetch-enabled = true
+prefetch-batch-size = 10
+preload-images = true
+max-preload-size-mb = 100
 
 [ui]
-progress_refresh_rate = 20
-enable_custom_ctrlc_handler = false
-progress_message_mode = "id"
-detailed_progress = true
-auto_clear_progress = true
-pagination_size = 20
-colored_output = true
-progress_format = "MegaBytes"
-tag_guide_on_first_run = true
+ctrlc-handler = false
+pagination-size = 20
+colored-output = true
+tag-guide = true
+language = "english"
+
+[ui.progress]
+refresh-rate = 20
+format = "MegaBytes"
+detailed = true
+message = "id"
 
 [search]
 results = 320
@@ -65,23 +65,23 @@ blacklist = [
     "feral",
     "bestiality",
 ]
-min_posts_on_tag = 2
-min_posts_on_pool = 2
-show_inactive_pools = true
-sort_pools_by_post_count = false
-sort_tags_by_post_count = true
-min_post_score = 0
-max_post_score = 9223372036854775807
-reverse_tags_order = false
-fetch_threads = 8
+min-posts-on-tag = 2
+min-posts-on-pool = 2
+show-inactive-pools = true
+sort-pools-by-post-count = false
+sort-tags-by-post-count = true
+min-post-score = 0
+max-post-score = 9223372036854775807
+reverse-tags-order = false
+fetch-threads = 8
 
 [login]
 login = true
 username = ""
-api_key = ""
+api-key = ""
 
 [completion]
-tag_similarity_threshold = 0.8
+tag-similarity-threshold = 0.8
 tags = "data/tags.csv"
 aliases = "data/tag_aliases.csv"
 implications = "data/tag_implications.csv"
@@ -93,34 +93,34 @@ pools = true
 
 [download]
 path = "downloads"
-pools_path = "downloads/pools"
+pools-path = "downloads/pools"
 threads = 15
-save_metadata = true
+save-metadata = true
 format = "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
 
 [explorer]
 recursive = true
-show_progress = true
-progress_threshold = 100
-default_sort = "date_newest"
-posts_per_page = 20
-cache_metadata = true
-auto_display_image = true
-slideshow_delay = 5
+show-progress = true
+progress-threshold = 100
+default-sort = "date_newest"
+posts-per-page = 20
+cache-metadata = true
+auto-display-image = true
+slideshow-delay = 5
 
 [gallery]
 enabled = true
-metadata_filtering = true
+metadata-filtering = true
 port = 23794
-cache_metadata = true
-auto_open = false
-load_threads = 8
+cache-metadata = true
+auto-open = false
+load-threads = 8
 theme = "catppuccin-frappe"
 
 [logging]
 enable = true
 level = "info"
-format = "Pretty"
+format = "pretty"
 asni = true
-event_targets = false
-line_numbers = false
+event-targets = false
+line-numbers = false

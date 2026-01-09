@@ -4,10 +4,10 @@
     clippy::clone_on_copy,
     clippy::missing_docs_in_private_items,
     clippy::empty_docs,
-    //clippy::missing_errors_doc,
     clippy::missing_safety_doc,
-    //clippy::missing_panics_doc
+    unused
 )]
+#![allow(uncommon_codepoints, confusable_idents)]
 pub mod app;
 pub mod cache;
 pub mod client;

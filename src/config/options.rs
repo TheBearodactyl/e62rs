@@ -55,11 +55,12 @@ impl SizeFormat {
 /// Configuration options for making HTTP requests
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
+#[serde(rename_all = "kebab-case")]
 pub struct HttpConfig {
     /// The base URL of the API (defaults to <https://e621.net>)
     #[schemars(url)]
     #[default(Some("https://e621.net".to_string()))]
-    pub api_url: Option<String>,
+    pub api: Option<String>,
 
     /// Connection pool size per host
     #[default(Some(32))]
@@ -67,15 +68,15 @@ pub struct HttpConfig {
 
     /// Connection pool idle timeout in seconds
     #[default(Some(90))]
-    pub pool_idle_timeout_secs: Option<u64>,
+    pub pool_idle_timeout: Option<u64>,
 
     /// Request timeout in seconds
     #[default(Some(30))]
-    pub timeout_secs: Option<u64>,
+    pub timeout: Option<u64>,
 
     /// Connection timeout in seconds
     #[default(Some(10))]
-    pub connect_timeout_secs: Option<u64>,
+    pub connect_timeout: Option<u64>,
 
     #[schemars(range(min = 1, max = 15))]
     /// Max concurrent connections
@@ -114,6 +115,7 @@ pub struct HttpConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct CacheConfig {
     /// Enable response caching
     #[default(Some(true))]
@@ -168,6 +170,7 @@ pub struct CacheConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PostCacheConfig {
     /// Enable post cache
     #[default(Some(true))]
@@ -198,6 +201,7 @@ pub struct PostCacheConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PerformanceConfig {
     /// Prefetch next batch of posts
     #[default(Some(true))]
@@ -220,26 +224,11 @@ pub struct PerformanceConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct UiConfig {
-    /// Progress bar refresh rate (Hz)
-    #[default(Some(20))]
-    pub progress_refresh_rate: Option<u64>,
-
     /// Enable the custom Ctrl+C interceptor
     #[default(Some(false))]
-    pub enable_custom_ctrlc_handler: Option<bool>,
-
-    /// The string to display next to download progress bars
-    #[default(Some("id".to_string()))]
-    pub progress_message_mode: Option<String>,
-
-    /// Show detailed progress info
-    #[default(Some(true))]
-    pub detailed_progress: Option<bool>,
-
-    /// Auto-clear completed progress bars
-    #[default(Some(true))]
-    pub auto_clear_progress: Option<bool>,
+    pub ctrlc_handler: Option<bool>,
 
     /// Pagination size for post listings
     #[default(Some(20))]
@@ -249,17 +238,45 @@ pub struct UiConfig {
     #[default(Some(true))]
     pub colored_output: Option<bool>,
 
-    /// The format to display download progress in
-    #[default(Some(SizeFormat::default()))]
-    pub progress_format: Option<SizeFormat>,
-
     /// Show the tag input guide on the first run
     #[default(Some(true))]
-    pub tag_guide_on_first_run: Option<bool>,
+    pub tag_guide: Option<bool>,
+
+    /// The language to use
+    #[default(Some(Language::default()))]
+    pub language: Option<Language>,
+
+    /// Progress configuration
+    #[default(Some(ProgressCfg::default()))]
+    pub progress: Option<ProgressCfg>,
+}
+
+/// Settings for progress in the UI
+#[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
+#[schemars(bound = "T: JsonSchema + Default")]
+#[schemars(default)]
+#[serde(rename_all = "kebab-case")]
+pub struct ProgressCfg {
+    /// Progress bar refresh rate (Hz)
+    #[default(Some(20))]
+    pub refresh_rate: Option<u64>,
+
+    /// The format to display download progress in
+    #[default(Some(SizeFormat::default()))]
+    pub format: Option<SizeFormat>,
+
+    /// Show detailed progress info
+    #[default(Some(true))]
+    pub detailed: Option<bool>,
+
+    /// The string to display next to download progress bars
+    #[default(Some("id".to_string()))]
+    pub message: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
+#[serde(rename_all = "kebab-case")]
 /// The format to log in
 pub enum LoggingFormat {
     /// Use the compact output format
@@ -274,6 +291,7 @@ pub enum LoggingFormat {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct LoggingConfig {
     /// Enable logging (HIGHLY RECCOMMEND TO KEEP ON)
     #[default(Some(true))]
@@ -304,6 +322,7 @@ pub struct LoggingConfig {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct ImageDisplay {
     /// The max width of displayed images
     #[default(Some(800))]
@@ -330,6 +349,7 @@ pub struct ImageDisplay {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct SearchCfg {
     /// The amount of posts to show in a search
     #[default(Some(320))]
@@ -380,6 +400,7 @@ pub struct SearchCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct CompletionCfg {
     /// The similarity threshold to complete a tag
     #[default(Some(0.8))]
@@ -406,6 +427,7 @@ pub struct CompletionCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct LoginCfg {
     #[default(Some(true))]
     /// Whether to login or not
@@ -424,6 +446,7 @@ pub struct LoginCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct AutoUpdateCfg {
     /// Whether or not to auto-update tags
     #[default(Some(true))]
@@ -438,6 +461,7 @@ pub struct AutoUpdateCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct ExplorerCfg {
     /// Enable recursive directory scanning
     #[default(Some(true))]
@@ -476,6 +500,7 @@ pub struct ExplorerCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct DownloadCfg {
     /// The directory to download posts to
     #[default(Some("downloads".to_string()))]
@@ -653,6 +678,7 @@ pub struct DownloadCfg {
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default")]
 #[schemars(default)]
+#[serde(rename_all = "kebab-case")]
 pub struct GalleryCfg {
     /// Enable the media gallery server
     #[default(Some(true))]
@@ -694,6 +720,7 @@ pub struct GalleryCfg {
 
 /// The language the app uses
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, JsonSchema, Default)]
+#[serde(rename_all = "kebab-case")]
 pub enum Language {
     #[default]
     /// English
@@ -709,11 +736,8 @@ pub enum Language {
 /// E62RS configuration options
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default", default)]
+#[serde(rename_all = "kebab-case")]
 pub struct E62Rs {
-    /// The language to use
-    #[default(Some(Language::default()))]
-    pub language: Option<Language>,
-
     /// Post viewing settings
     #[default(Some(ImageDisplay::default()))]
     pub display: Option<ImageDisplay>,

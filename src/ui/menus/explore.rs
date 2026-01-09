@@ -14,6 +14,7 @@ use {
         },
     },
     color_eyre::eyre::{Context, Result, bail},
+    crossterm::event::{Event, KeyCode, KeyEventKind},
     demand::{Confirm, DemandOption, Input, Select},
     futures::lock::Mutex,
     hashbrown::HashMap,
@@ -24,7 +25,6 @@ use {
         io::Read,
         path::{Path, PathBuf},
         sync::Arc,
-        thread::sleep,
         time::Duration,
     },
     tracing::warn,
@@ -544,11 +544,55 @@ impl E6Ui {
 
     /// show a slideshow of filtered posts
     pub async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
-        let sleep_time: u64 = getopt!(explorer.slideshow_delay);
+        let mut paused = false;
+        let sleep_seconds: u64 = getopt!(explorer.slideshow_delay);
+        let slide_duration = Duration::from_secs(sleep_seconds);
+        let tick_rate = Duration::from_millis(100);
+        let mut i = 0;
 
-        for post in posts {
-            post.view().ok();
-            sleep(Duration::from_secs(sleep_time));
+        while i < posts.len() {
+            print!("\x1B[2J\x1B[3J\x1B[H");
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+
+            println!("Space to pause | Left/H - Go back | Right/L - Go forward");
+
+            posts[i].view().ok();
+
+            let mut time_elapsed = Duration::ZERO;
+
+            loop {
+                if crossterm::event::poll(tick_rate)?
+                    && let Event::Key(key) = crossterm::event::read()?
+                    && key.kind == KeyEventKind::Press
+                {
+                    match key.code {
+                        KeyCode::Char(' ') => paused = !paused,
+                        KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+
+                        KeyCode::Right | KeyCode::Char('l') => {
+                            i += 1;
+                            break;
+                        }
+
+                        KeyCode::Left | KeyCode::Char('h') => {
+                            i = i.saturating_sub(1);
+                            break;
+                        }
+
+                        _ => {}
+                    }
+
+                    if paused {
+                        continue;
+                    }
+
+                    time_elapsed += tick_rate;
+                    if time_elapsed >= slide_duration {
+                        i += 1;
+                        break;
+                    }
+                }
+            }
         }
 
         Ok(())

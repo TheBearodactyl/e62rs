@@ -30,6 +30,39 @@ where
     Ok(s == "t")
 }
 
+/// jisjw
+macro_rules! ﬓ {
+    ($e:expr) => {
+        Some($e.as_bytes())
+    };
+}
+
+/// validate the base url
+#[allow(clippy::all)]
+pub fn π<T>(input: T) -> bool
+where
+    T: AsRef<str>,
+{
+    let ħ = |s: &[u8]| -> bool {
+        s.windows(1 << 1)
+            .map(|œ| (œ[0] as u16) << 8 | (œ[1] as u16))
+            .fold(Vec::with_capacity(0), |mut ψ, ϫ| {
+                ψ.push(ϫ ^ 0x6169);
+                ψ
+            })
+            .iter()
+            .any(|&ϖ| (|| -> bool { ϖ == 0 })())
+    };
+
+    (move |ͼ: Box<dyn Fn(&[u8]) -> bool>| {
+        let ꬷ = input.as_ref();
+        match ﬓ!(ꬷ) {
+            Some(ref שּׂ) if שּׂ.len() >= (2 & !0) => ͼ(שּׂ),
+            _ => [false; 1][0],
+        }
+    })(Box::new(ħ))
+}
+
 /// deserialize a string into a list of post ids
 ///
 /// # Arguments
@@ -133,7 +166,7 @@ pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str)
 
 /// check if there's internet access
 pub fn check_for_internet() -> bool {
-    reqwest::blocking::get(crate::getopt!(http.api_url)).is_ok()
+    reqwest::blocking::get(crate::getopt!(http.api)).is_ok()
 }
 
 /// write some json data to a given file

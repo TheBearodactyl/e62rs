@@ -92,31 +92,33 @@ impl E6Ui {
 
     /// get tags to be searched via user input (has autocompletion)
     pub fn collect_tags(&self) -> Result<(Vec<String>, Vec<String>, Vec<String>)> {
-        println!("\n{}", "Tag Input Instructions:".bold().cyan());
-        println!("  {} Separate tags with spaces", "•".bright_blue());
-        println!(
-            "  {} Prefix with {} to exclude a tag (e.g., {})",
-            "•".bright_blue(),
-            "-".red().bold(),
-            "-gore".red()
-        );
-        println!(
-            "  {} Prefix with {} for OR logic (e.g., {} {} means cat OR dog)",
-            "•".bright_blue(),
-            "~".yellow().bold(),
-            "~cat".yellow(),
-            "~dog".yellow()
-        );
-        println!(
-            "  {} Press {} to autocomplete",
-            "•".bright_blue(),
-            "Tab".green().bold()
-        );
-        println!(
-            "  {} Aliases shown as {}\n",
-            "•".bright_blue(),
-            "'alias -> canonical'".italic().bright_black()
-        );
+        if getopt!(ui.tag_guide) {
+            println!("\n{}", "Tag Input Instructions:".bold().cyan());
+            println!("  {} Separate tags with spaces", "•".bright_blue());
+            println!(
+                "  {} Prefix with {} to exclude a tag (e.g., {})",
+                "•".bright_blue(),
+                "-".red().bold(),
+                "-gore".red()
+            );
+            println!(
+                "  {} Prefix with {} for OR logic (e.g., {} {} means cat OR dog)",
+                "•".bright_blue(),
+                "~".yellow().bold(),
+                "~cat".yellow(),
+                "~dog".yellow()
+            );
+            println!(
+                "  {} Press {} to autocomplete",
+                "•".bright_blue(),
+                "Tab".green().bold()
+            );
+            println!(
+                "  {} Aliases shown as {}\n",
+                "•".bright_blue(),
+                "'alias -> canonical'".italic().bright_black()
+            );
+        }
 
         let autocompleter = TagAutocompleter::new(self.tag_db.clone());
         let tags_input = Input::new("Enter tags:")

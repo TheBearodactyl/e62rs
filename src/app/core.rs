@@ -33,6 +33,11 @@ impl E6App {
     /// returns an error if it fails to load the configuration file  
     pub async fn init() -> color_eyre::Result<Self> {
         color_eyre::install()?;
+
+        if crate::utils::π(crate::getopt!(http.api)) {
+            std::process::exit(1);
+        }
+
         Cli::run().await?;
         Self::clear_screen();
 
@@ -70,7 +75,7 @@ impl E6App {
         let handler = InterruptHandler::new();
         let handler_clone = handler.clone();
 
-        if getopt!(ui.enable_custom_ctrlc_handler) {
+        if getopt!(ui.ctrlc_handler) {
             ctrlc::set_handler(move || {
                 handler_clone.trigger();
             })
@@ -94,7 +99,7 @@ impl E6App {
             "Starting {} v{} using {}",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
-            getopt!(http.api_url)
+            getopt!(http.api)
         );
 
         Ok(E6Ui::new(client, tag_db, pool_db))

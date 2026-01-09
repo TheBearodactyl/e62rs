@@ -221,8 +221,7 @@ macro_rules! menu {
 
                 $(
                     {
-                        let lang = $crate::getopt!(language);
-                        let has_internet = $crate::utils::check_for_internet();
+                        let lang = $crate::getopt!(ui.language);
 
                         let label = match lang {
                             Language::English => $label,
@@ -240,7 +239,7 @@ macro_rules! menu {
                             ),
                         };
 
-                        if has_internet == $online {
+                        if $online {
                             use ::owo_colors::OwoColorize;
                             let warning = match lang {
                                 Language::English => " (REQUIRES INTERNET ACCESS)",

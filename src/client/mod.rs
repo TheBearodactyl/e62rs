@@ -86,10 +86,10 @@ impl E6Client {
     fn build_http_client() -> Result<Client> {
         let mut client_builder = Client::builder()
             .user_agent(getopt!(http.user_agent))
-            .timeout(Duration::from_secs(getopt!(http.timeout_secs)))
-            .connect_timeout(Duration::from_secs(getopt!(http.connect_timeout_secs)))
+            .timeout(Duration::from_secs(getopt!(http.timeout)))
+            .connect_timeout(Duration::from_secs(getopt!(http.connect_timeout)))
             .pool_max_idle_per_host(getopt!(http.pool_max_idle_per_host))
-            .pool_idle_timeout(Duration::from_secs(getopt!(http.pool_idle_timeout_secs)));
+            .pool_idle_timeout(Duration::from_secs(getopt!(http.pool_idle_timeout)));
 
         opt_and!(
             http.http2,

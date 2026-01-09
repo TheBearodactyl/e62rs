@@ -18,11 +18,11 @@ pub trait Validate {
 validator! { HttpConfig,
     pool_max_idle_per_host => |v: &usize| *v > 0,
         "must be greater than 0";
-    pool_idle_timeout_secs => |v: &u64| *v > 0,
+    pool_idle_timeout => |v: &u64| *v > 0,
         "must be greater than 0";
-    timeout_secs => |v: &u64| *v > 0,
+    timeout => |v: &u64| *v > 0,
         "must be greater than 0";
-    connect_timeout_secs => |v: &u64| *v > 0,
+    connect_timeout => |v: &u64| *v > 0,
         "must be greater than 0";
     max_connections => |v: &usize| *v >= 1 && *v <= 15,
         "must be between 1 and 15";
@@ -30,7 +30,7 @@ validator! { HttpConfig,
         "must be greater than 0";
     user_agent => |v: &String| !v.trim().is_empty(),
         "must not be empty";
-    api_url => |v: &String| v.starts_with("http://") || v.starts_with("https://"),
+    api => |v: &String| v.starts_with("http://") || v.starts_with("https://"),
         "must be a valid url and not link to e6ai";
 }
 
@@ -76,12 +76,15 @@ validator! { PerformanceConfig,
 const VALID_PROGRESS_MESSAGE_MODES: &[&str] = &["id", "filename"];
 
 validator! { UiConfig,
-    progress_refresh_rate => |v: &u64| *v > 0 && *v <= 240,
-        "must be between 1 and 240 Hz";
-    progress_message_mode => |v: &String| VALID_PROGRESS_MESSAGE_MODES.contains(&v.to_lowercase().as_str()),
-        "must be either 'id' or 'filename'";
     pagination_size => |v: &usize| *v > 0 && *v <= 1000,
         "must be between 1 and 1000";
+}
+
+validator! { ProgressCfg,
+    refresh_rate => |v: &u64| *v > 0 && *v <= 240,
+        "must be between 1 and 240 Hz";
+    message => |v: &String| VALID_PROGRESS_MESSAGE_MODES.contains(&v.to_lowercase().as_str()),
+        "must be either 'id' or 'filename'";
 }
 
 /// valid log levels
