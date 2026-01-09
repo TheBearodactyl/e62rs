@@ -7,6 +7,10 @@ use {
 };
 
 /// setup logging
+///
+/// # Errors
+///
+/// returns an error if it fails to setup logging
 pub fn setup() -> Result<()> {
     let max_level = string_to_log_level(&getopt!(logging.level));
     let enabled = getopt!(logging.enable);

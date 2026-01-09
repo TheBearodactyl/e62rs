@@ -2,8 +2,10 @@
 use {
     crate::{cache::posts::CacheEntry, client::E6Client, getopt},
     color_eyre::eyre::{Context, Result, bail},
+    flate2::{Compression, read::GzDecoder, write::GzEncoder},
     hashbrown::HashMap,
     std::{
+        io::{Read, Write},
         sync::atomic::Ordering,
         time::{Instant, SystemTime, UNIX_EPOCH},
     },
@@ -15,6 +17,19 @@ pub mod stats;
 
 impl E6Client {
     /// get an entry from the cache, fetch if no entry found
+    ///
+    /// # Arguments
+    ///
+    /// * `url` - the url of the post to get
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to fetch the post
+    ///
+    /// # Returns
+    ///
+    /// * `Err(color_eyre::Report)` - an error describing why it failed
+    /// * `Ok(Vec<u8>)` - the data of the cache entry or fetched post
     pub async fn get_cached_or_fetch(&self, url: &str) -> Result<Vec<u8>> {
         let cache_key = url.to_string();
 
@@ -28,7 +43,7 @@ impl E6Client {
             let cached_data = {
                 let cache = self.cache.read().await;
 
-                if let Some(entry) = cache.get(&cache_key) {
+                cache.get(&cache_key).and_then(|entry| {
                     let ttl = getopt!(cache.ttl_secs);
                     let tti = getopt!(cache.tti_secs);
                     let age = now.saturating_sub(entry.timestamp);
@@ -53,9 +68,7 @@ impl E6Client {
 
                         None
                     }
-                } else {
-                    None
-                }
+                })
             };
 
             if let Some((data, compressed)) = cached_data {
@@ -120,6 +133,12 @@ impl E6Client {
     }
 
     /// make a new cache entry
+    ///
+    /// # Arguments
+    ///
+    /// * `cache_key` - the key of the new entry to insert into the cache
+    /// * `data` - the data of the new entry
+    /// * `etag` - an optional etag for the new entry
     async fn insert_into_cache(
         &self,
         cache_key: String,
@@ -174,6 +193,11 @@ impl E6Client {
     }
 
     /// evict n entries from the cache
+    ///
+    /// # Arguments
+    ///
+    /// * `cache` - the current state of the cache (mutable)
+    /// * `target_size` - the size to attempt to achieve by evicting entries
     fn evict_entries_inner(&self, cache: &mut HashMap<String, CacheEntry>, target_size: usize) {
         let to_remove = cache.len().saturating_sub(target_size * 3 / 4);
 
@@ -228,12 +252,16 @@ impl E6Client {
     }
 
     /// compress bytes
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - the data to compress
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to move the given data into a compressor
+    /// returns an error if it fails to compress the given data
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use {
-            flate2::{Compression, write::GzEncoder},
-            std::io::Write,
-        };
-
         let level = getopt!(cache.compression_level);
         let level = level.clamp(0, 9) as u32;
 
@@ -245,9 +273,15 @@ impl E6Client {
     }
 
     /// decompress bytes
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - the data to decompress
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to decompress (obviously lol)
     fn decompress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use {flate2::read::GzDecoder, std::io::Read};
-
         let mut decoder = GzDecoder::new(data);
         let mut decompressed = Vec::new();
         decoder
@@ -257,9 +291,10 @@ impl E6Client {
     }
 
     /// clear the cache
+    ///
+    /// removes all entries from the cache
     pub async fn clear_cache(&self) {
         let mut cache = self.cache.write().await;
-
         cache.clear();
 
         if getopt!(cache.enable_stats) {
@@ -267,6 +302,7 @@ impl E6Client {
         }
 
         info!("Cache cleared");
+        drop(cache);
     }
 
     /// get stats for the http cache
@@ -274,6 +310,7 @@ impl E6Client {
         let cache = self.cache.read().await;
         let size = cache.len();
         let total_bytes: u64 = cache.values().map(|entry| entry.data.len() as u64).sum();
+        drop(cache);
 
         (size, total_bytes)
     }
@@ -310,6 +347,10 @@ impl E6Client {
     }
 
     /// clear the http and post caches
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to clear the post cache
     pub async fn clear_all_caches(&self) -> Result<()> {
         self.clear_cache().await;
         self.post_cache.clear().await?;
@@ -318,6 +359,10 @@ impl E6Client {
     }
 
     /// get the stats for the http and post caches
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to get the stats of the post cache
     pub async fn get_all_cache_stats(&self) -> Result<String> {
         let http_stats = self.get_detailed_cache_stats().await;
         let post_stats = self
@@ -330,6 +375,10 @@ impl E6Client {
     }
 
     /// cleanup expired entries from the cache
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to get the system time in seconds
     pub async fn cleanup_expired_entries(&self) -> Result<usize> {
         if !getopt!(cache.enabled) {
             return Ok(0);
@@ -337,8 +386,7 @@ impl E6Client {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map(|d| d.as_secs())?;
         let ttl = getopt!(cache.ttl_secs);
         let tti = getopt!(cache.tti_secs);
         let mut cache = self.cache.write().await;
@@ -356,6 +404,8 @@ impl E6Client {
         for key in keys_to_remove {
             cache.remove(&key);
         }
+
+        drop(cache);
 
         if count > 0 {
             if getopt!(cache.enable_stats) {

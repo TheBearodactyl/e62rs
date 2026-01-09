@@ -5,10 +5,10 @@ use {
     std::{io::Cursor, path::Path},
 };
 
-/// raw rgb888 image data with dimensions
+/// raw rgba888 image data with dimensions
 #[derive(Debug, Clone)]
 pub struct ImageData {
-    /// raw rgb888 pixel data
+    /// raw rgba888 pixel data
     pub rgb_data: Vec<u8>,
     /// image width (px)
     pub width: usize,

@@ -1,5 +1,7 @@
 //! ui menus
-use crate::{getopt, ui::themes::ROSE_PINE};
+//!
+//! áéíóú
+use crate::{menu, ui::themes::ROSE_PINE};
 
 pub mod blacklist;
 pub mod download;
@@ -8,121 +10,151 @@ pub mod reorganize;
 pub mod search;
 pub mod view;
 
-/// make a menu from an enum
-macro_rules! menu {
-    (
-        $(#[$enum_meta:meta])*
-        $vis:vis $enum_name:ident { filterable: $filterable:expr,
-            $(
-                $(#[$variant_meta:meta])*
-                $variant:ident => {
-                    label: $label:expr,
-                    desc: $desc:expr
-                }
-            ),* $(,)?
-        }
-    ) => {
-        $(#[$enum_meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        $vis enum $enum_name {
-            $(
-                $(#[$variant_meta])*
-                $variant,
-            )*
-        }
-
-        impl ::std::fmt::Display for $enum_name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                match self {
-                    $(
-                        Self::$variant => write!(f, "{}", $desc),
-                    )*
-                }
-            }
-        }
-
-        impl $enum_name {
-            /// display a menu and return the selected option
-            #[allow(dead_code)]
-            pub fn select(prompt: &str) -> ::demand::Select<'_, Self> {
-                ::demand::Select::new(prompt)
-                    .filterable($filterable)
-                    .theme(&ROSE_PINE)
-                    .options(vec![
-                        $(
-                            ::demand::DemandOption::new(Self::$variant)
-                                .label($label)
-                                .description($desc),
-                        )*
-                    ])
-            }
-
-            /// get the label of the given variant
-            #[allow(dead_code)]
-            pub const fn label(&self) -> &'static str {
-                match self {
-                    $(
-                        Self::$variant => $label,
-                    )*
-                }
-            }
-        }
-    };
+#[derive(Default)]
+/// stats for translation progress on a language
+pub struct TranslationStats {
+    /// the number of labels translated for a language
+    pub labels_translated: usize,
+    /// the number of descriptions translated for a language
+    pub descriptions_translated: usize,
+    /// the total number of variants
+    pub total_variants: usize,
 }
 
 menu! {
     /// Post interaction menu
-    pub InteractionMenu {  filterable: false,
+    pub InteractionMenu {  filterable: true,
         /// Open the post in a browser
         OpenInBrowser => {
-            label: "Open in browser",
-            desc: "Open the post in your browser at the e621 website"
+            label: {
+                english => "Open in browser",
+                japanese => "",
+                spanish => "Abrir en el navegador"
+            },
+            desc: {
+                english => "Open the post in your browser at the e621 website",
+                japanese => "e621のウェでブサイトで",
+                spanish => "Abre la publicación en tu navegador en e621 welfare q"
+            },
+            online: true
         },
         /// Download the post
         Download => {
-            label: "Download",
-            desc: &format!("Download the post to your downloads folder ({})", getopt!(download.path))
+            label: {
+                english => "Download",
+                japanese => "",
+                spanish => "Descargar"
+            },
+            desc: {
+                english => "Download the post to your downloads folder",
+                japanese => "",
+                spanish => "Descarga la publicación en tu carpeta de descargas"
+            },
+            online: true
         },
         /// View the post in your terminal
         View => {
-            label: "View in terminal",
-            desc: "Display the post image in your terminal via SIXEL"
+            label: {
+                english => "View in terminal",
+                japanese => "",
+                spanish => "Ver en terminal"
+            },
+            desc: {
+                english => "Display the post image in your terminal via SIXEL",
+                japanese => "",
+                spanish => "Muestra la imagen de la publicación en tu terminal mediante SIXEL"
+            },
+            online: true
         },
         /// Go back
         Back => {
-            label: "Go back to search",
-            desc: "Go back to the search menu"
+            label: {
+                english => "Go back to search",
+                japanese => "",
+                spanish => "Volver a la búsqueda"
+            },
+            desc: {
+                english => "Go back to the search menu",
+                japanese => "",
+                spanish => "Volver al menú de búsqueda"
+            },
+            online: false
         }
     }
 }
 
 menu! {
     /// Pool interaction menu
-    pub PoolInteractionMenu { filterable: false,
+    pub PoolInteractionMenu { filterable: true,
         /// View posts from this pool
         ViewPosts => {
-            label: "View posts from this pool",
-            desc: "Browse and interact with all posts contained in this pool"
+            label: {
+                english => "View posts from this pool",
+                japanese => "",
+                spanish => "Ver publicaciones de este grupo"
+            },
+            desc: {
+                english => "Browse and interact with all posts contained in this pool",
+                japanese => "",
+                spanish => "Explora e interactúa con todas las publicaciones contenidas en este grupo"
+            },
+            online: true
         },
         /// Download all posts from this pool
         Download => {
-            label: "Download all posts from this pool",
-            desc: "Download all posts from this pool to your downloads folder"
+            label: {
+                english => "Download all posts from this pool",
+                japanese => "",
+                spanish => "Descargar todas las publicaciones de este grupo"
+            },
+            desc: {
+                english => "Download all posts from this pool to your downloads folder",
+                japanese => "",
+                spanish => "Descarga todas las publicaciones de este grupo a tu carpeta de descargas"
+            },
+            online: true
         },
         /// Download pool to dedicated pools folder
         DownloadToPoolsFolder => {
-            label: "Download to pools dir",
-            desc: "Download the entire pool to your dedicated pools folder with metadata"
+            label: {
+                english => "Download to pools dir",
+                japanese => "",
+                spanish => "Descargar al directorio de grupos"
+            },
+            desc: {
+                english => "Download the entire pool to your dedicated pools folder with metadata",
+                japanese => "",
+                spanish => "Descargar todo el grupo a tu directorio de grupos dedicado con metadatos"
+            },
+            online: true
         },
         /// Open the pool in e621
         OpenInBrowser => {
-            label: "Open pool page in browser",
-            desc: "Open the pool page in your browser at the e621 website"
+            label: {
+                english => "Open pool page in browser",
+                japanese => "",
+                spanish => "Abrir la página del grupo en el navegador"
+            },
+            desc: {
+                english => "Open the pool page in your browser at the e621 website",
+                japanese => "",
+                spanish => "Abre la página del grupo en tu navegador en el sitio web e621"
+            },
+            online: true
         },
         /// Go back
         Back => {
-            label: "Go back to pool search",
-            desc: "Return to the pool search menu"
+            label: {
+                english => "Go back to pool search",
+                japanese => "",
+                spanish => "Volver a la búsqueda por grupos"
+            },
+            desc: {
+                english => "Return to the pool search menu",
+                japanese => "",
+                spanish => "Volver al menú de búsqueda de grupos"
+            },
+            online: false
         }
     }
 }
@@ -130,32 +162,77 @@ menu! {
 menu! {
     /// Batch post interaction
     pub BatchAction {
-        filterable: false,
+        filterable: true,
 
         /// Download all selected
         DownloadAll => {
-            label: "Download all selected posts",
-            desc: "Download all currently selected posts to your downloads folder"
+            label: {
+                english => "Download all selected posts",
+                japanese => "",
+                spanish => "Descargar todos las publicaciones seleccionadas"
+            },
+            desc: {
+                english => "Download all currently selected posts to your downloads folder",
+                japanese => "",
+                spanish => "Descarga todas las publicaciones seleccionadas actualmente a tu carpeta de descargas"
+            },
+            online: true
         },
         /// Open all selected in browser
         Browser => {
-            label: "Open all selected posts in browser",
-            desc: "Open all selected posts in your default web browser"
+            label: {
+                english => "Open all selected posts in browser",
+                japanese => "",
+                spanish => "Abrir todas las publicaciones seleccionadas en el navegador"
+            },
+            desc: {
+                english => "Open all selected posts in your default web browser",
+                japanese => "",
+                spanish => "Abre todas las publicaciones seleccionadas en tu navegador web predeterminado"
+            },
+            online: true
         },
         /// Download and open all selected posts
         DlAndOpen => {
-            label: "Download + open all selected posts",
-            desc: "Download all selected posts and then open them in your browser"
+            label: {
+                english => "Download + open all selected posts",
+                japanese => "",
+                spanish => "Descargar y abrir todas las publicaciones seleccionadas"
+            },
+            desc: {
+                english => "Download all selected posts and then open them in your browser",
+                japanese => "",
+                spanish => "Descarga todas las publicaciones seleccionadas y luego ábrelas en tu navegador"
+            },
+            online: true
         },
         /// View all posts in terminal
         ViewAll => {
-            label: "View all post images in terminal",
-            desc: "Display all selected post images in your terminal via SIXEL"
+            label: {
+                english => "View all post images in terminal",
+                japanese => "",
+                spanish => "Ver todas las imágenes en terminal"
+            },
+            desc: {
+                english => "Display all selected post images in your terminal via SIXEL",
+                japanese => "",
+                spanish => "Muestra todos las imágenes de publicaciones seleccionadas en tu terminal mediante SIXEL"
+            },
+            online: true
         },
         /// Go back
         Back => {
-            label: "Go back to search",
-            desc: "Return to the search results menu"
+            label: {
+                english => "Go back to search",
+                japanese => "",
+                spanish => "Volver a la búsqueda"
+            },
+            desc: {
+                english => "Return to the search results menu",
+                japanese => "",
+                spanish => "Volver al menú de resultados de búsqueda"
+            },
+            online: false
         }
     }
 }
@@ -163,32 +240,77 @@ menu! {
 menu! {
     /// Advanced pool search
     pub AdvPoolSearch {
-        filterable: false,
+        filterable: true,
 
         /// Search pools by name
         ByName => {
-            label: "Search by name",
-            desc: "Search for pools by their name or title"
+            label: {
+                english => "Search by name",
+                japanese => "",
+                spanish => "Buscar por nombre"
+            },
+            desc: {
+                english => "Search for pools by their name or title",
+                japanese => "",
+                spanish => "Busca grupos por su nombre o título"
+            },
+            online: true
         },
         /// Search pools by description
         ByDesc => {
-            label: "Search by description",
-            desc: "Search for pools by keywords in their description"
+            label: {
+                english => "Search by description",
+                japanese => "",
+                spanish => "Buscar por descripción"
+            },
+            desc: {
+                english => "Search for pools by keywords in their description",
+                japanese => "",
+                spanish => "Busca grupos por palabras clave en su descripción"
+            },
+            online: true
         },
         /// Search pools by creator
         ByCreator => {
-            label: "Search by creator",
-            desc: "Search for pools by the username of their creator"
+            label: {
+                english => "Search by creator",
+                japanese => "",
+                spanish => "Busca por creador"
+            },
+            desc: {
+                english => "Search for pools by the username of their creator",
+                japanese => "",
+                spanish => "Busca grupos por el nombre de usuario de su creador"
+            },
+            online: true
         },
         /// Browse the latest pools
         BrowseLatest => {
-            label: "Browse latest pools",
-            desc: "Browse the most recently created or updated pools"
+            label: {
+                english => "Browse latest pools",
+                japanese => "",
+                spanish => "Explorar grupos recientes"
+            },
+            desc: {
+                english => "Browse the most recently created or updated pools",
+                japanese => "",
+                spanish => "Explora los grupos creados o actualizados más recientemente"
+            },
+            online: true
         },
         /// Go back
         Back => {
-            label: "Go back to main menu",
-            desc: "Return to the main menu"
+            label: {
+                english => "Go back to main menu",
+                japanese => "",
+                spanish => "Volver al menú principal"
+            },
+            desc: {
+                english => "Return to the main menu",
+                japanese => "",
+                spanish => "Volver al menú principal"
+            },
+            online: false
         }
     }
 }
@@ -196,37 +318,91 @@ menu! {
 menu! {
     /// Blacklist manager
     pub BlacklistManager {
-        filterable: false,
+        filterable: true,
 
         /// Show current blacklist
         ShowCurrent => {
-            label: "Show current blacklist",
-            desc: "Display all tags currently in your blacklist"
+            label: {
+                english => "Show current blacklist",
+                japanese => "",
+                spanish => "Mostrar lista negra actual"
+            },
+            desc: {
+                english => "Display all tags currently in your blacklist",
+                japanese => "",
+                spanish => "Muestra todas las etiquetas que se encuentran actualmente en tu lista negra"
+            },
+            online: false
         },
         /// Add a tag to the blacklist
         AddTag => {
-            label: "Add tag to blacklist",
-            desc: "Add a new tag to your blacklist to filter unwanted content"
+            label: {
+                english => "Add tag to blacklist",
+                japanese => "",
+                spanish => "Agregar etiqueta a la lista negra"
+            },
+            desc: {
+                english => "Add a new tag to your blacklist to filter unwanted content",
+                japanese => "",
+                spanish => "Agrega una nueva e"
+            },
+            online: false
         },
         /// Remove a tag from the blacklist
         RemoveTag => {
-            label: "Remove tag from blacklist",
-            desc: "Remove a tag from your blacklist"
+            label: {
+                english => "Remove tag from blacklist",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Remove a tag from your blacklist",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Clear the blacklist
         Clear => {
-            label: "Clear entire blacklist",
-            desc: "Remove all tags from your blacklist"
+            label: {
+                english => "Clear entire blacklist",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Remove all tags from your blacklist",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Import tags into the blacklist from a search
         ImportFromSearch => {
-            label: "Import tags from search",
-            desc: "Import multiple tags from a search query into your blacklist"
+            label: {
+                english => "Import tags from search",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Import multiple tags from a search query into your blacklist",
+                japanese => "",
+                spanish => ""
+            },
+            online: true
         },
         /// Go back
         Back => {
-            label: "Go back to main menu",
-            desc: "Return to the main menu"
+            label: {
+                english => "Go back to main menu",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Return to the main menu",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         }
     }
 }
@@ -238,53 +414,143 @@ menu! {
 
         /// Search posts/pools
         Search => {
-            label: "Search",
-            desc: "Search for posts or pools by tags and filters"
+            label: {
+                english => "Search",
+                japanese => "",
+                spanish => "Buscar"
+            },
+            desc: {
+                english => "Search for posts or pools by tags and filters",
+                japanese => "",
+                spanish => "Busca publicaciones o encuestas mediante etiquetas y filtros"
+            },
+            online: true
         },
         /// View the latest posts
         ViewLatest => {
-            label: "View the latest posts",
-            desc: "Browse the most recently uploaded posts on e621"
+            label: {
+                english => "View the latest posts",
+                japanese => "",
+                spanish => "Ver las últimas publicaciones"
+            },
+            desc: {
+                english => "Browse the most recently uploaded posts on e621",
+                japanese => "",
+                spanish => "Explora las publicaciones subidas más recientemente en e621"
+            },
+            online: true
         },
         /// Explore downloads
         ExploreDownloads => {
-            label: "View downloaded files",
-            desc: "Browse, search, and manage your downloaded posts"
+            label: {
+                english => "View downloaded posts",
+                japanese => "",
+                spanish => "Ver publicaciones descargadas"
+            },
+            desc: {
+                english => "Browse, search, and manage your downloaded posts",
+                japanese => "",
+                spanish => "Explora, busca y gestiona tus publicaciones descargadas"
+            },
+            online: false
         },
         /// Open your downloads in your browser
         OpenInBrowser => {
-            label: "View downloads in your browser",
-            desc: "Open your local downloads folder in your default web browser"
+            label: {
+                english => "View downloads in your browser",
+                japanese => "",
+                spanish => "Ver las descargas en tu navegador"
+            },
+            desc: {
+                english => "Open your local downloads folder in your default web browser",
+                japanese => "",
+                spanish => "Abre tus descargas como una galería en tu navegador predeterminado"
+            },
+            online: false
         },
         /// Manage your blacklist
         ManageBlacklist => {
-            label: "Manage your blacklist",
-            desc: "Add, remove, or view tags in your blacklist"
+            label: {
+                english => "Manage your blacklist",
+                japanese => "",
+                spanish => "Gestiona tu lista negra"
+            },
+            desc: {
+                english => "Add, remove, or view tags in your blacklist",
+                japanese => "",
+                spanish => "Agregue, elimine o vea las etiquetas en su lista negra"
+            },
+            online: false
         },
         /// Reorganize downloads
         Reorganize => {
-            label: "Reorganize downloaded files",
-            desc: "Reorganize and sort your downloaded files by various criteria"
+            label: {
+                english => "Reorganize downloads",
+                japanese => "",
+                spanish => "Reorganizar descargas"
+            },
+            desc: {
+                english => "Reorganize and sort your downloaded files by various criteria",
+                japanese => "",
+                spanish => "Reorganiza y clasifica tus archivos descargados según diversos criterios"
+            },
+            online: false
         },
         /// Edit your configuration file
         EditConfig => {
-            label: "Edit your config file",
-            desc: "Open your configuration file in your default text editor"
+            label: {
+                english => "Edit your config file",
+                japanese => "",
+                spanish => "Edita tu archivo de configuratión"
+            },
+            desc: {
+                english => "Open your configuration file in your default text editor",
+                japanese => "",
+                spanish => "Abre tu archivo de configuración con tu editor de texto predeterminado"
+            },
+            online: false
         },
         /// Update currently downloaded files based on already downloaded artists
         UpdateDownloads => {
-            label: "Update downloaded artists",
-            desc: "Check for and download new posts from artists you've already downloaded"
+            label: {
+                english => "Update downloaded artists",
+                japanese => "",
+                spanish => "Actualizar artistas descargadas"
+            },
+            desc: {
+                english => "Check for and download new posts from artists you've already downloaded",
+                japanese => "",
+                spanish => "Busca y descarga nuevas publicaciones de los artistas cuyas obras ya has descargado"
+            },
+            online: true
         },
         /// Reload the configuration file from disk
         ReloadConfig => {
-            label: "Reload config",
-            desc: "Reload the config file and apply any changes made since last load"
+            label: {
+                english => "Reload config",
+                japanese => "",
+                spanish => "Recargar configuratión"
+            },
+            desc: {
+                english => "Reload the config file and apply any changes made since last load",
+                japanese => "",
+                spanish => "Vuelve a cargar el archivo de configuración y aplica los cambios realizados desde la última carga"
+            },
+            online: false
         },
         /// Exit
         Exit => {
-            label: "Exit e62rs",
-            desc: "Exit the app"
+            label: {
+                english => "Exit e62rs",
+                japanese => "",
+                spanish => "Salir de e62rs"
+            },
+            desc: {
+                english => "Exit the app",
+                japanese => "",
+                spanish => "Salir de la aplicación"
+            },
+            online: false
         }
     }
 }
@@ -292,22 +558,49 @@ menu! {
 menu! {
     /// Search type
     pub SearchMenu {
-        filterable: false,
+        filterable: true,
 
         /// Search posts
         Posts => {
-            label: "Posts",
-            desc: "Search for individual posts by tags and filters"
+            label: {
+                english => "Posts",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Search for individual posts by tags and filters",
+                japanese => "",
+                spanish => ""
+            },
+            online: true
         },
         /// Search pools
         Pools => {
-            label: "Pools",
-            desc: "Search for collections of related posts organized into pools"
+            label: {
+                english => "Pools",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Search for collections of related posts organized into pools",
+                japanese => "",
+                spanish => ""
+            },
+            online: true
         },
         /// Go back to the main menu
         Back => {
-            label: "Go back",
-            desc: "Go back to the main menu"
+            label: {
+                english => "Go back",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Go back to the main menu",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         }
     }
 }
@@ -315,17 +608,35 @@ menu! {
 menu! {
     /// Pool search mode
     pub PoolSearchModeMenu {
-        filterable: false,
+        filterable: true,
 
         /// Simple search
         Simple => {
-            label: "Simple search",
-            desc: "Quick and easy pool search with basic filters"
+            label: {
+                english => "Simple search",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Quick and easy pool search with basic filters",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Advanced search
         Advanced => {
-            label: "Advanced search",
-            desc: "Advanced pool search with detailed filtering options"
+            label: {
+                english => "Advanced search",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Advanced pool search with detailed filtering options",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         }
     }
 }
@@ -337,43 +648,115 @@ menu! {
 
         /// Browse posts
         Browse => {
-            label: "Browse downloaded posts",
-            desc: "View and interact with your downloaded posts"
+            label: {
+                english => "Browse downloaded posts",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "View and interact with your downloaded posts",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Search for posts
         Search => {
-            label: "Search by tags, ID, uploader, or desc",
-            desc: "Search your downloaded posts using various criteria"
+            label: {
+                english => "Search by tags, ID, uploader, or desc",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Search your downloaded posts using various criteria",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Filter posts by rating
         FilterByRating => {
-            label: "Filter by rating",
-            desc: "Filter posts by their content rating (safe, questionable, explicit)"
+            label: {
+                english => "Filter by rating",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Filter posts by their content rating (safe, questionable, explicit)",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort posts
         SortBy => {
-            label: "Sort posts",
-            desc: "Sort your downloaded posts by date, score, favorites, or ID"
+            label: {
+                english => "Sort posts",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort your downloaded posts by date, score, favorites, or ID",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// View statistics
         ViewStatistics => {
-            label: "View statistics",
-            desc: "View detailed statistics about your downloaded collection"
+            label: {
+                english => "View statistics",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "View detailed statistics about your downloaded collection",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Clear all filters
         ClearFilters => {
-            label: "Clear all filters",
-            desc: "Remove all active filters and sorting options"
+            label: {
+                english => "Clear all filters",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Remove all active filters and sorting options",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Watch selected posts in a slideshow
         Slideshow => {
-            label: "Watch a slideshow",
-            desc: "View your posts in an automated slideshow"
+            label: {
+                english => "Watch a slideshow",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "View your posts in an automated slideshow",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Go back
         Back => {
-            label: "Go back to main menu",
-            desc: "Return to the main menu"
+            label: {
+                english => "Go back to main menu",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Return to the main menu",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         }
     }
 }
@@ -381,47 +764,119 @@ menu! {
 menu! {
     /// Explorer sorting options
     pub ExplorerSortBy {
-        filterable: false,
+        filterable: true,
 
         /// Sort by date (newest)
         DateNewest => {
-            label: "Sort by date (newest first)",
-            desc: "Sort posts with the most recent uploads first"
+            label: {
+                english => "Sort by date (newest first)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts with the most recent uploads first",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by date (oldest)
         DateOldest => {
-            label: "Sort by date (oldest first)",
-            desc: "Sort posts with the oldest uploads first"
+            label: {
+                english => "Sort by date (oldest first)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts with the oldest uploads first",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by score (highest)
         ScoreHighest => {
-            label: "Sort by score (highest first)",
-            desc: "Sort posts by their score with highest rated first"
+            label: {
+                english => "Sort by score (highest first)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts by their score with highest rated first",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by score (lowest)
         ScoreLowest => {
-            label: "Sort by score (lowest first)",
-            desc: "Sort posts by their score with lowest rated first"
+            label: {
+                english => "Sort by score (lowest first)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts by their score with lowest rated first",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by favorites (highest)
         FavoritesHighest => {
-            label: "Sort by favs (highest first)",
-            desc: "Sort posts by favorite count with most favorited first"
+            label: {
+                english => "Sort by favs (highest first)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts by favorite count with most favorited first",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by favorites (lowest)
         FavoritesLowest => {
-            label: "Sort by favs (lowest first)",
-            desc: "Sort posts by favorite count with least favorited first"
+            label: {
+                english => "Sort by favs (lowest first)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts by favorite count with least favorited first",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by id (ascending)
         IDAscending => {
-            label: "Sort by ID (ascending)",
-            desc: "Sort posts by their ID in ascending order (oldest to newest)"
+            label: {
+                english => "Sort by ID (ascending)",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Sort posts by their ID in ascending order (oldest to newest)",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
         /// Sort by id (descending)
         IDDescending => {
-            label: "Sort by ID (descending)",
-            desc: "Sort posts by their ID in descending order (newest to oldest)"
+            label: {
+                english => "Sort by ID (descending)",
+                japanese => "",
+                spanish => "Ordenar por ID (descendente)"
+            },
+            desc: {
+                english => "Sort posts by their ID in descending order (newest to oldest)",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         }
     }
 }
@@ -431,26 +886,161 @@ menu! {
     pub ExplorerFilterBy { filterable: true,
         /// all ratings
         AllRatings => {
-            label: "All ratings",
-            desc: "Display posts of all ratings"
+            label: {
+                english => "All ratings",
+                japanese => "",
+                spanish => "Todas las calificaciones"
+            },
+            desc: {
+                english => "Display posts of all ratings",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
 
         /// safe posts
         Safe => {
-            label: "Safe posts",
-            desc: "Display posts with the 'safe' rating"
+            label: {
+                english => "Safe posts",
+                japanese => "",
+                spanish => "Publicaciones seguras"
+            },
+            desc: {
+                english => "Display posts with the 'safe' rating",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
 
         /// questionable posts
         Questionable => {
-            label: "Questionable posts",
-            desc: "Display posts with the `questionable` rating"
+            label: {
+                english => "Questionable posts",
+                japanese => "Publicaciones cuestionables",
+                spanish => ""
+            },
+            desc: {
+                english => "Display posts with the `questionable` rating",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
         },
 
         /// explicit posts
         Explicit => {
-            label: "Explicit posts",
-            desc: "Display posts with the 'explicit' rating"
+            label: {
+                english => "Explicit posts",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Display posts with the 'explicit' rating",
+                japanese => "",
+                spanish => "Publicaciones explicítas"
+            },
+            online: false
         },
     }
+}
+
+/// calculates and prints the total
+/// localization progress across all menus
+pub fn calculate_localization_progress() {
+    let mut translated_labels_en = 0;
+    let mut translated_labels_es = 0;
+    let mut translated_labels_ja = 0;
+    let mut translated_descs_es = 0;
+    let mut translated_descs_en = 0;
+    let mut translated_descs_ja = 0;
+
+    let menu_stats = vec![
+        InteractionMenu::translation_stats(),
+        PoolInteractionMenu::translation_stats(),
+        BatchAction::translation_stats(),
+        AdvPoolSearch::translation_stats(),
+        BlacklistManager::translation_stats(),
+        MainMenu::translation_stats(),
+        SearchMenu::translation_stats(),
+        PoolSearchModeMenu::translation_stats(),
+        ExplorerMenu::translation_stats(),
+        ExplorerSortBy::translation_stats(),
+        ExplorerFilterBy::translation_stats(),
+    ];
+
+    for stat in menu_stats {
+        if let Some(en) = stat.get("english") {
+            translated_descs_en += en.descriptions_translated;
+            translated_labels_en += en.labels_translated;
+        }
+
+        if let Some(es) = stat.get("spanish") {
+            translated_labels_es += es.labels_translated;
+            translated_descs_es += es.descriptions_translated;
+        }
+
+        if let Some(ja) = stat.get("japanese") {
+            translated_labels_ja += ja.labels_translated;
+            translated_descs_ja += ja.descriptions_translated;
+        }
+    }
+
+    let print_stat =
+        |lang: &str, labels: usize, descs: usize, total_labels: usize, total_descs: usize| {
+            let label_pct = (labels as f64 / total_labels as f64) * 100.0;
+            let desc_pct = (descs as f64 / total_descs as f64) * 100.0;
+
+            println!(
+                "- [{}] **{}**",
+                if label_pct == 100.0 && desc_pct == 100.0 {
+                    "x"
+                } else if label_pct == 100.0 || desc_pct == 100.0 {
+                    "-"
+                } else {
+                    " "
+                },
+                lang.to_uppercase()
+            );
+
+            println!(
+                "- [{}] Labels: {}/{} ({:.2}%)",
+                if label_pct == 100.0 { "x" } else { " " },
+                labels,
+                total_labels,
+                label_pct
+            );
+            println!(
+                "- [{}] Descriptions: {}/{} ({:.2}%)",
+                if desc_pct == 100.0 { "x" } else { " " },
+                descs,
+                total_descs,
+                desc_pct
+            );
+            println!();
+        };
+
+    print_stat(
+        "English",
+        translated_labels_en,
+        translated_descs_en,
+        translated_labels_en,
+        translated_descs_en,
+    );
+
+    print_stat(
+        "Spanish",
+        translated_labels_es,
+        translated_descs_es,
+        translated_labels_en,
+        translated_descs_en,
+    );
+    print_stat(
+        "Japanese",
+        translated_labels_ja,
+        translated_descs_ja,
+        translated_labels_en,
+        translated_descs_en,
+    );
 }

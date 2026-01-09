@@ -18,7 +18,7 @@ impl Handlers {
     /// # Arguments
     ///
     /// * `interrupt` - the interruption handler to use
-    pub fn new(ui: E6Ui, interrupt: InterruptHandler) -> Self {
+    pub const fn new(ui: E6Ui, interrupt: InterruptHandler) -> Self {
         Self { ui, interrupt }
     }
 

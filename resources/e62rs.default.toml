@@ -1,10 +1,4 @@
-base_url = "https://e621.net"
-blacklist = [
-    "young",
-    "rape",
-    "feral",
-    "bestiality",
-]
+language = "English"
 
 [display]
 width = 800
@@ -14,6 +8,7 @@ sixel_quality = 100
 resize_method = "lanczos3"
 
 [http]
+api_url = "https://e621.net"
 pool_max_idle_per_host = 32
 pool_idle_timeout_secs = 90
 timeout_secs = 30
@@ -22,7 +17,7 @@ max_connections = 15
 http2 = false
 tcp_keepalive = true
 tcp_keepalive_secs = 60
-user_agent = "e62rs/v1.0.0 (by bearodactyl on e621)"
+user_agent = "e62rs/v1.0.1 (by bearodactyl on e621)"
 
 [cache]
 enabled = true
@@ -53,14 +48,23 @@ max_preload_size_mb = 100
 
 [ui]
 progress_refresh_rate = 20
+enable_custom_ctrlc_handler = false
+progress_message_mode = "id"
 detailed_progress = true
 auto_clear_progress = true
 pagination_size = 20
 colored_output = true
 progress_format = "MegaBytes"
+tag_guide_on_first_run = true
 
 [search]
 results = 320
+blacklist = [
+    "young",
+    "rape",
+    "feral",
+    "bestiality",
+]
 min_posts_on_tag = 2
 min_posts_on_pool = 2
 show_inactive_pools = true

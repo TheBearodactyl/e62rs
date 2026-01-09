@@ -1,10 +1,6 @@
 //! configuration validation stuff
 use {
-    crate::config::options::{
-        AutoUpdateCfg, CacheConfig, CompletionCfg, DownloadCfg, E62Rs, ExplorerCfg, GalleryCfg,
-        HttpConfig, ImageDisplay, LoggingConfig, LoginCfg, PerformanceConfig, PostCacheConfig,
-        SearchCfg, UiConfig,
-    },
+    crate::{config::options::*, validator, validator_nested},
     color_eyre::Result,
 };
 
@@ -17,69 +13,6 @@ pub trait Validate {
     fn is_valid(&self) -> bool {
         self.validate().is_ok()
     }
-}
-
-/// helper macro for generating validators
-macro_rules! validator {
-    ($struct_name:ty, $( $field:ident => $requirement:expr, $err_msg:expr );* $(;)? ) => {
-        impl Validate for $struct_name {
-            fn validate(&self) -> Result<(), Vec<String>> {
-                let mut errors: Vec<String> = Vec::new();
-
-                $(
-                    if let Some(ref value) = self.$field {
-                        if !($requirement)(value) {
-                            errors.push(format!("{}: {}", stringify!($field), $err_msg));
-                        }
-                    }
-                )*
-
-                if errors.is_empty() {
-                    Ok(())
-                } else {
-                    Err(errors)
-                }
-            }
-        }
-    };
-}
-
-/// helper macro for nested validation
-macro_rules! validator_nested {
-    ($struct_name:ty,
-        fields: { $( $field:ident => $requirement:expr, $err_msg:expr );* $(;)? }
-        nested: { $( $nested:ident );* $(;)? }
-    ) => {
-        impl Validate for $struct_name {
-            fn validate(&self) -> Result<(), Vec<String>> {
-                let mut errors: Vec<String> = Vec::new();
-
-                $(
-                    if let Some(ref value) = self.$field {
-                        if !($requirement)(value) {
-                            errors.push(format!("{}: {}", stringify!($field), $err_msg));
-                        }
-                    }
-                )*
-
-                $(
-                    if let Some(ref nested) = self.$nested {
-                        if let Err(nested_errors) = nested.validate() {
-                            for err in nested_errors {
-                                errors.push(format!("{}.{}", stringify!($nested), err));
-                            }
-                        }
-                    }
-                )*
-
-                if errors.is_empty() {
-                    Ok(())
-                } else {
-                    Err(errors)
-                }
-            }
-        }
-    };
 }
 
 validator! { HttpConfig,
@@ -139,6 +72,7 @@ validator! { PerformanceConfig,
         "must be greater than 0";
 }
 
+/// valid modes for displaying in progress downloads
 const VALID_PROGRESS_MESSAGE_MODES: &[&str] = &["id", "filename"];
 
 validator! { UiConfig,

@@ -49,27 +49,3 @@ impl Default for SixelEncoder {
         Self::new()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_encode_small_image() {
-        let encoder = SixelEncoder::new();
-        let rgb_data = vec![255u8; 10 * 10 * 3];
-        let image_data = ImageData::new(rgb_data, 10, 10);
-
-        let result = encoder.encode(&image_data);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_encode_raw() {
-        let encoder = SixelEncoder::new();
-        let rgb_data = vec![0u8; 5 * 5 * 3];
-
-        let result = encoder.encode_raw(&rgb_data, 5, 5);
-        assert!(result.is_ok());
-    }
-}

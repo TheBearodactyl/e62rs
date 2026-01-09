@@ -9,10 +9,7 @@ use {
     schemars::JsonSchema,
     serde::{Deserialize, Serialize},
     smart_default::SmartDefault,
-    std::{
-        path::{Path, PathBuf},
-        time::Duration,
-    },
+    std::path::{Path, PathBuf},
     tracing::info,
 };
 
@@ -228,6 +225,10 @@ pub struct UiConfig {
     #[default(Some(20))]
     pub progress_refresh_rate: Option<u64>,
 
+    /// Enable the custom Ctrl+C interceptor
+    #[default(Some(false))]
+    pub enable_custom_ctrlc_handler: Option<bool>,
+
     /// The string to display next to download progress bars
     #[default(Some("id".to_string()))]
     pub progress_message_mode: Option<String>,
@@ -251,6 +252,10 @@ pub struct UiConfig {
     /// The format to display download progress in
     #[default(Some(SizeFormat::default()))]
     pub progress_format: Option<SizeFormat>,
+
+    /// Show the tag input guide on the first run
+    #[default(Some(true))]
+    pub tag_guide_on_first_run: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, JsonSchema, SmartDefault)]
@@ -687,10 +692,28 @@ pub struct GalleryCfg {
     pub theme: Option<String>,
 }
 
+/// The language the app uses
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, JsonSchema, Default)]
+pub enum Language {
+    #[default]
+    /// English
+    English,
+
+    /// Español
+    Spanish,
+
+    /// Japanese
+    Japanese,
+}
+
 /// E62RS configuration options
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema, SmartDefault)]
 #[schemars(bound = "T: JsonSchema + Default", default)]
 pub struct E62Rs {
+    /// The language to use
+    #[default(Some(Language::default()))]
+    pub language: Option<Language>,
+
     /// Post viewing settings
     #[default(Some(ImageDisplay::default()))]
     pub display: Option<ImageDisplay>,
@@ -789,7 +812,6 @@ impl E62Rs {
         match cfg.run_validation() {
             Ok(_) => {
                 info!("Configuration validation successful");
-                std::thread::sleep(Duration::from_secs(2));
                 print!("\x1B[2J\x1B[3J\x1B[H");
                 std::io::Write::flush(&mut std::io::stdout())?;
             }
@@ -895,80 +917,4 @@ impl E62Rs {
         let path = Self::global_config_path()?;
         self.save_to_file(path)
     }
-}
-
-/// get the current value of a given setting
-#[macro_export]
-macro_rules! getopt {
-    () => {
-        $crate::config::instance::config()
-    };
-
-    ($field:ident) => {{
-        $crate::config::instance::get_or_default(
-            |c| c.$field.clone(),
-            $crate::config::options::E62Rs::default()
-                .$field
-                .expect(concat!("Default value missing for: ", stringify!($field))),
-        )
-    }};
-
-    ($lvl1:ident . $field:ident) => {{
-        $crate::config::instance::get_or_default(
-            |c| c.$lvl1.as_ref().and_then(|sub| sub.$field.clone()),
-            $crate::config::options::E62Rs::default()
-                .$lvl1
-                .and_then(|sub| sub.$field)
-                .expect(concat!(
-                    "Default value missing for: ",
-                    stringify!($lvl1),
-                    ".",
-                    stringify!($field)
-                )),
-        )
-    }};
-
-    ($lvl1:ident . $lvl2:ident . $field:ident) => {{
-        $crate::config::instance::get_or_default(
-            |c| {
-                c.$lvl1
-                    .as_ref()
-                    .and_then(|sub| sub.$lvl2.as_ref())
-                    .and_then(|sub| sub.$field.clone())
-            },
-            $crate::config::options::E62Rs::default()
-                .$lvl1
-                .and_then(|sub| sub.$lvl2)
-                .and_then(|sub| sub.$field)
-                .expect(concat!(
-                    "Default value missing for: ",
-                    stringify!($lvl1),
-                    ".",
-                    stringify!($lvl2),
-                    ".",
-                    stringify!($field)
-                )),
-        )
-    }};
-
-    (raw $field:ident) => {{
-        $crate::config::instance::config()
-            .ok()
-            .and_then(|c| c.$field.clone())
-    }};
-
-    (raw $lvl1:ident . $field:ident) => {{
-        $crate::config::instance::config()
-            .ok()
-            .and_then(|c| c.$lvl1.as_ref().and_then(|sub| sub.$field.clone()))
-    }};
-
-    (raw $lvl1:ident . $lvl2:ident . $field:ident) => {{
-        $crate::config::instance::config().ok().and_then(|c| {
-            c.$lvl1
-                .as_ref()
-                .and_then(|sub| sub.$lvl2.as_ref())
-                .and_then(|sub| sub.$field.clone())
-        })
-    }};
 }

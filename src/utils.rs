@@ -3,7 +3,7 @@ use {
     crate::getopt,
     base64::{Engine, engine::general_purpose},
     color_eyre::eyre::Result,
-    reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue},
+    reqwest::header::{AUTHORIZATION, HeaderMap},
     serde::Deserialize,
     std::{
         fs::OpenOptions,
@@ -18,6 +18,10 @@ use {
 /// # Arguments
 ///
 /// * `deserializer` - the deserializer
+///
+/// # Errors
+///
+/// returns an error if it fails to deserialize the deserializer
 pub fn deserialize_bool_from_str<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -31,6 +35,10 @@ where
 /// # Arguments
 ///
 /// * `deserializer` - the deserializer
+///
+/// # Errors
+///
+/// returns an error if it fails to deserialize the deserializer
 pub fn deserialize_post_ids<'de, D>(deserializer: D) -> Result<Vec<i64>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -55,13 +63,20 @@ where
 }
 
 /// make an auth header based on the loaded config
+///
+/// # Errors
+///
+/// returns an error if it fails to convert `auth_value` to a [`reqwest::header::HeaderValue`]
 pub fn create_auth_header() -> Result<HeaderMap> {
     let auth_str = format!("{}:{}", getopt!(login.username), getopt!(login.api_key));
     let encoded = general_purpose::STANDARD.encode(&auth_str);
     let auth_value = format!("Basic {}", encoded);
     let mut headers = HeaderMap::new();
 
-    headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_value)?);
+    headers.insert(
+        AUTHORIZATION,
+        reqwest::header::HeaderValue::from_str(&auth_value)?,
+    );
 
     Ok(headers)
 }
@@ -97,6 +112,11 @@ pub fn shorten_path(path: &str, max_len: usize) -> String {
 /// * `file_path` - the path to the file to make an ads on
 /// * `stream_name` - the name of the ads stream
 /// * `data` - the data to put into the ads stream
+///
+/// # Errors
+///
+/// returns an error if it fails to open `ads_path`  
+/// returns an error if it fails to write `data` to `ads_path`
 pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str) -> Result<usize> {
     let file_path = file_path.as_ref();
     let ads_path = format!("{}:{}", file_path.display(), stream_name);
@@ -111,12 +131,22 @@ pub fn write_to_ads<P: AsRef<Path>>(file_path: P, stream_name: &str, data: &str)
     Ok(data.len())
 }
 
+/// check if there's internet access
+pub fn check_for_internet() -> bool {
+    reqwest::blocking::get(crate::getopt!(http.api_url)).is_ok()
+}
+
 /// write some json data to a given file
 ///
 /// # Arguments
 ///
 /// * `file_path` - the path to the json file
 /// * `data` - the data to write to `file_path`
+///
+/// # Errors
+///
+/// returns an error if it fails to open `file_path`  
+/// returns an error if it fails to write `data` to `file_path`
 pub fn _write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> {
     let file_path = file_path.as_ref();
     let json_path = format!("{}.json", file_path.display());
@@ -233,22 +263,6 @@ where
     }
 }
 
-/// implement display for a type
-#[macro_export]
-macro_rules! impl_display {
-    ($type:ty, $name:expr, $color:ident, $($field:ident: $format:expr),*) => {
-        impl std::fmt::Display for $type {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                writeln!(f, "{} {{", $name.$color())?;
-                $(
-                    writeln!(f, "  {}: {}", stringify!($field).yellow(), $format(&self.$field))?;
-                )*
-                writeln!(f, "}}")
-            }
-        }
-    };
-}
-
 /// iterator repetition utils
 pub trait IteratorRepeatExt: Iterator {
     /// repeat n times, returning the collected outputs
@@ -321,6 +335,10 @@ where
     /// # Arguments
     ///
     /// * `n` - the number of times to repeat
+    ///
+    /// # Panics
+    ///
+    /// panics if `n` is less than 0
     pub fn repeat_last(mut self, n: usize) -> R {
         assert!(n > 0, "repeat_last requires n > 0");
         let mut result = (self.f)();
@@ -329,74 +347,4 @@ where
         }
         result
     }
-}
-
-/// format a value (lol)
-#[macro_export]
-macro_rules! fmt_value {
-    () => {
-        |v| format!("{}", v)
-    };
-    (debug) => {
-        |v| format!("{:?}", v)
-    };
-}
-
-/// implement Send + Sync for a type
-#[macro_export]
-macro_rules! sendsync {
-    ($ty:ty) => {
-        unsafe impl<T: $crate::data::Entry> Send for $ty {}
-        unsafe impl<T: $crate::data::Entry> Sync for $ty {}
-    };
-}
-
-/// repeat an expression n times
-#[macro_export]
-macro_rules! repeat {
-    ($n:expr, $body:expr) => {
-        for _ in 0..$n {
-            $body;
-        }
-    };
-}
-
-/// make a new `String`
-#[macro_export]
-macro_rules! mkstr {
-    ($n:ident) => {
-        let mut $n = String::new();
-    };
-
-    ($n:ident, $capacity:expr) => {
-        let mut $n = String::with_capacity($capacity);
-    };
-}
-
-/// make a new `Vec`
-#[macro_export]
-macro_rules! mkvec {
-    ($n:ident, $t:ty) => {
-        let mut $n: Vec<$t> = Vec::new();
-    };
-
-    ($n:ident, $t:ty, $c:expr) => {
-        let mut $n: Vec<$t> = Vec::with_capacity($c);
-    };
-}
-
-/// if an option is enabled, perform an expression
-#[macro_export]
-macro_rules! opt_and {
-    ($field:ident, $a:expr) => {
-        if $crate::getopt!($field) {
-            $a
-        }
-    };
-
-    ($lvl1:ident . $field:ident, $a:expr) => {
-        if $crate::getopt!($lvl1.$field) {
-            $a
-        }
-    };
 }

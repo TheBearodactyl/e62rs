@@ -91,10 +91,6 @@ pub async fn list_media_handler(
 
 #[get("/api/stats")]
 /// handler for getting current filter stats
-///
-/// # Arguments
-///
-/// * `state` - the current state of the app
 pub async fn stats_handler(state: &State<Arc<AppState>>) -> Result<Json<FilterStats>, Status> {
     let gallery = state.gallery.read().await;
     let stats = gallery.get_filter_stats();

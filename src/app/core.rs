@@ -22,6 +22,15 @@ pub struct E6App {
 
 impl E6App {
     /// init e62rs
+    ///
+    /// # Errors
+    ///
+    /// returns an error if color_eyre fails to install [`color_eyre::install`]  
+    /// returns an error if the cli fails to run  
+    /// returns an error if it fails to setup logging  
+    /// returns an error if it fails to setup the interrupt handler  
+    /// returns an error if it fails to setup the UI  
+    /// returns an error if it fails to load the configuration file  
     pub async fn init() -> color_eyre::Result<Self> {
         color_eyre::install()?;
         Cli::run().await?;
@@ -42,6 +51,10 @@ impl E6App {
     }
 
     /// run the main loop
+    ///
+    /// # Errors
+    ///
+    /// returns an error if the main loop fails
     pub async fn run(&self) -> color_eyre::Result<()> {
         self.handlers.run_main_loop().await
     }
@@ -57,10 +70,12 @@ impl E6App {
         let handler = InterruptHandler::new();
         let handler_clone = handler.clone();
 
-        ctrlc::set_handler(move || {
-            handler_clone.trigger();
-        })
-        .context("failed to set Ctrl+C handler")?;
+        if getopt!(ui.enable_custom_ctrlc_handler) {
+            ctrlc::set_handler(move || {
+                handler_clone.trigger();
+            })
+            .context("failed to set Ctrl+C handler")?;
+        }
 
         Ok(handler)
     }

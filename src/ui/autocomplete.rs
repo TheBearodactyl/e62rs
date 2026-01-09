@@ -159,15 +159,12 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
     /// # Arguments
     ///
     /// * `input` - the input to base suggestions off of
-    pub fn get_suggestions_impl(
-        &self,
-        input: &str,
-    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    pub fn get_suggestions_impl(&self, input: &str) -> Vec<String> {
         let current_token = get_current_token(input);
         let (prefix_char, search_query) = PrefixChar::find_from_str(current_token);
 
         if search_query.is_empty() {
-            return Ok(Vec::new());
+            return Vec::new();
         }
 
         let matches = self.db.autocomplete(search_query, self.limit);
@@ -179,7 +176,7 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
             })
             .collect();
 
-        Ok(formatted)
+        formatted
     }
 
     /// get completions based on input
@@ -272,7 +269,7 @@ impl TagAutocompleter {
 
 impl Autocomplete for TagAutocompleter {
     fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        self.inner.get_suggestions_impl(input)
+        Ok(self.inner.get_suggestions_impl(input))
     }
 
     fn get_completion(
@@ -331,7 +328,7 @@ impl PoolAutocompleter {
 
 impl Autocomplete for PoolAutocompleter {
     fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        self.inner.get_suggestions_impl(input)
+        Ok(self.inner.get_suggestions_impl(input))
     }
 
     fn get_completion(

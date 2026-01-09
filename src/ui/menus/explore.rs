@@ -45,7 +45,11 @@ pub struct LocalPost {
 }
 
 impl LocalPost {
-    /// make a LocalPost from a path
+    /// read a file into a [`LocalPost`]
+    ///
+    /// # Arguments
+    ///
+    /// * `file_path` - the path to the file to be parsed
     pub fn from_file(file_path: PathBuf) -> Result<Self> {
         let post = Self::read_metadata(&file_path)?;
         Ok(Self { post, file_path })
@@ -58,7 +62,7 @@ impl LocalPost {
 
     #[cfg(target_os = "windows")]
     /// read post metadata (windows)
-    fn read_metadata(file_path: &Path) -> Result<E6Post> {
+    pub fn read_metadata(file_path: &Path) -> Result<E6Post> {
         let ads_path = format!("{}:metadata", file_path.display());
         let mut contents = String::new();
         let mut file = OpenOptions::new()
@@ -75,7 +79,7 @@ impl LocalPost {
 
     #[cfg(not(target_os = "windows"))]
     /// read post metadata (non-windows)
-    fn read_metadata(file_path: &Path) -> Result<E6Post> {
+    pub fn read_metadata(file_path: &Path) -> Result<E6Post> {
         let json_path = file_path.with_extension(format!(
             "{}.json",
             file_path.extension().and_then(|e| e.to_str()).unwrap_or("")
@@ -85,7 +89,7 @@ impl LocalPost {
             bail!("Metadata file not found: {}", json_path.display());
         }
 
-        let contents = fs::read_to_string(&json_path)
+        let contents = std::fs::read_to_string(&json_path)
             .with_context(|| format!("Failed to read metadata file {}", json_path.display()))?;
 
         serde_json::from_str(&contents)
@@ -172,7 +176,7 @@ impl ExplorerState {
     }
 
     /// apply the selected filters
-    fn apply_filters(&mut self) {
+    pub fn apply_filters(&mut self) {
         self.filtered_posts = self
             .posts
             .iter()
@@ -539,7 +543,7 @@ impl E6Ui {
     }
 
     /// show a slideshow of filtered posts
-    async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
+    pub async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
         let sleep_time: u64 = getopt!(explorer.slideshow_delay);
 
         for post in posts {
@@ -551,7 +555,7 @@ impl E6Ui {
     }
 
     /// browse local downloads
-    async fn browse_local_posts(&self, posts: &[LocalPost]) -> Result<()> {
+    pub async fn browse_local_posts(&self, posts: &[LocalPost]) -> Result<()> {
         let posts_per_page: usize = getopt!(explorer.posts_per_page);
         let mut current_page = 0;
         let total_pages = posts.len().div_ceil(posts_per_page);
@@ -633,7 +637,7 @@ impl E6Ui {
     }
 
     /// print a local post
-    async fn view_local_post(&self, local_post: &LocalPost) -> Result<()> {
+    pub async fn view_local_post(&self, local_post: &LocalPost) -> Result<()> {
         self.display_post(&local_post.post);
 
         let auto_display: bool = getopt!(explorer.auto_display_image);
@@ -701,7 +705,7 @@ impl E6Ui {
     }
 
     /// filter posts by content rating
-    fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
+    pub fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
         let options = ["All ratings", "Safe", "Questionable", "Explicit"];
         let selection = Select::new("Filter by rating:")
             .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
@@ -720,7 +724,7 @@ impl E6Ui {
     }
 
     /// sort posts
-    fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
+    pub fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
         let sort_by = ExplorerSortBy::select("Sort posts by:")
             .theme(&ROSE_PINE)
             .run()?;
@@ -730,7 +734,7 @@ impl E6Ui {
     }
 
     /// display explorer stats
-    fn display_statistics(&self, state: &ExplorerState) {
+    pub fn display_statistics(&self, state: &ExplorerState) {
         let stats = state.get_statistics();
 
         println!("\n{}", "=".repeat(50));

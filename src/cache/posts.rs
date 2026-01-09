@@ -1,13 +1,16 @@
 //! post cache management stuff
 use {
-    crate::{cache::stats::PostCacheStats, getopt, mkvec, models::E6Post},
-    color_eyre::eyre::{Context, Result, bail},
+    crate::{cache::stats::PostCacheStats, getopt, models::E6Post},
+    color_eyre::{
+        Section,
+        eyre::{Context, Result, bail},
+    },
     postcard::{from_bytes, to_allocvec},
     redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition},
     serde::{Deserialize, Serialize},
     std::{fs::create_dir_all, path::PathBuf, sync::Arc},
     tokio::sync::RwLock,
-    tracing::{debug, info, warn},
+    tracing::{debug, error, info, warn},
 };
 
 /// the table of cached posts
@@ -47,6 +50,15 @@ pub struct PostCache {
 
 impl PostCache {
     /// initialize and/or load the post cache
+    ///
+    /// # Arguments
+    ///
+    /// * `cache_dir` - the directory where the cache will be initialized
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to make the cache directory  
+    /// returns an error if it fails to create the post cache db
     pub fn new(cache_dir: &str) -> Result<Self> {
         let cache_path = PathBuf::from(cache_dir).join("posts.redb");
 
@@ -65,11 +77,15 @@ impl PostCache {
         create_dir_all(cache_dir).context(format!("failed to make cache dir: {}", cache_dir))?;
 
         let cache_size_mb = getopt!(cache.max_size_mb);
-        let cahce_size_bytes = ((cache_size_mb / 4) * 1024 * 1024) as usize;
+        let cahce_size_bytes = (cache_size_mb / 4 * 1024 * 1024) as usize;
         let db = Database::builder()
             .set_cache_size(cahce_size_bytes)
             .create(&cache_path)
-            .context(format!("failed to make post cache db at {:?}", cache_path))?;
+            .context(format!("failed to make post cache db at {:?}", cache_path))
+            .suggestion(format!(
+                "make sure the directory at '{}' exists and has the correct permissions",
+                cache_path.display()
+            ))?;
         let db = Arc::new(RwLock::new(Some(db)));
         let max_posts = getopt!(cache.posts.max_posts);
         let auto_compact = getopt!(cache.posts.auto_compact);
@@ -90,6 +106,12 @@ impl PostCache {
     }
 
     /// print a list of entries currently in the post cache
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to read the post cache db  
+    /// returns an error if it fails to open the posts table in the db  
+    /// returns an error if it fails to iterate over the posts table in the db
     pub async fn list_entries(&self) -> Result<()> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {
@@ -100,12 +122,19 @@ impl PostCache {
             }
         };
 
-        let read_txn = db.begin_read().context("failed to start read")?;
+        let read_txn = match db.begin_read().context("failed to start read") {
+            Ok(txn) => txn,
+            Err(e) => {
+                error!("failed to start read transaction on db");
+                return Err(e);
+            }
+        };
+
         let table_db = match read_txn.open_table(POSTS_TABLE) {
             Ok(t) => t,
-            Err(_e) => {
+            Err(e) => {
                 warn!("no posts table found in cache");
-                return Ok(());
+                return Err(color_eyre::eyre::Report::new(e));
             }
         };
 
@@ -114,7 +143,7 @@ impl PostCache {
 
         const CHUNK_SIZE: usize = 100;
 
-        mkvec!(chunk, (i64, Vec<u8>), CHUNK_SIZE);
+        let mut chunk: Vec<(i64, Vec<u8>)> = Vec::with_capacity(CHUNK_SIZE);
 
         for entry in table_db.iter()? {
             if let Ok((id, data)) = entry {
@@ -146,6 +175,16 @@ impl PostCache {
     }
 
     /// get a post in the cache
+    ///
+    /// # Arguments
+    ///
+    /// * `post_id` - the id of the post to try retrieving from the cache
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to start reading the post cache db  
+    /// returns an error if it fails to deserialize the cached post  
+    /// returns an error if it fails to read from the post cache
     pub async fn get(&self, post_id: i64) -> Result<Option<E6Post>> {
         let db_guard = self.db.read().await;
         let db = match db_guard.as_ref() {

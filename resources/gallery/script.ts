@@ -1071,9 +1071,13 @@ function handle_key_down(e: KeyboardEvent): void {
         close_modal();
         return;
       case "ArrowRight":
+      case "d":
+      case "D":
         nav_modal(1);
         return;
       case "ArrowLeft":
+      case "A":
+      case "a":
         nav_modal(-1);
         return;
       case "d":

@@ -1,29 +1,8 @@
 //! theme presets
-use crate::serve::theme::{Theme, ThemeVariant, palette::*};
-
-/// make a theme
-#[macro_export]
-macro_rules! impl_theme {
-    ($name:ident, $display_name:expr, $variant:expr, $colors:expr) => {
-        /// a theme preset
-        #[derive(Clone, Default)]
-        pub struct $name;
-
-        impl Theme for $name {
-            fn colors() -> ThemeColors {
-                $colors
-            }
-
-            fn name() -> &'static str {
-                $display_name
-            }
-
-            fn variant() -> ThemeVariant {
-                $variant
-            }
-        }
-    };
-}
+use crate::{
+    impl_theme,
+    serve::theme::{Theme, ThemeVariant, palette::*},
+};
 
 impl_theme!(RosePine, "Rose Pine", ThemeVariant::Dark, {
     ThemeColors::new(CorePalette {

@@ -54,17 +54,23 @@ pub struct DownloadData {
 /// the ui for e62rs
 pub struct E6Ui {
     /// the e6 api client
-    client: Arc<E6Client>,
+    pub client: Arc<E6Client>,
     /// the post downloader
-    downloader: Arc<PostDownloader>,
+    pub downloader: Arc<PostDownloader>,
     /// the tags db
-    tag_db: Arc<TagDb>,
+    pub tag_db: Arc<TagDb>,
     /// the pools db
-    pool_db: Arc<PoolDb>,
+    pub pool_db: Arc<PoolDb>,
 }
 
 impl E6Ui {
     /// make a new e6ui
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - an e621 api client (see [`crate::client::E6Client`])
+    /// * `tag_db` - a loaded tag database
+    /// * `pool_db` - a loaded pool database
     pub fn new(client: Arc<E6Client>, tag_db: Arc<TagDb>, pool_db: Arc<PoolDb>) -> Self {
         let downloader = Arc::new(PostDownloader::with_download_dir_and_format(
             getopt!(download.path),
@@ -182,6 +188,10 @@ impl E6Ui {
     }
 
     /// shows a list of posts and allows the user to select from them
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - the posts to select from
     pub fn select_multiple_posts<'a>(&self, posts: &'a [E6Post]) -> Result<Vec<&'a E6Post>> {
         let options: Vec<DemandOption<usize>> = posts
             .iter()
@@ -211,7 +221,11 @@ impl E6Ui {
     }
 
     /// shows the interaction menu for a post
-    async fn interaction_menu(&self, post: E6Post) -> Result<InteractionMenu> {
+    ///
+    /// # Arguments
+    ///
+    /// * `post` - the post to interact with
+    pub async fn interaction_menu(&self, post: E6Post) -> Result<InteractionMenu> {
         let choice = InteractionMenu::select("What would you like to do?")
             .theme(&ROSE_PINE)
             .run()
@@ -249,20 +263,10 @@ impl E6Ui {
         let temp_file = std::env::temp_dir().join("e62rs_config.toml");
         fs::write(&temp_file, &curr_cfg).await?;
 
-        #[cfg(unix)]
-        {
-            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
-            std::process::Command::new(editor)
-                .arg(&temp_file)
-                .status()?;
-        }
-
-        #[cfg(windows)]
-        {
-            std::process::Command::new("notepad")
-                .arg(&temp_file)
-                .status()?;
-        }
+        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "nano".to_string());
+        std::process::Command::new(editor)
+            .arg(&temp_file)
+            .status()?;
 
         let new_cfg_text = fs::read_to_string(&temp_file).await?;
 
@@ -274,10 +278,16 @@ impl E6Ui {
             std::process::exit(1);
         }
 
+        crate::config::instance::reload_config()?;
+
         Ok(())
     }
 
     /// display a menu for interacting with multiple posts at once
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - the posts to interact with
     pub async fn batch_interaction_menu(&self, posts: Vec<E6Post>) -> Result<BatchAction> {
         let choice = BatchAction::select(&format!(
             "What would you like to do with {} selected posts?",
@@ -312,6 +322,10 @@ impl E6Ui {
     }
 
     /// display a menu for interacting with posts
+    ///
+    /// # Arguments
+    ///
+    /// * `pool` - the pool to interact with
     pub async fn pool_interaction_menu(&self, pool: E6Pool) -> Result<PoolInteractionMenu> {
         let choice = PoolInteractionMenu::select("What would you like to do with this pool?")
             .theme(&ROSE_PINE)
@@ -376,7 +390,11 @@ impl E6Ui {
     }
 
     /// download pool posts to `<pools_dir>/<pool_name>/`
-    async fn download_pool_to_pools_folder(&self, pool: &E6Pool) -> Result<()> {
+    ///
+    /// # Arguments
+    ///
+    /// * `pool` - the pool to download
+    pub async fn download_pool_to_pools_folder(&self, pool: &E6Pool) -> Result<()> {
         if pool.post_ids.is_empty() {
             println!("This pool has no posts to download.");
             return Ok(());
@@ -434,7 +452,11 @@ impl E6Ui {
     }
 
     /// fetch all posts from a pool
-    async fn fetch_pool_posts(&self, pool: &E6Pool) -> Result<Vec<E6Post>> {
+    ///
+    /// # Arguments
+    ///
+    /// * `pool` - the pool to fetch posts from
+    pub async fn fetch_pool_posts(&self, pool: &E6Pool) -> Result<Vec<E6Post>> {
         let total = pool.post_ids.len();
         if total == 0 {
             return Ok(Vec::new());
@@ -559,7 +581,12 @@ impl E6Ui {
     }
 
     /// check if a post contains any blacklisted tags
-    fn post_contains_blacklisted_tags(post: &E6Post, blacklist: &HashSet<String>) -> bool {
+    ///
+    /// # Arguments
+    ///
+    /// * `post` - the post to check
+    /// * `blacklist` - the current blacklist
+    pub fn post_contains_blacklisted_tags(post: &E6Post, blacklist: &HashSet<String>) -> bool {
         if blacklist.is_empty() {
             return false;
         }
@@ -964,7 +991,16 @@ impl E6Ui {
     }
 
     /// download new artist posts based on already downloaded posts
-    async fn download_new_artist_posts(
+    ///
+    /// # Arguments
+    ///
+    /// * `client` - an e621 api client
+    /// * `downloader` - a post downloader
+    /// * `artist` - the artist to download
+    /// * `limit` - the max amount of new posts to download from the artist
+    /// * `downloaded_post_ids` - a list of already downloaded ids from the artist
+    /// * `blacklist` - the current loaded blacklist
+    pub async fn download_new_artist_posts(
         client: &Arc<E6Client>,
         downloader: &Arc<PostDownloader>,
         artist: &str,

@@ -28,10 +28,19 @@ pub struct Cli {
     /// Generate both the schema and the default config file
     #[arg(short = 'a', long)]
     pub gen_all: bool,
+
+    /// Display localization progress
+    #[arg(short, long = "localization")]
+    pub loc_prog: bool,
 }
 
 impl Cli {
     /// run the CLI
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to generate and/or save the json schema  
+    /// returns an error if it fails to generate and/or save the default config  
     pub async fn run() -> Result<()> {
         let argv = Self::parse();
 
@@ -43,7 +52,11 @@ impl Cli {
             Self::gen_defaults(argv.save)?;
         }
 
-        if argv.gen_default || argv.gen_all || argv.gen_schema || argv.save {
+        if argv.loc_prog {
+            crate::ui::menus::calculate_localization_progress();
+        }
+
+        if argv.gen_default || argv.gen_all || argv.gen_schema || argv.save || argv.loc_prog {
             std::process::exit(0);
         }
 
@@ -56,7 +69,11 @@ impl Cli {
     ///
     /// * `path` - the path to the file being written
     /// * `contents` - the data to write to the file
-    fn write_to_file(path: &str, contents: &str) -> Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to open `path`
+    pub fn write_to_file(path: &str, contents: &str) -> Result<()> {
         let file = OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -71,7 +88,12 @@ impl Cli {
     /// # Arguments
     ///
     /// * `save` - save instead of printing
-    fn gen_schema(save: bool) -> Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to convert the schema to a JSON string  
+    /// returns an error if it fails to save the schema to `resources/e62rs.schema.json`
+    pub fn gen_schema(save: bool) -> Result<()> {
         let settings = SchemaSettings::draft2020_12().for_serialize();
         let generator = settings.into_generator();
         let schema = generator.into_root_schema_for::<E62Rs>();
@@ -91,7 +113,12 @@ impl Cli {
     /// # Arguments
     ///
     /// * `save` - save instead of printing
-    fn gen_defaults(save: bool) -> Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// returns an error if it fails to convert the default config to TOML  
+    /// returns an error if it fails to save the default config to `resources/e62rs.default.toml
+    pub fn gen_defaults(save: bool) -> Result<()> {
         let defaults = toml::to_string_pretty(&E62Rs::default())?;
 
         if save {
