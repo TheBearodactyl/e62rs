@@ -147,7 +147,7 @@ pub fn check_for_internet() -> bool {
 ///
 /// returns an error if it fails to open `file_path`  
 /// returns an error if it fails to write `data` to `file_path`
-pub fn _write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> {
+pub fn write_to_json<P: AsRef<Path>>(file_path: P, data: String) -> Result<()> {
     let file_path = file_path.as_ref();
     let json_path = format!("{}.json", file_path.display());
 
