@@ -217,7 +217,7 @@ impl PostDownloader {
 
             #[cfg(not(target_os = "windows"))]
             {
-                utils::write_to_json(filepath, &metadata)?;
+                utils::write_to_json(filepath, metadata)?;
             }
         }
 
