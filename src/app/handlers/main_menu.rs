@@ -3,7 +3,13 @@ use {
     super::Handlers,
     crate::{
         config::instance::reload_config,
-        ui::{menus::MainMenu, themes::ROSE_PINE},
+        ui::{
+            menus::{
+                MainMenu, blacklist::BlacklistMenu, explore::ExploreMenu,
+                reorganize::RegorganizeMenu, view::ViewMenu,
+            },
+            themes::ROSE_PINE,
+        },
     },
 };
 

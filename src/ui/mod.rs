@@ -12,7 +12,8 @@ use {
             menus::{
                 BatchAction, InteractionMenu, PoolInteractionMenu,
                 download::{PostDownloader, sanitize_pool_name},
-                view::{print_post_to_terminal, print_posts_to_terminal},
+                explore::ExploreMenu,
+                view::{ViewMenu, print_post_to_terminal, print_posts_to_terminal},
             },
             progress::ProgressManager,
             themes::ROSE_PINE,

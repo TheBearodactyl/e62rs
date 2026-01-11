@@ -7,6 +7,7 @@ use {
     std::{
         fs::OpenOptions,
         io::{BufWriter, Write},
+        path::Path,
     },
 };
 
@@ -73,7 +74,10 @@ impl Cli {
     /// # Errors
     ///
     /// returns an error if it fails to open `path`
-    pub fn write_to_file(path: &str, contents: &str) -> Result<()> {
+    pub fn write_to_file<T>(path: T, contents: &str) -> Result<()>
+    where
+        T: AsRef<Path>,
+    {
         let file = OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -126,6 +130,27 @@ impl Cli {
         } else {
             println!("{}", defaults);
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {super::*, tempfile::NamedTempFile};
+
+    #[test]
+    fn test_write_to_file() -> color_eyre::Result<()> {
+        let exfile = NamedTempFile::new()?;
+        let res = Cli::write_to_file(exfile.path(), "woah");
+        let contents = std::fs::read_to_string(exfile.path())?;
+
+        assert!(res.is_ok(), "failed to write 'woah' to temp file");
+        assert_eq!(
+            contents,
+            "woah".to_string(),
+            "contents of temp file not correct"
+        );
 
         Ok(())
     }

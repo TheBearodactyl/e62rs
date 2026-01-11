@@ -1,4 +1,10 @@
 //! post downloading stuff
+//!
+//! provides utilities for downloading from e(621/926), with support for:  
+//! * batch downloads
+//! * progress tracking
+//! * metadata storage
+//! * highly customizable filename formatting
 use {
     crate::{
         config::format::FormatTemplate, getopt, models::E6Post, ui::progress::ProgressManager,
@@ -19,20 +25,49 @@ use {
 };
 
 /// a post downloader
+///
+/// handles downloading posts from e(621/926)
 #[derive(Default, Clone)]
 pub struct PostDownloader {
     /// the http client
-    client: Client,
+    ///
+    /// used for making requests to the e6 api
+    pub client: Client,
+
     /// the path to download to
-    download_dir: Option<PathBuf>,
+    ///
+    /// specifies the base directory where downloaded files are stored
+    pub download_dir: Option<PathBuf>,
+
     /// the format template to use for output
-    output_format: Option<String>,
+    ///
+    /// the way filenames should be formatted using post metadata
+    pub output_format: Option<String>,
+
     /// the progress bar manager
-    progress_manager: Arc<ProgressManager>,
+    ///
+    /// manages and displays progress bars for download operations
+    pub progress_manager: Arc<ProgressManager>,
 }
 
 /// sanitize a value for use in filenames (before template substitution)
-pub fn sanitize_value<S: AsRef<str>>(input: S) -> String {
+///
+/// replaces fs-unsafe chars with safe alts, using full-width unicode eqs on windows for characters
+/// like `<>:"|?*` and replaces slashes with `" on "`
+///
+/// # Examples
+///
+/// ```
+/// use e62rs::ui::menus::download::sanitize_value;
+///
+/// let sanitized = sanitize_value("artist/name");
+/// assert_eq!(sanitized, "artist on name");
+/// ```
+#[bearive::argdoc]
+pub fn sanitize_value<S: AsRef<str>>(
+    /// the string to sanitize
+    input: S,
+) -> String {
     let s = input.as_ref();
     let mut sanitized = String::with_capacity(s.len());
 
@@ -62,7 +97,19 @@ pub fn sanitize_value<S: AsRef<str>>(input: S) -> String {
 }
 
 /// sanitize a path for fs compatibility (only OS-specific issues, not `/`)
-pub fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
+///
+/// removes/replaces chars that're invalid on the current OS but preserves path seps. primarily
+/// handles windows-specific restrictions like `<>:"|?*`
+///
+/// # Platform-specific behavior
+///
+/// - **Windows**: replaces `<>:"|?*` with full-width unicode equivalents
+/// - **Unix**: returns the path unchanged
+#[bearive::argdoc]
+pub fn sanitize_path<S: AsRef<str>>(
+    /// the path to sanitize
+    input: S,
+) -> PathBuf {
     let s = input.as_ref();
 
     #[cfg(target_os = "windows")]
@@ -92,7 +139,16 @@ pub fn sanitize_path<S: AsRef<str>>(input: S) -> PathBuf {
 
 impl PostDownloader {
     /// make a new post downloader with a given download dir and output format
-    pub fn with_download_dir_and_format<T>(download_dir: T, output_format: Option<String>) -> Self
+    ///
+    /// makes a downloader instance configured with a specific dir and optional custom filename
+    /// format. also initializes an http client and progress manager
+    #[bearive::argdoc]
+    pub fn with_download_dir_and_format<T>(
+        /// the base directory for downloads
+        download_dir: T,
+        /// optional custom output format template
+        output_format: Option<String>,
+    ) -> Self
     where
         T: AsRef<Path>,
         PathBuf: From<T>,
@@ -106,7 +162,17 @@ impl PostDownloader {
     }
 
     /// download multiple posts
-    pub async fn download_posts(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
+    ///
+    /// concurrently downloads a list of posts with a configurable thread limit. creates a progress
+    /// bar to track overall progress and handles errs for individual downloads without stopping
+    #[bearive::argdoc]
+    #[error = "the progress bar cannot be created (individual download failures are logged as \
+               warnings)"]
+    pub async fn download_posts(
+        self: Arc<Self>,
+        /// the posts to download
+        posts: Vec<E6Post>,
+    ) -> Result<()> {
         let concurrent_limit = getopt!(download.threads);
 
         let total_pb = self
@@ -149,7 +215,21 @@ impl PostDownloader {
     }
 
     /// download an individual post
-    pub async fn download_post(&self, post: E6Post, index: usize) -> Result<()> {
+    ///
+    /// downloads a single post, saves it to disk with formatted filename, and optionally
+    /// stoers metadata. creates and manages a progress bar for tracking the download
+    #[bearive::argdoc]
+    #[error = "the post has no downloadable url"]
+    #[error = "the filename cannot be formatted"]
+    #[error = "the http request fails"]
+    #[error = "the file cannot be saved"]
+    pub async fn download_post(
+        &self,
+        /// the post to download
+        post: E6Post,
+        /// the index of this post in a batch download
+        index: usize,
+    ) -> Result<()> {
         let url = post
             .file
             .url
@@ -195,11 +275,20 @@ impl PostDownloader {
     }
 
     /// save a post to a file
-    async fn save_to_file(
+    ///
+    /// streams the http response to disk while updating a progress bar, optionally saves metadata
+    /// to an ADS (Windows) or JSON file (Unix)
+    #[bearive::argdoc]
+    #[error = "returns an error if"]
+    pub async fn save_to_file(
         &self,
+        /// the http response to stream from
         response: reqwest::Response,
+        /// the path where the file will be saved
         filepath: &Path,
+        /// progress bar for download progress tracking
         pb: ProgressBar,
+        /// post metadata to save alongside the file
         post: &E6Post,
     ) -> Result<()> {
         let mut file = File::create(filepath)
@@ -207,17 +296,14 @@ impl PostDownloader {
             .context(format!("Failed to create file '{}'", filepath.display()))?;
 
         if getopt!(download.save_metadata) {
-            let metadata =
-                serde_json::to_string_pretty(post).context("Failed to serialize post metadata")?;
-
             #[cfg(target_os = "windows")]
             {
-                utils::write_to_ads(filepath, "metadata", &metadata)?;
+                utils::write_to_ads(filepath, "metadata", post)?;
             }
 
             #[cfg(not(target_os = "windows"))]
             {
-                utils::write_to_json(filepath, metadata)?;
+                utils::write_to_json(filepath, post)?;
             }
         }
 
@@ -246,7 +332,17 @@ impl PostDownloader {
     }
 
     /// format the filename based on the post metadata
-    pub fn format_filename(&self, post: &E6Post) -> Result<String> {
+    ///
+    /// applies a format template to post metadata to gen a filename. uses the configured output
+    /// format or a default if non is specified
+    #[bearive::argdoc]
+    #[error = "the format template can't be parsed"]
+    #[error = "the template can't be rendered with the post data"]
+    pub fn format_filename(
+        &self,
+        /// the post to generate a filename for
+        post: &E6Post,
+    ) -> Result<String> {
         let out_fmt = self.output_format.as_deref().unwrap_or("$id.$ext");
         let template = FormatTemplate::parse(out_fmt).context("failed to parse output format")?;
         let (simple_context, array_context) = build_context_from_post(post);
@@ -258,7 +354,17 @@ impl PostDownloader {
     }
 
     /// get the path to a file
-    pub fn get_filepath(&self, filename: &str) -> Result<PathBuf> {
+    ///
+    /// constructs the full path for a file, making parent dirs as needed. checks if the file
+    /// already exists and returns an error if it does
+    #[bearive::argdoc]
+    #[error = "parent directories can't be made"]
+    #[error = "the file already exists"]
+    pub fn get_filepath(
+        &self,
+        /// the filename to construct a path for
+        filename: &str,
+    ) -> Result<PathBuf> {
         let filename = sanitize_path(filename);
 
         let path = if let Some(ref dir) = self.download_dir {
@@ -282,7 +388,16 @@ impl PostDownloader {
     }
 
     /// make a new downloader for a pool, saving to `<download_dir>/<pool_name>`
-    pub fn for_pool<T, S>(base_download_dir: T, pool_name: S) -> Self
+    ///
+    /// creates a downloader configured to save files in a subdir named after the given
+    /// pool. sanitizes the pool name to ensure fs compat
+    #[bearive::argdoc]
+    pub fn for_pool<T, S>(
+        /// the base dir for pool downloads
+        base_download_dir: T,
+        /// the name of the pool being downloaded
+        pool_name: S,
+    ) -> Self
     where
         T: AsRef<Path>,
         S: AsRef<str>,
@@ -299,7 +414,16 @@ impl PostDownloader {
     }
 
     /// download pool posts with sequential naming based on pool order
-    pub async fn download_pool_posts(self: Arc<Self>, posts: Vec<E6Post>) -> Result<()> {
+    ///
+    /// download posts from a pool using seq numbering (001, 002, 003, etc.) to preserve the pool's
+    /// intended order. handles concurrent downloads while maintaining filename order
+    #[bearive::argdoc]
+    #[error = "progress bar creation fails"]
+    pub async fn download_pool_posts(
+        self: Arc<Self>,
+        /// the posts to download in seq order
+        posts: Vec<E6Post>,
+    ) -> Result<()> {
         let concurrent_limit = getopt!(download.threads);
         let total = posts.len();
         let pad_width = total.to_string().len().max(3);
@@ -347,10 +471,20 @@ impl PostDownloader {
     }
 
     /// download a single pool post with sequential naming
-    async fn download_pool_post(
+    ///
+    /// downloads one post from a pool using a 0-padded seq number as the filename. preserves
+    /// metadata alongside the downloaded file
+    #[bearive::argdoc]
+    #[error = "the post has no downloadable url"]
+    #[error = "the download fails"]
+    #[error = "the file cannot be saved"]
+    pub async fn download_pool_post(
         &self,
+        /// the post to download
         post: E6Post,
+        /// the 1-indexed position in the pool
         sequence_num: usize,
+        /// the number of digits for 0-padding
         pad_width: usize,
     ) -> Result<()> {
         let url = post
@@ -398,7 +532,131 @@ impl PostDownloader {
 }
 
 /// build template context based on post metadata
+///
+/// extracts metadata from a post and organizes it into simple str maps and arr maps for use in
+/// filename templates. includes computed vals like aspect ratio, res cat, and formatted data
+///
+/// # Returns
+///
+/// a tuple of:
+/// - simple string subs (id, rating, score, etc.)
+/// - array subs (tags, artists, characters, etc.)
+///
+/// # Available template variables
+///
+/// **Basic Post Information:**
+///
+/// - `$id` → post ID
+/// - `$rating` → rating (e.g. `"safe"`, `"questionable"`, `"explicit"`)
+/// - `$rating_first` → first character of rating (`s`, `q`, `e`)
+/// - `$md5` → MD5 hash of file
+/// - `$ext` → file extension
+///
+/// **Scores & Engagement:**
+///
+/// - `$score` → total post score
+/// - `$score_up` → upvote score
+/// - `$score_down` → downvote score
+/// - `$fav_count` → number of favorites
+/// - `$comment_count` → number of comments
+///
+/// **File Metadata:**
+///
+/// - `$width` / `$height` → file dimensions in pixels
+/// - `$aspect_ratio` → aspect ratio (width/height)
+/// - `$orientation` → `"portrait"`, `"landscape"`, or `"square"`
+/// - `$resolution` → resolution category (`"SD"`, `"HD"`, `"FHD"`, `"QHD"`, `"4K"`, `"8K"`)
+/// - `$megapixels` → megapixel count (rounded to 1 decimal)
+/// - `$size` → file size in bytes
+/// - `$size_mb` → file size in megabytes (rounded to 2 decimals)
+/// - `$size_kb` → file size in kilobytes (rounded to 2 decimals)
+/// - `$file_type` → media type (`"image"`, `"video"`, `"flash"`, `"unknown"`)
+///
+/// **Video-Specific:**
+///
+/// - `$duration` → video duration in seconds (0 if not applicable)
+/// - `$duration_formatted` → video duration as `MM:SS` or `HH:MM:SS`
+///
+/// **User Information:**
+///
+/// - `$artist` → first listed artist (or `"unknown"`)
+/// - `$uploader` → uploader username
+/// - `$uploader_id` → uploader user ID
+/// - `$approver_id` → approver ID (or `"none"`)
+///
+/// **Tag Counts:**
+///
+/// - `$tag_count` → total number of tags
+/// - `$artist_count` → number of artist tags
+/// - `$tag_count_general` → number of general tags
+/// - `$tag_count_character` → number of character tags
+/// - `$tag_count_species` → number of species tags
+/// - `$tag_count_copyright` → number of copyright tags
+///
+/// **Pool Information:**
+///
+/// - `$pool_ids` → comma-separated list of pool IDs
+/// - `$pool_count` → number of pools the post is in
+///
+/// **Relationships:**
+///
+/// - `$has_children` → `"yes"` if post has children, `"no"` otherwise
+/// - `$parent_id` → parent post ID (or `"none"`)
+///
+/// **Flags:**
+///
+/// - `$is_pending` → `"yes"` if pending approval, `"no"` otherwise
+/// - `$is_flagged` → `"yes"` if flagged, `"no"` otherwise
+/// - `$is_deleted` → `"yes"` if deleted, `"no"` otherwise
+/// - `$has_notes` → `"yes"` if has notes, `"no"` otherwise
+///
+/// ### Date/Time Placeholders
+///
+/// **Post Creation Date:**
+///
+/// - `$year`, `$month`, `$day` → creation date components
+/// - `$hour`, `$minute`, `$second` → creation time components
+/// - `$date` → shorthand for `$year-$month-$day`
+/// - `$time` → shorthand for `$hour-$minute-$second`
+/// - `$datetime` → shorthand for `$year-$month-$day $hour-$minute-$second`
+/// - `$timestamp` → Unix timestamp of upload
+///
+/// **Post Update Date:**
+///
+/// - `$year_updated`, `$month_updated`, `$day_updated` → last update date components
+/// - `$date_updated` → shorthand for `$year_updated-$month_updated-$day_updated`
+///
+/// **Download Time:**
+///
+/// - `$now_year`, `$now_month`, `$now_day` → download date components
+/// - `$now_hour`, `$now_minute`, `$now_second` → download time components
+/// - `$now_date` → shorthand for `$now_year-$now_month-$now_day`
+/// - `$now_time` → shorthand for `$now_hour-$now_minute-$now_second`
+/// - `$now_datetime` → shorthand for `$now_year-$now_month-$now_day $now_hour-$now_minute-$now_second`
+/// - `$now_timestamp` → Unix timestamp at download time
+///
+/// ### Indexed Placeholders
+///
+/// These placeholders allow you to extract multiple items from lists. They support several range syntaxes:
+///
+/// **Syntax:**
+///
+/// - `$key[N]` → first N items (e.g., `$tags[5]`)
+/// - `$key[L..R]` → items from index L to R (exclusive) (e.g., `$tags[2..5]`)
+/// - `$key[N..]` → all items from index N onwards (e.g., `$artists[1..]`)
+/// - `$key[..N]` → items from start to index N (exclusive) (e.g., `$sources[..3]`)
+///
+/// **Available indexed placeholders:**
+///
+/// - `$tags[...]` → general tags, joined by commas
+/// - `$artists[...]` → artist tags, joined by commas
+/// - `$characters[...]` → character tags, joined by commas
+/// - `$species[...]` → species tags, joined by commas
+/// - `$copyright[...]` → copyright tags, joined by commas
+/// - `$sources[...]` → source domains, joined by commas
+#[bearive::argdoc]
 pub fn build_context_from_post(
+    /// the post to extract metadata from
     post: &E6Post,
 ) -> (HashMap<String, String>, HashMap<String, Vec<String>>) {
     let mut simple = HashMap::new();
@@ -651,7 +909,21 @@ pub fn build_context_from_post(
 }
 
 /// sanitize a pool name for use as a directory name
-pub fn sanitize_pool_name<S: AsRef<str>>(name: S) -> String {
+///
+/// removes/replaces chars that're problematic in dir names. collapses multiple consecutive
+/// underscores and trims leading/trailing underscores
+///
+/// # Examples
+///
+/// ```
+/// let sanitized = e62rs::ui::menus::download::sanitize_pool_name("I'm A Pool, Motherfucker: Part 2");
+/// assert_eq!(sanitized, "I'm_A_Pool,_Motherfucker_Part_2");
+/// ```
+#[bearive::argdoc]
+pub fn sanitize_pool_name<S: AsRef<str>>(
+    /// the pool name to sanatize
+    name: S,
+) -> String {
     let s = name.as_ref();
     let mut sanitized = String::with_capacity(s.len());
 
@@ -668,11 +940,13 @@ pub fn sanitize_pool_name<S: AsRef<str>>(name: S) -> String {
 
     let mut result = String::with_capacity(sanitized.len());
     let mut last_was_underscore = false;
+
     for ch in sanitized.chars() {
         if ch == '_' {
             if !last_was_underscore {
                 result.push(ch);
             }
+
             last_was_underscore = true;
         } else {
             result.push(ch);

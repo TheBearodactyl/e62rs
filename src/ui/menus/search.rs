@@ -4,7 +4,11 @@ use {
         display::dtext::parser::format_text,
         getopt,
         models::*,
-        ui::{E6Ui, ROSE_PINE, autocomplete::PoolAutocompleter, menus::AdvPoolSearch},
+        ui::{
+            E6Ui, ROSE_PINE,
+            autocomplete::PoolAutocompleter,
+            menus::{AdvPoolSearch, view::ViewMenu},
+        },
     },
     color_eyre::eyre::{Context, Result, bail},
     demand::{Confirm, DemandOption, Input, Select},
@@ -13,9 +17,85 @@ use {
     tracing::{debug, warn},
 };
 
-impl E6Ui {
+/// functions for searching posts and pools
+pub trait SearchMenu {
     /// search for pools in an advanced way
-    pub async fn search_pools_adv(&self) -> Result<()> {
+    fn search_pools_adv(&self) -> impl Future<Output = Result<()>>;
+
+    /// search pools by their description
+    fn perform_pool_description_search(&self) -> impl Future<Output = Result<()>>;
+
+    /// search pools by creator
+    fn perform_pool_creator_search(&self) -> impl Future<Output = Result<()>>;
+
+    /// browse the latest pools
+    fn browse_latest_pools(&self) -> impl Future<Output = Result<()>>;
+
+    /// handle the results of a search
+    fn handle_pool_results(&self, pools: Vec<E6Pool>) -> impl Future<Output = Result<()>>;
+
+    /// get the search query for finding pools
+    fn get_pool_search_query(&self) -> Result<String>;
+
+    /// get the max number of pools to display
+    fn get_pool_limit(&self) -> Result<u64>;
+
+    /// select a pool from a list
+    fn select_pool<'a>(&self, pools: &'a [E6Pool]) -> Result<Option<&'a E6Pool>>;
+
+    /// convert a PoolEntry to an E6Pool
+    fn pool_entry_to_e6pool(&self, entry: &PoolEntry) -> E6Pool;
+
+    /// search posts
+    fn search_posts(&self) -> impl Future<Output = Result<()>>;
+
+    /// search pools
+    fn search_pools(&self) -> impl Future<Output = Result<()>>;
+
+    /// perform a pool search
+    fn perform_pool_search(&self) -> impl Future<Output = Result<bool>>;
+
+    /// perform a post search
+    fn perform_search(&self) -> impl Future<Output = Result<bool>>;
+
+    /// perform a paginated post search
+    fn fetch_posts_paginated(
+        &self,
+        all_tags: Vec<String>,
+        total_limit: u64,
+    ) -> impl Future<Output = Result<Vec<E6Post>>>;
+
+    /// make a search progress bar
+    fn create_search_progress_bar(&self, total: u64) -> Result<ProgressBar>;
+
+    /// handle a post interaction
+    fn handle_post_interaction(&self, posts: Vec<E6Post>) -> impl Future<Output = Result<bool>>;
+
+    /// fetch posts selected in list of results
+    fn fetch_selected_posts(
+        &self,
+        selected_posts: Vec<&E6Post>,
+    ) -> impl Future<Output = Result<Vec<E6Post>>>;
+
+    /// make a progress bar for fetching
+    fn create_fetch_progress_bar(&self, total: usize) -> Result<ProgressBar>;
+
+    /// get the limit of posts to return
+    fn get_post_limit(&self) -> Result<u64>;
+
+    /// ask whether to continue
+    fn ask_continue(&self, message: &str) -> Result<bool>;
+
+    /// select a post from a list of posts
+    fn select_post<'a>(&self, posts: &'a [E6Post]) -> Result<Option<&'a E6Post>>;
+
+    /// display a pools info
+    fn display_pool(&self, pool: &E6Pool);
+}
+
+impl SearchMenu for E6Ui {
+    /// search for pools in an advanced way
+    async fn search_pools_adv(&self) -> Result<()> {
         loop {
             let search_type = AdvPoolSearch::select("How would you like to search for pools")
                 .theme(&ROSE_PINE)
@@ -147,7 +227,7 @@ impl E6Ui {
     }
 
     /// get the search query for finding pools
-    pub fn get_pool_search_query(&self) -> Result<String> {
+    fn get_pool_search_query(&self) -> Result<String> {
         let autocompleter = PoolAutocompleter::new(self.pool_db.clone());
         let query = Input::new("Enter pool search query (leave empty for latest pools):")
             .autocomplete(autocompleter)
@@ -159,7 +239,7 @@ impl E6Ui {
     }
 
     /// get the max number of pools to display
-    pub fn get_pool_limit(&self) -> Result<u64> {
+    fn get_pool_limit(&self) -> Result<u64> {
         let default_limit = getopt!(search.results).min(getopt!(search.results));
 
         let input = Input::new("How many pools to return?")
@@ -192,7 +272,7 @@ impl E6Ui {
     }
 
     /// select a pool from a list
-    pub fn select_pool<'a>(&self, pools: &'a [E6Pool]) -> Result<Option<&'a E6Pool>> {
+    fn select_pool<'a>(&self, pools: &'a [E6Pool]) -> Result<Option<&'a E6Pool>> {
         if pools.is_empty() {
             return Ok(None);
         }
@@ -230,7 +310,7 @@ impl E6Ui {
     }
 
     /// convert a PoolEntry to an E6Pool
-    pub fn pool_entry_to_e6pool(&self, entry: &PoolEntry) -> E6Pool {
+    fn pool_entry_to_e6pool(&self, entry: &PoolEntry) -> E6Pool {
         E6Pool {
             id: entry.id,
             name: entry.name.clone(),
@@ -247,7 +327,7 @@ impl E6Ui {
     }
 
     /// search posts
-    pub async fn search_posts(&self) -> Result<()> {
+    async fn search_posts(&self) -> Result<()> {
         loop {
             match self.perform_search().await {
                 Ok(should_continue) => {
@@ -268,7 +348,7 @@ impl E6Ui {
     }
 
     /// search pools
-    pub async fn search_pools(&self) -> Result<()> {
+    async fn search_pools(&self) -> Result<()> {
         loop {
             match self.perform_pool_search().await {
                 Ok(should_continue) => {
@@ -335,7 +415,7 @@ impl E6Ui {
     }
 
     /// perform a post search
-    pub async fn perform_search(&self) -> Result<bool> {
+    async fn perform_search(&self) -> Result<bool> {
         let (include_tags, or_tags, exclude_tags) = self.collect_tags()?;
         let total_limit = self.get_post_limit()?;
         if include_tags.is_empty() && or_tags.is_empty() && exclude_tags.is_empty() {
@@ -692,7 +772,7 @@ impl E6Ui {
     }
 
     /// display a pools info
-    pub fn display_pool(&self, pool: &E6Pool) {
+    fn display_pool(&self, pool: &E6Pool) {
         println!("\n{}", "=".repeat(70));
         println!("Pool: {}", pool.name);
         println!("ID: {}", pool.id);

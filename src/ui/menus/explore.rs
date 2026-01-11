@@ -1,4 +1,6 @@
 //! downloads explorer stuff
+//!
+//! provides a menu for browsing downloaded posts
 use {
     crate::{
         getopt,
@@ -7,7 +9,7 @@ use {
             E6Ui,
             menus::{
                 ExplorerMenu, ExplorerSortBy,
-                view::{print_dl_to_terminal, print_post_to_terminal},
+                view::{ViewMenu, print_dl_to_terminal, print_post_to_terminal},
             },
             progress::ProgressManager,
             themes::ROSE_PINE,
@@ -32,37 +34,65 @@ use {
 
 lazy_static::lazy_static! {
     /// the metadata cache for the explorer
+    ///
+    /// stores parsed post metadata in mem to avoid repeatedly reading from disk. shared across all
+    /// explorer ops.
     static ref METADATA_CACHE: Arc<Mutex<HashMap<PathBuf, E6Post>>> = Arc::new(Mutex::new(HashMap::new()));
 }
 
 #[derive(Debug, Clone)]
 /// a local post
+///
+/// represents a downloaded post with its associated file and metadata
 pub struct LocalPost {
     /// the post metadata
+    ///
+    /// contains all e6 metadata for this post
     pub post: E6Post,
+
     /// the path to the post
+    ///
+    /// the location of the downloaded file on the filesystem
     pub file_path: PathBuf,
 }
 
 impl LocalPost {
     /// read a file into a [`LocalPost`]
     ///
-    /// # Arguments
-    ///
-    /// * `file_path` - the path to the file to be parsed
-    pub fn from_file(file_path: PathBuf) -> Result<Self> {
+    /// loads a file from disk and parses its associated metadata into a [`LocalPost`]. metadata is
+    /// read from alternate data streams (Windows) or JSON sidecar files (Unix)
+    #[bearive::argdoc]
+    #[error = "the metadata can't be read"]
+    #[error = "the metadata is malformed"]
+    pub fn from_file(
+        /// the path to the downloaded file
+        file_path: PathBuf,
+    ) -> Result<Self> {
         let post = Self::read_metadata(&file_path)?;
         Ok(Self { post, file_path })
     }
 
     /// view a post
+    ///
+    /// displays the post image/animation in the terminal via sixel
+    #[bearive::argdoc]
+    #[error = "the file cannot be displayed"]
     pub fn view(&self) -> Result<()> {
         crate::ui::menus::view::print_dl_to_terminal(&self.file_path)
     }
 
     #[cfg(target_os = "windows")]
     /// read post metadata (windows)
-    pub fn read_metadata(file_path: &Path) -> Result<E6Post> {
+    ///
+    /// reads metadata from an NTFS alternate data stream named `metadata`. the metadata is stored
+    /// as JSON in the ADS
+    #[bearive::argdoc]
+    #[error = "the ads can't be opened"]
+    #[error = "the ads can't be parsed"]
+    pub fn read_metadata(
+        /// the path to the file containing the alternate data stream
+        file_path: &Path,
+    ) -> Result<E6Post> {
         let ads_path = format!("{}:metadata", file_path.display());
         let mut contents = String::new();
         let mut file = OpenOptions::new()
@@ -98,22 +128,46 @@ impl LocalPost {
 }
 
 /// state of the explorer
+///
+/// maintains the curr state of the explorer including all loaded posts, filters, queries, and sort
+/// order
 pub struct ExplorerState {
     /// loaded posts
+    ///
+    /// all posts that're loaded from the downloads dir
     pub posts: Vec<LocalPost>,
+
     /// posts that match the current filters
+    ///
+    /// all posts that pass all active filters and queries
     pub filtered_posts: Vec<LocalPost>,
+
     /// the current sort mode
+    ///
+    /// how the filtered posts are sorted
     pub current_sort: ExplorerSortBy,
+
     /// the current search query (if any)
+    ///
+    /// text that posts must match in tags, id, desc, file ext, or uploader
     pub search_query: Option<String>,
+
     /// the current content rating filter (if any)
+    ///
+    /// if set, only posts with this rating (`s`/`q`/`e`) will be shown
     pub rating_filter: Option<String>,
 }
 
 impl ExplorerState {
     /// initialize the explorer state
-    pub fn new(posts: Vec<LocalPost>) -> Self {
+    ///
+    /// makes a new explorer state with the given posts. initially, all posts are included in the
+    /// filtered list with default date-newest sorting
+    #[bearive::argdoc]
+    pub fn new(
+        /// all posts loaded from the downloads directory
+        posts: Vec<LocalPost>,
+    ) -> Self {
         let filtered_posts = posts.clone();
         Self {
             posts,
@@ -125,7 +179,14 @@ impl ExplorerState {
     }
 
     /// sort the current loaded downloads
-    pub fn sort(&mut self, sort_by: ExplorerSortBy) {
+    ///
+    /// applies the specified sort order to the filtered posts. does not affect the full posts list
+    #[bearive::argdoc]
+    pub fn sort(
+        &mut self,
+        /// how to sort the filtered posts
+        sort_by: ExplorerSortBy,
+    ) {
         self.current_sort = sort_by;
         match sort_by {
             ExplorerSortBy::DateNewest => {
@@ -164,18 +225,37 @@ impl ExplorerState {
     }
 
     /// filter posts by content rating
-    pub fn filter_by_rating(&mut self, rating: Option<String>) {
+    ///
+    /// filters the posts to only show those matching the specified rating. using `None` removes
+    /// the rating filter
+    #[bearive::argdoc]
+    pub fn filter_by_rating(
+        &mut self,
+        /// the rating to filter for (`s`/`q`/`e`) or None to show all
+        rating: Option<String>,
+    ) {
         self.rating_filter = rating.clone();
         self.apply_filters();
     }
 
     /// search for posts given a query
-    pub fn search(&mut self, query: Option<String>) {
+    ///
+    /// filters posts to only show those matching the search query in their id, tags, desc,
+    /// uploader name, or file ext. using `None` removes the search filter
+    #[bearive::argdoc]
+    pub fn search(
+        &mut self,
+        /// the search text, or `None` to clear search
+        query: Option<String>,
+    ) {
         self.search_query = query;
         self.apply_filters();
     }
 
     /// apply the selected filters
+    ///
+    /// rebuilds the filtered posts list by applying all active filters (rating + search).
+    /// automatically re-sorts after filtering
     pub fn apply_filters(&mut self) {
         self.filtered_posts = self
             .posts
@@ -224,8 +304,19 @@ impl ExplorerState {
                         .uploader_name
                         .to_lowercase()
                         .contains(&query_lower);
+                    let matches_extension = local_post
+                        .file_path
+                        .extension()
+                        .map(|a| a.to_str().unwrap_or(""))
+                        .unwrap_or("")
+                        .contains(&query_lower);
 
-                    if !matches_id && !matches_tags && !matches_description && !matches_uploader {
+                    if !matches_id
+                        && !matches_tags
+                        && !matches_description
+                        && !matches_uploader
+                        && !matches_extension
+                    {
                         return false;
                     }
                 }
@@ -239,6 +330,9 @@ impl ExplorerState {
     }
 
     /// get statistics based on the current filtered posts
+    ///
+    /// calculates stats about both the full post collection and the curr filtered subset. includes
+    /// counts by rating, avg score, and total faves
     pub fn get_statistics(&self) -> ExplorerStatistics {
         let total_posts = self.posts.len();
         let filtered_posts = self.filtered_posts.len();
@@ -278,30 +372,190 @@ impl ExplorerState {
     }
 }
 
-#[derive(Debug)]
 /// statistics for the explorer
+///
+/// contains aggregate stats about the post collection including:
+/// - counts
+/// - rating distrobution
+/// - score metrics
+#[derive(Debug)]
 pub struct ExplorerStatistics {
     /// total available posts
+    ///
+    /// the total number of posts loaded from disk
     pub total_posts: usize,
+
     /// total filtered posts
+    ///
+    /// the number of posts matching curr filters
     pub filtered_posts: usize,
+
     /// total safe posts
+    ///
+    /// count of posts with safe rating
     pub safe: usize,
+
     /// total questionable posts
+    ///
+    /// count of posts with questionable rating
     pub questionable: usize,
+
     /// total explicit posts
+    ///
+    /// count of posts with explicit rating
     pub explicit: usize,
+
     /// total unknown posts
+    ///
+    /// count of posts with unrecognized rating
     pub unknown: usize,
+
     /// the average score of loaded posts
+    ///
+    /// mean total scores across all loaded posts
     pub avg_score: f64,
+
     /// the total favorites across all loaded posts
+    ///
+    /// sum of favorite counts from all posts
     pub total_favorites: i64,
 }
 
-impl E6Ui {
+/// functions for the explorer menu
+///
+/// provides the ui for the downloads browser (TUI | For the web gallery, see [`crate::serve`])
+#[bearive::argdoc]
+pub trait ExploreMenu {
     /// show downloads explorer
-    pub async fn explore_downloads(&self) -> Result<()> {
+    ///
+    /// shows the main explorer interface with opts for browsing, searching, filtering, sorting,
+    /// and viewing stats. loops until the user chooses to exit
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - the downloads dir doesn't exist
+    /// - posts can't be scanned
+    /// - user interaction fails
+    fn explore_downloads(&self) -> impl Future<Output = Result<()>>;
+
+    /// scan the downloads directory for posts
+    ///
+    /// # Returns
+    ///
+    /// a list of local posts found in the dl dir
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - dir traversal fails
+    fn scan_downloads_directory(
+        &self,
+        /// the directory to scan
+        directory: &Path,
+    ) -> impl Future<Output = Result<Vec<LocalPost>>>;
+
+    /// show a slideshow of filtered posts
+    ///
+    /// displays posts sequentially in the term with configurable timing. supports pausing,
+    /// navigation, and exit controls via the kb
+    ///
+    /// # Keyboard controls
+    ///
+    /// - Space: pause/resume
+    /// - Left/H: prev post
+    /// - Right/L: next post
+    /// - Q/Esc: exit slideshow
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - image display fails
+    /// - keyboard input fails
+    fn slideshow(
+        &self,
+        /// the posts to include in the slideshow
+        posts: &[LocalPost],
+    ) -> impl Future<Output = Result<()>>;
+
+    /// browse local downloads
+    ///
+    /// shows a paginated, searchable list of posts for selection and viewing. supports navigation
+    /// between pages and returns to the explorer menu
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - user interaction fails
+    fn browse_local_posts(
+        &self,
+        /// the posts to browse
+        posts: &[LocalPost],
+    ) -> impl Future<Output = Result<()>>;
+
+    /// print a local post
+    ///
+    /// displays details info about a post and provides opts to view its image, open it in browser,
+    /// show it in explorer, or display full metadata
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - image display fails
+    /// - browser opening fails
+    /// - file ops fail
+    fn view_local_post(
+        &self,
+        /// the post to view
+        local_post: &LocalPost,
+    ) -> impl Future<Output = Result<()>>;
+
+    /// filter posts by content rating
+    ///
+    /// prompts the user to select a rating filter (`all`/`safe`/`questionable`/`explicit`) and
+    /// applies it to the explorer state
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - user inteeraction fails
+    fn filter_by_rating(
+        &self,
+        /// the explorer state to update
+        state: &mut ExplorerState,
+    ) -> Result<()>;
+
+    /// sort posts
+    ///
+    /// prompts the user to select a sort mode and applies it to the explorer state
+    ///
+    /// # Errors
+    ///
+    /// returns an error if:
+    /// - user interaction fails
+    fn sort_posts(
+        &self,
+        /// the explorer state to update
+        state: &mut ExplorerState,
+    ) -> Result<()>;
+
+    /// display explorer stats
+    ///
+    /// prints stats about the post collection including:
+    /// - counts by rating
+    /// - average score
+    /// - total faves
+    /// - active filters
+    fn display_statistics(
+        &self,
+        /// the explorer state to analyze
+        state: &ExplorerState,
+    );
+}
+
+impl ExploreMenu for E6Ui {
+    /// show downloads explorer
+    async fn explore_downloads(&self) -> Result<()> {
         println!("\n{0} Downloads Explorer {0}\n", "===".green());
 
         let download_dir: String = getopt!(download.path);
@@ -353,9 +607,10 @@ impl E6Ui {
                     false
                 }
                 ExplorerMenu::Search => {
-                    let query =
-                        Input::new("Enter search query (tags, ID, uploader, or description):")
-                            .run()?;
+                    let query = Input::new(
+                        "Enter search query (tags, file extension, ID, uploader, or description):",
+                    )
+                    .run()?;
                     state.search(Some(query));
                     println!("Found {} matching posts", state.filtered_posts.len());
                     false
@@ -405,7 +660,7 @@ impl E6Ui {
     }
 
     /// scan the downloads directory for posts
-    pub async fn scan_downloads_directory(&self, directory: &Path) -> Result<Vec<LocalPost>> {
+    async fn scan_downloads_directory(&self, directory: &Path) -> Result<Vec<LocalPost>> {
         let mut local_posts = Vec::new();
         let mut skipped_count = 0;
 
@@ -439,12 +694,6 @@ impl E6Ui {
                     )
                     .await?,
             )
-        } else {
-            None
-        };
-
-        let cache = if cache_enabled {
-            Some(METADATA_CACHE.lock().await)
         } else {
             None
         };
@@ -492,13 +741,14 @@ impl E6Ui {
             };
 
             if has_metadata {
-                let post = if let Some(ref cache) = cache {
+                let cached_post = if cache_enabled {
+                    let cache = METADATA_CACHE.lock().await;
                     cache.get(&path).cloned()
                 } else {
                     None
                 };
 
-                let local_post = if let Some(post) = post {
+                let local_post = if let Some(post) = cached_post {
                     LocalPost {
                         post,
                         file_path: path.to_path_buf(),
@@ -506,14 +756,16 @@ impl E6Ui {
                 } else {
                     match LocalPost::from_file(path.to_path_buf()) {
                         Ok(local_post) => {
-                            if let Some(ref _cache) = cache {
+                            if cache_enabled {
                                 let mut cache_map = METADATA_CACHE.lock().await;
                                 cache_map.insert(path.to_path_buf(), local_post.post.clone());
                             }
+
                             local_post
                         }
+
                         Err(e) => {
-                            warn!("Failed to load metadata for {}: {}", path.display(), e);
+                            warn!("failed to load metadata for {}: {}", path.display(), e);
                             skipped_count += 1;
                             continue;
                         }
@@ -543,7 +795,7 @@ impl E6Ui {
     }
 
     /// show a slideshow of filtered posts
-    pub async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
+    async fn slideshow(&self, posts: &[LocalPost]) -> Result<()> {
         let mut paused = false;
         let sleep_seconds: u64 = getopt!(explorer.slideshow_delay);
         let slide_duration = Duration::from_secs(sleep_seconds);
@@ -599,7 +851,7 @@ impl E6Ui {
     }
 
     /// browse local downloads
-    pub async fn browse_local_posts(&self, posts: &[LocalPost]) -> Result<()> {
+    async fn browse_local_posts(&self, posts: &[LocalPost]) -> Result<()> {
         let posts_per_page: usize = getopt!(explorer.posts_per_page);
         let mut current_page = 0;
         let total_pages = posts.len().div_ceil(posts_per_page);
@@ -681,7 +933,7 @@ impl E6Ui {
     }
 
     /// print a local post
-    pub async fn view_local_post(&self, local_post: &LocalPost) -> Result<()> {
+    async fn view_local_post(&self, local_post: &LocalPost) -> Result<()> {
         self.display_post(&local_post.post);
 
         let auto_display: bool = getopt!(explorer.auto_display_image);
@@ -749,7 +1001,7 @@ impl E6Ui {
     }
 
     /// filter posts by content rating
-    pub fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
+    fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
         let options = ["All ratings", "Safe", "Questionable", "Explicit"];
         let selection = Select::new("Filter by rating:")
             .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
@@ -768,7 +1020,7 @@ impl E6Ui {
     }
 
     /// sort posts
-    pub fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
+    fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
         let sort_by = ExplorerSortBy::select("Sort posts by:")
             .theme(&ROSE_PINE)
             .run()?;
@@ -778,7 +1030,7 @@ impl E6Ui {
     }
 
     /// display explorer stats
-    pub fn display_statistics(&self, state: &ExplorerState) {
+    fn display_statistics(&self, state: &ExplorerState) {
         let stats = state.get_statistics();
 
         println!("\n{}", "=".repeat(50));

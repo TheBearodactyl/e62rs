@@ -5,11 +5,13 @@ use {
             dtext::parser::format_text,
             image::{
                 animation::{AnimatedImage, is_animated_format, load_animated},
+                dimensions::ImageDimensions,
                 encoder::SixelEncoder,
                 processor::ImageProcessor,
                 source::ImageSource,
             },
         },
+        getopt,
         models::E6Post,
         ui::E6Ui,
     },
@@ -23,6 +25,11 @@ use {
 };
 
 /// load an animation from bytes with explicit extension
+///
+/// # Arguments
+///
+/// * `bytes` - the bytes of the animation file
+/// * `ext` - the extension to load as (webp/gif)
 fn load_animated_from_bytes_with_ext(bytes: &[u8], ext: &str) -> Result<AnimatedImage> {
     match ext.to_lowercase().as_str() {
         "gif" => AnimatedImage::from_gif_bytes(bytes),
@@ -32,6 +39,12 @@ fn load_animated_from_bytes_with_ext(bytes: &[u8], ext: &str) -> Result<Animated
 }
 
 /// play an animation in the terminal
+///
+/// # Arguments
+///
+/// * `animated` - the animated image to play
+/// * `processor` - an image processor
+/// * `encoder` - a sixel encoder
 fn play_animation(
     animated: AnimatedImage,
     processor: &ImageProcessor,
@@ -79,6 +92,7 @@ fn play_animation(
             }
 
             print!("{}", sixel_str);
+            println!();
             io::stdout().flush()?;
 
             thread::sleep(*delay);
@@ -97,9 +111,15 @@ fn play_animation(
 }
 
 /// fetch a post image and display it in the terminal
+///
+/// # Arguments
+///
+/// * `post` - the post to fetch and display
+#[allow(clippy::await_holding_lock)]
 pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
     let post_url = post.file.url.unwrap();
-    let processor = ImageProcessor::new();
+    let cfg = crate::config::instance::config()?;
+    let processor = ImageProcessor::with_dimensions(ImageDimensions::from_cfg(&cfg)?);
     let encoder = SixelEncoder::new();
     let source = ImageSource::from_url(&post_url)
         .await
@@ -132,13 +152,19 @@ pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
         .context("failed to encode image to sixel")?;
 
     print!("{}", sixel_str);
+    println!();
 
     Ok(())
 }
 
 /// print an image to the terminal
+///
+/// # Arguments
+///
+/// * `path` - the path to the image to display
 pub fn print_dl_to_terminal(path: &Path) -> Result<()> {
-    let processor = ImageProcessor::new();
+    let cfg = getopt!()?;
+    let processor = ImageProcessor::with_dimensions(ImageDimensions::from_cfg(&cfg)?);
     let encoder = SixelEncoder::new();
 
     if is_animated_format(path) {
@@ -165,11 +191,16 @@ pub fn print_dl_to_terminal(path: &Path) -> Result<()> {
         .context("failed to encode to sixel")?;
 
     print!("{}", sixel_str);
+    println!();
 
     Ok(())
 }
 
 /// fetch multiple posts and display them in the terminal
+///
+/// # Arguments
+///
+/// * `posts` - a list of posts to fetch and print
 pub async fn print_posts_to_terminal(posts: Vec<E6Post>) -> Result<()> {
     for post in posts {
         print_post_to_terminal(post).await?;
@@ -178,9 +209,94 @@ pub async fn print_posts_to_terminal(posts: Vec<E6Post>) -> Result<()> {
     Ok(())
 }
 
-impl E6Ui {
+/// functions for viewing posts
+pub trait ViewMenu {
     /// open a post in the users default browser
-    pub fn open_in_browser(&self, post: &E6Post) -> Result<()> {
+    ///
+    /// # Arguments
+    ///
+    /// * `post` - the post to open
+    fn open_in_browser(&self, post: &E6Post) -> Result<()>;
+
+    /// open multiple posts in the users default browser
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to open
+    fn open_posts_in_browser(&self, posts: &[E6Post]) -> Result<()>;
+
+    /// display post info
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to display the info for
+    /// * `column_width` - the width for each column of the displayed info
+    fn display_posts_row(&self, posts: &[E6Post], column_width: usize);
+
+    /// print a post field
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to display the info for
+    /// * `column_width` - the width for each column of the displayed info
+    /// * `field_fn` - a function that returns the data to display in the field
+    fn print_posts_field<F>(&self, posts: &[E6Post], column_width: usize, field_fn: F)
+    where
+        F: Fn(&E6Post) -> String;
+
+    /// print a row separator
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - the number of separators to make
+    /// * `column_width` - the width for each column of the displayed info
+    /// * `left` - the character to use for the left of the separator
+    /// * `mid` - the character to use for the middle of the separator
+    /// * `right` - the character to use for the right of the separator
+    /// * `fill` - the character to use for filling in blank space
+    fn print_row_separator(
+        &self,
+        count: usize,
+        column_width: usize,
+        left: &str,
+        mid: &str,
+        right: &str,
+        fill: &str,
+    );
+
+    /// truncate a string
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - the string to truncate
+    /// * `max_width` - the width to truncate it to
+    fn truncate_string(&self, s: &str, max_width: usize) -> String;
+
+    /// display multiple posts
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to display
+    fn display_posts(&self, posts: &[E6Post]);
+
+    /// display the latest posts
+    fn display_latest_posts(&self) -> impl Future<Output = Result<()>>;
+
+    /// display an individual post
+    ///
+    /// # Arguments
+    ///
+    /// * `post` - the post to display
+    fn display_post(&self, post: &E6Post);
+}
+
+impl ViewMenu for E6Ui {
+    /// open a post in the users default browser
+    ///
+    /// # Arguments
+    ///
+    /// * `post` - the post to open
+    fn open_in_browser(&self, post: &E6Post) -> Result<()> {
         if post.id <= 0 {
             bail!("invalid post id: {}", post.id);
         }
@@ -192,7 +308,11 @@ impl E6Ui {
     }
 
     /// open multiple posts in the users default browser
-    pub fn open_posts_in_browser(&self, posts: &[E6Post]) -> Result<()> {
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to open
+    fn open_posts_in_browser(&self, posts: &[E6Post]) -> Result<()> {
         println!("Opening {} posts in browser...", posts.len());
         for post in posts {
             let url = format!("https://e621.net/posts/{}", post.id);
@@ -205,7 +325,12 @@ impl E6Ui {
     }
 
     /// display post info
-    pub fn display_posts_row(&self, posts: &[E6Post], column_width: usize) {
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to display the info for
+    /// * `column_width` - the width for each column of the displayed info
+    fn display_posts_row(&self, posts: &[E6Post], column_width: usize) {
         self.print_row_separator(posts.len(), column_width, "┌", "┬", "┐", "─");
         self.print_posts_field(posts, column_width, |post| format!("ID: {}", post.id));
         self.print_row_separator(posts.len(), column_width, "├", "┼", "┤", "─");
@@ -241,7 +366,13 @@ impl E6Ui {
     }
 
     /// print a post field
-    pub fn print_posts_field<F>(&self, posts: &[E6Post], column_width: usize, field_fn: F)
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to display the info for
+    /// * `column_width` - the width for each column of the displayed info
+    /// * `field_fn` - a function that returns the data to display in the field
+    fn print_posts_field<F>(&self, posts: &[E6Post], column_width: usize, field_fn: F)
     where
         F: Fn(&E6Post) -> String,
     {
@@ -257,7 +388,16 @@ impl E6Ui {
     }
 
     /// print a row separator
-    pub fn print_row_separator(
+    ///
+    /// # Arguments
+    ///
+    /// * `count` - the number of separators to make
+    /// * `column_width` - the width for each column of the displayed info
+    /// * `left` - the character to use for the left of the separator
+    /// * `mid` - the character to use for the middle of the separator
+    /// * `right` - the character to use for the right of the separator
+    /// * `fill` - the character to use for filling in blank space
+    fn print_row_separator(
         &self,
         count: usize,
         column_width: usize,
@@ -278,7 +418,12 @@ impl E6Ui {
     }
 
     /// truncate a string
-    pub fn truncate_string(&self, s: &str, max_width: usize) -> String {
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - the string to truncate
+    /// * `max_width` - the width to truncate it to
+    fn truncate_string(&self, s: &str, max_width: usize) -> String {
         if s.len() <= max_width {
             format!("{:width$}", s, width = max_width)
         } else {
@@ -287,7 +432,11 @@ impl E6Ui {
     }
 
     /// display multiple posts
-    pub fn display_posts(&self, posts: &[E6Post]) {
+    ///
+    /// # Arguments
+    ///
+    /// * `posts` - a list of posts to display
+    fn display_posts(&self, posts: &[E6Post]) {
         let posts_per_row = 3;
         let column_width = 28;
 
@@ -298,7 +447,7 @@ impl E6Ui {
     }
 
     /// display the latest posts
-    pub async fn display_latest_posts(&self) -> Result<()> {
+    async fn display_latest_posts(&self) -> Result<()> {
         let results = self
             .client
             .get_latest_posts()
@@ -316,7 +465,11 @@ impl E6Ui {
     }
 
     /// display an individual post
-    pub fn display_post(&self, post: &E6Post) {
+    ///
+    /// # Arguments
+    ///
+    /// * `post` - the post to display
+    fn display_post(&self, post: &E6Post) {
         println!("\n{}", "=".repeat(50));
         println!("Post ID: {}", post.id);
         println!("Rating: {}", post.rating);

@@ -1,8 +1,4 @@
 //! ui menus
-//!
-//! áéíóú
-use crate::{menu, ui::themes::ROSE_PINE};
-
 pub mod blacklist;
 pub mod download;
 pub mod explore;
@@ -21,7 +17,7 @@ pub struct TranslationStats {
     pub total_variants: usize,
 }
 
-menu! {
+crate::menu! {
     /// Post interaction menu
     pub InteractionMenu {  filterable: true,
         /// Open the post in a browser
@@ -83,7 +79,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Pool interaction menu
     pub PoolInteractionMenu { filterable: true,
         /// View posts from this pool
@@ -159,7 +155,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Batch post interaction
     pub BatchAction {
         filterable: true,
@@ -237,7 +233,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Advanced pool search
     pub AdvPoolSearch {
         filterable: true,
@@ -315,7 +311,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Blacklist manager
     pub BlacklistManager {
         filterable: true,
@@ -407,7 +403,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// The main menu
     pub MainMenu {
         filterable: true,
@@ -555,7 +551,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Search type
     pub SearchMenu {
         filterable: true,
@@ -605,7 +601,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Pool search mode
     pub PoolSearchModeMenu {
         filterable: true,
@@ -641,7 +637,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Downloads explorer menu
     pub ExplorerMenu {
         filterable: true,
@@ -761,7 +757,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// Explorer sorting options
     pub ExplorerSortBy {
         filterable: true,
@@ -881,7 +877,7 @@ menu! {
     }
 }
 
-menu! {
+crate::menu! {
     /// the rating to filter for in the explorer
     pub ExplorerFilterBy { filterable: true,
         /// all ratings

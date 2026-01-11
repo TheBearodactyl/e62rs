@@ -11,12 +11,60 @@ use {
     std::sync::Arc,
 };
 
-impl E6Ui {
+/// functions for blacklist management
+pub trait BlacklistMenu {
     /// show info about the blacklist
     ///
     /// displays a list of blacklist rules
     /// and the total amount of rules
-    pub fn show_blacklist_info(&self) -> Result<()> {
+    fn show_blacklist_info(&self) -> Result<()>;
+
+    /// show the blacklist manager ui
+    ///
+    /// * [`BlacklistManager::ShowCurrent`] displays info about the current blacklist
+    /// * [`BlacklistManager::AddTag`] lets the user add a tag to the blacklist
+    /// * [`BlacklistManager::RemoveTag`] lets the user remove a tag from the blacklist
+    /// * [`BlacklistManager::Clear`] removes all tags from the blacklist
+    /// * [`BlacklistManager::ImportFromSearch`] lets the user import tags from a search
+    /// * [`BlacklistManager::Back`] goes back to the main menu
+    fn manage_blacklist(&self) -> impl Future<Output = Result<()>>;
+
+    /// ask whether to continue managing the blacklist
+    fn prompt_continue(&self) -> Result<bool>;
+
+    /// add a tag to the blacklist
+    fn add_tag_to_blacklist(&self) -> impl Future<Output = Result<()>>;
+
+    /// ask whether to add a tag not in the tags database
+    ///
+    /// # Arguments
+    ///
+    /// * `tag` - the tag to ask about
+    fn prompt_add_unknown_tag(&self, tag: &str) -> impl Future<Output = Result<bool>>;
+
+    /// add a validated tag to the blacklist
+    ///
+    /// # Arguments
+    ///
+    /// * `tag` - the tag to add
+    fn add_validated_tag_to_blacklist(&self, tag: String) -> impl Future<Output = Result<()>>;
+
+    /// remove a tag from the blacklist
+    fn remove_tag_from_blacklist(&self) -> impl Future<Output = Result<()>>;
+
+    /// clear all tags from the blacklist
+    fn clear_blacklist(&self) -> impl Future<Output = Result<()>>;
+
+    /// import tags from a search to the blacklist
+    fn import_tags_to_blacklist(&self) -> impl Future<Output = Result<()>>;
+}
+
+impl BlacklistMenu for E6Ui {
+    /// show info about the blacklist
+    ///
+    /// displays a list of blacklist rules
+    /// and the total amount of rules
+    fn show_blacklist_info(&self) -> Result<()> {
         let blacklist = getopt!(search.blacklist);
 
         if blacklist.is_empty() {
@@ -43,7 +91,7 @@ impl E6Ui {
     /// * [`BlacklistManager::Clear`] removes all tags from the blacklist
     /// * [`BlacklistManager::ImportFromSearch`] lets the user import tags from a search
     /// * [`BlacklistManager::Back`] goes back to the main menu
-    pub async fn manage_blacklist(&self) -> Result<()> {
+    async fn manage_blacklist(&self) -> Result<()> {
         loop {
             let blacklist_action = BlacklistManager::select("Blacklist Settings:")
                 .run()
@@ -82,7 +130,7 @@ impl E6Ui {
     }
 
     /// ask whether to continue managing the blacklist
-    pub fn prompt_continue(&self) -> Result<bool> {
+    fn prompt_continue(&self) -> Result<bool> {
         Confirm::new("Continue managing blacklist?")
             .affirmative("Yes")
             .negative("No")
@@ -92,7 +140,7 @@ impl E6Ui {
     }
 
     /// add a tag to the blacklist
-    pub async fn add_tag_to_blacklist(&self) -> Result<()> {
+    async fn add_tag_to_blacklist(&self) -> Result<()> {
         let tag_db = Arc::clone(&self.tag_db);
         let completer = TagAutocompleter::new(tag_db);
 
@@ -128,7 +176,7 @@ impl E6Ui {
     /// # Arguments
     ///
     /// * `tag` - the tag to ask about
-    pub async fn prompt_add_unknown_tag(&self, tag: &str) -> Result<bool> {
+    async fn prompt_add_unknown_tag(&self, tag: &str) -> Result<bool> {
         let use_anyway = Confirm::new(format!(
             "Tag '{}' not found in database. Add to blacklist anyway?",
             tag
@@ -168,7 +216,7 @@ impl E6Ui {
     /// # Arguments
     ///
     /// * `tag` - the tag to add
-    pub async fn add_validated_tag_to_blacklist(&self, tag: String) -> Result<()> {
+    async fn add_validated_tag_to_blacklist(&self, tag: String) -> Result<()> {
         add_to_blacklist(tag.clone())
             .wrap_err_with(|| format!("Failed to add '{}' to blacklist", tag))?;
 
@@ -180,7 +228,7 @@ impl E6Ui {
     }
 
     /// remove a tag from the blacklist
-    pub async fn remove_tag_from_blacklist(&self) -> Result<()> {
+    async fn remove_tag_from_blacklist(&self) -> Result<()> {
         let blacklist = getopt!(search.blacklist);
 
         if blacklist.is_empty() {
@@ -231,7 +279,7 @@ impl E6Ui {
     }
 
     /// clear all tags from the blacklist
-    pub async fn clear_blacklist(&self) -> Result<()> {
+    async fn clear_blacklist(&self) -> Result<()> {
         let blacklist = getopt!(search.blacklist);
         let blacklist_count = blacklist.len();
 
@@ -261,7 +309,7 @@ impl E6Ui {
     }
 
     /// import tags from a search to the blacklist
-    pub async fn import_tags_to_blacklist(&self) -> Result<()> {
+    async fn import_tags_to_blacklist(&self) -> Result<()> {
         let blacklist = getopt!(search.blacklist);
 
         println!("This will allow you to search for posts and add their tags to the blacklist.");

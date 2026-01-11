@@ -34,7 +34,7 @@ impl E6App {
     pub async fn init() -> color_eyre::Result<Self> {
         color_eyre::install()?;
 
-        if !crate::utils::π(crate::getopt!(http.api)) {
+        if crate::utils::ꟿ(crate::getopt!(http.api)) {
             std::process::exit(1);
         }
 

@@ -1,5 +1,34 @@
 //! macros used by e62rs
 
+/// defer execution of code until current scope exits
+///
+/// # Examples
+///
+/// ```
+/// use std::cell::RefCell;
+/// use e62rs::defer;
+///
+/// let executed = RefCell::new(false);
+///
+/// {
+///     defer! {
+///         *executed.borrow_mut() = true;
+///     }
+///
+///     assert!(!*executed.borrow());
+/// }
+///
+/// assert!(*executed.borrow());
+/// ```
+#[macro_export]
+macro_rules! defer {
+    ($($body:tt)*) => {
+        let _defer_guard = $crate::utils::DeferGuard {
+            func: Some(|| { $($body)* }),
+        };
+    };
+}
+
 /// format a value (lol)
 #[macro_export]
 macro_rules! fmt_value {
@@ -217,7 +246,7 @@ macro_rules! menu {
 
                 let mut selection = ::demand::Select::new(prompt)
                     .filterable($filterable)
-                    .theme(&ROSE_PINE);
+                    .theme(&$crate::ui::ROSE_PINE);
 
                 $(
                     {
@@ -457,6 +486,8 @@ macro_rules! getopt {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     fn unstable_operation(counter: &mut i32) -> color_eyre::Result<String, String> {
         *counter += 1;
 
@@ -485,5 +516,66 @@ mod tests {
             Ok(msg) => println!("final result: {}", msg),
             Err(e) => println!("final error: {}", e),
         }
+    }
+
+    #[test]
+    fn test_basic_defer() {
+        let executed = RefCell::new(false);
+
+        {
+            defer! {
+                *executed.borrow_mut() = true;
+            }
+
+            assert!(!*executed.borrow(), "defer should not have executed yet");
+        }
+
+        assert!(*executed.borrow(), "defer should've run by now");
+    }
+
+    #[test]
+    fn test_multiple_defers_lifo_order() {
+        let order = RefCell::new(Vec::new());
+
+        {
+            defer! {
+                order.borrow_mut().push(1);
+            }
+
+            defer! {
+                order.borrow_mut().push(2);
+            }
+
+            defer! {
+                order.borrow_mut().push(3);
+            }
+        }
+
+        assert_eq!(*order.borrow(), vec![3, 2, 1]);
+    }
+
+    #[test]
+    fn test_defer_in_nested_scopes() {
+        let outer = RefCell::new(0);
+        let inner = RefCell::new(0);
+
+        {
+            defer! {
+                *outer.borrow_mut() = 1;
+            }
+
+            {
+                defer! {
+                    *inner.borrow_mut() = 1;
+                }
+
+                assert_eq!(*inner.borrow(), 0);
+            }
+
+            assert_eq!(*inner.borrow(), 1);
+            assert_eq!(*outer.borrow(), 0);
+        }
+
+        assert_eq!(*outer.borrow(), 1);
     }
 }

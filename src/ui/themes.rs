@@ -11,7 +11,11 @@ trait RosePineTheme {
     fn rose_pine() -> Theme;
 }
 
-/// make a color
+/// set the fg to a color
+///
+/// # Arguments
+///
+/// * `color` - the color to use as the foreground
 fn make_color(color: Color) -> ColorSpec {
     let mut spec = ColorSpec::new();
     spec.set_fg(Some(color));

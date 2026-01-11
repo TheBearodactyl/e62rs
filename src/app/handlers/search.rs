@@ -4,7 +4,7 @@
 use {
     super::Handlers,
     crate::ui::{
-        menus::{PoolSearchModeMenu, SearchMenu},
+        menus::{PoolSearchModeMenu, SearchMenu, search::SearchMenu as _},
         themes::ROSE_PINE,
     },
 };

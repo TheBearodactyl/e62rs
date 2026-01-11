@@ -1,6 +1,139 @@
-//! every single available configuration option and its type is listed in this file
+//! every single available configuration option and its type is listed here
+//!
+//! the default configuration file is as follows:
+//! ```toml
+//! [display]
+//! width = 800
+//! height = 600
+//! image-when-info = true
+//! sixel-quality = 100
+//! resize-method = "lanczos3"
+//!
+//! [http]
+//! api = "https://e621.net"
+//! pool-max-idle-per-host = 32
+//! pool-idle-timeout = 90
+//! timeout = 30
+//! connect-timeout = 10
+//! max-connections = 15
+//! http2 = false
+//! tcp-keepalive = true
+//! tcp-keepalive-secs = 60
+//! user-agent = "e62rs/v1.0.2 (by bearodactyl on e621)"
+//!
+//! [cache]
+//! enabled = true
+//! cache-dir = ".cache"
+//! ttl-secs = 3600
+//! tti-secs = 1800
+//! max-size-mb = 500
+//! max-entries = 10000
+//! use-lru-policy = false
+//! enable-stats = true
+//! cleanup-interval = 300
+//! enable-compression = false
+//! compression-level = 6
+//!
+//! [cache.posts]
+//! enabled = true
+//! max-posts = 50000000
+//! wal = true
+//! page-size-kb = 4
+//! auto-compact = true
+//! compact-threshold = 25
+//!
+//! [performance]
+//! prefetch-enabled = true
+//! prefetch-batch-size = 10
+//! preload-images = true
+//! max-preload-size-mb = 100
+//!
+//! [ui]
+//! ctrlc-handler = false
+//! pagination-size = 20
+//! colored-output = true
+//! tag-guide = true
+//! language = "english"
+//!
+//! [ui.progress]
+//! refresh-rate = 20
+//! format = "MegaBytes"
+//! detailed = true
+//! message = "id"
+//!
+//! [search]
+//! results = 320
+//! blacklist = [
+//!     "young",
+//!     "rape",
+//!     "feral",
+//!     "bestiality",
+//! ]
+//! min-posts-on-tag = 2
+//! min-posts-on-pool = 2
+//! show-inactive-pools = true
+//! sort-pools-by-post-count = false
+//! sort-tags-by-post-count = true
+//! min-post-score = 0
+//! max-post-score = 9223372036854775807
+//! reverse-tags-order = false
+//! fetch-threads = 8
+//!
+//! [login]
+//! login = true
+//! username = ""
+//! api-key = ""
+//!
+//! [completion]
+//! tag-similarity-threshold = 0.8
+//! tags = "data/tags.csv"
+//! aliases = "data/tag_aliases.csv"
+//! implications = "data/tag_implications.csv"
+//! pools = "data/pools.csv"
+//!
+//! [autoupdate]
+//! tags = true
+//! pools = true
+//!
+//! [download]
+//! path = "downloads"
+//! pools-path = "downloads/pools"
+//! threads = 15
+//! save-metadata = true
+//! format = "$artists[3]/$rating/$tags[3] - $id - $date $time - $score.$ext"
+//!
+//! [explorer]
+//! recursive = true
+//! show-progress = true
+//! progress-threshold = 100
+//! default-sort = "date_newest"
+//! posts-per-page = 20
+//! cache-metadata = true
+//! auto-display-image = true
+//! slideshow-delay = 5
+//!
+//! [gallery]
+//! enabled = true
+//! metadata-filtering = true
+//! port = 23794
+//! cache-metadata = true
+//! auto-open = false
+//! load-threads = 8
+//! theme = "catppuccin-frappe"
+//!
+//! [logging]
+//! enable = true
+//! level = "info"
+//! format = "pretty"
+//! asni = true
+//! event-targets = false
+//! line-numbers = false
+//! ```
 use {
-    crate::config::validate::{Validate, format_validation_errors},
+    crate::{
+        config::validate::{Validate, format_validation_errors},
+        utils::FileWriter,
+    },
     color_eyre::{
         Section, SectionExt,
         eyre::{Context, OptionExt, Result, eyre},
@@ -39,6 +172,10 @@ pub enum SizeFormat {
 
 impl SizeFormat {
     /// format a given number of bytes into a format
+    ///
+    /// # Arguments
+    ///
+    /// * `bytes` - the number of bytes to format
     pub fn format_size(&self, bytes: u64) -> String {
         let bits = bytes * 8;
         match self {
@@ -791,22 +928,6 @@ pub struct E62Rs {
     pub logging: Option<LoggingConfig>,
 }
 
-/// returns the path to the local config file if it exists
-fn _find_local_config_file() -> Result<Option<PathBuf>> {
-    let curr_dir = std::env::current_dir()
-        .wrap_err("failed to get current working directory")
-        .suggestion("ensure the current directory exists and is accessible")?;
-
-    for ancestor in curr_dir.ancestors() {
-        let config_path = ancestor.join("e62rs.toml");
-        if config_path.exists() {
-            return Ok(Some(config_path));
-        }
-    }
-
-    Ok(None)
-}
-
 impl E62Rs {
     /// load config from default locations
     ///
@@ -924,14 +1045,10 @@ impl E62Rs {
 
     /// save config to a file
     pub fn save_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
-        let path = path.as_ref();
-        let toml_str =
-            toml::to_string_pretty(self).wrap_err("Failed to serialize config to TOML")?;
-
-        std::fs::write(path, &toml_str)
-            .wrap_err_with(|| format!("Failed to write config file: {}", path.display()))
-            .with_section(|| path.display().to_string().header("File path"))
-            .with_section(|| format!("{} bytes", toml_str.len()).header("Content size:"))?;
+        let mut toml_writer = FileWriter::toml(path, true)?;
+        toml_writer
+            .write(self)
+            .wrap_err("failed to write config file")?;
 
         Ok(())
     }

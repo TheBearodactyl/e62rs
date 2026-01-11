@@ -705,9 +705,15 @@ impl FileReorganizer {
     }
 }
 
-impl E6Ui {
+/// functions for reorganizing downloaded files
+pub trait RegorganizeMenu {
     /// downloads reorganizer
-    pub async fn reorganize_downloads(&self) -> Result<()> {
+    fn reorganize_downloads(&self) -> impl Future<Output = Result<()>>;
+}
+
+impl RegorganizeMenu for E6Ui {
+    /// downloads reorganizer
+    async fn reorganize_downloads(&self) -> Result<()> {
         println!("\n=== Downloads Reorganizer ===\n");
         println!("This will reorganize your downloaded files based on the current output format.");
         println!("Files will be moved to match the format specified in your config.\n");
