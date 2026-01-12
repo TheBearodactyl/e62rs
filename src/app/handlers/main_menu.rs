@@ -3,12 +3,9 @@ use {
     super::Handlers,
     crate::{
         config::instance::reload_config,
-        ui::{
-            menus::{
-                MainMenu, blacklist::BlacklistMenu, explore::ExploreMenu,
-                reorganize::RegorganizeMenu, view::ViewMenu,
-            },
-            themes::ROSE_PINE,
+        ui::menus::{
+            MainMenu, blacklist::BlacklistMenu, explore::ExploreMenu, reorganize::RegorganizeMenu,
+            view::ViewMenu,
         },
     },
 };
@@ -33,10 +30,7 @@ impl Handlers {
     /// returns an error if it fails to run the logic associated with the user selection
     pub async fn run_main_loop(&self) -> color_eyre::Result<()> {
         'main: loop {
-            let selection = match MainMenu::select("What would you like to do?")
-                .theme(&ROSE_PINE)
-                .run()
-            {
+            let selection = match MainMenu::select("What would you like to do?").prompt() {
                 Ok(sel) => sel,
                 Err(_) if self.was_interrupted() => continue 'main,
                 Err(e) => return Err(e.into()),

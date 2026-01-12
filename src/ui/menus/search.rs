@@ -5,14 +5,17 @@ use {
         getopt,
         models::*,
         ui::{
-            E6Ui, ROSE_PINE,
+            E6Ui,
             autocomplete::PoolAutocompleter,
             menus::{AdvPoolSearch, view::ViewMenu},
         },
     },
     color_eyre::eyre::{Context, Result, bail},
-    demand::{Confirm, DemandOption, Input, Select},
     indicatif::{ProgressBar, ProgressStyle},
+    inquire::{
+        Confirm, Select, Text,
+        validator::{ErrorMessage, Validation},
+    },
     std::{collections::HashSet, sync::Arc, time::Duration},
     tracing::{debug, warn},
 };
@@ -98,8 +101,7 @@ impl SearchMenu for E6Ui {
     async fn search_pools_adv(&self) -> Result<()> {
         loop {
             let search_type = AdvPoolSearch::select("How would you like to search for pools")
-                .theme(&ROSE_PINE)
-                .run()
+                .prompt()
                 .context("Failed to get search type selection")?;
 
             let should_break = match search_type {
@@ -148,9 +150,8 @@ impl SearchMenu for E6Ui {
 
     /// search pools by their description
     async fn perform_pool_description_search(&self) -> Result<()> {
-        let query = Input::new("Enter pool description search:")
-            .theme(&ROSE_PINE)
-            .run()
+        let query = Text::new("Enter pool description search:")
+            .prompt()
             .context("Failed to get description search input")?;
 
         let query = query.trim();
@@ -171,9 +172,8 @@ impl SearchMenu for E6Ui {
 
     /// search pools by creator
     async fn perform_pool_creator_search(&self) -> Result<()> {
-        let creator = Input::new("Enter creator name:")
-            .theme(&ROSE_PINE)
-            .run()
+        let creator = Text::new("Enter creator name:")
+            .prompt()
             .context("Failed to get creator name input")?;
 
         let creator = creator.trim();
@@ -229,10 +229,9 @@ impl SearchMenu for E6Ui {
     /// get the search query for finding pools
     fn get_pool_search_query(&self) -> Result<String> {
         let autocompleter = PoolAutocompleter::new(self.pool_db.clone());
-        let query = Input::new("Enter pool search query (leave empty for latest pools):")
-            .autocomplete(autocompleter)
-            .theme(&ROSE_PINE)
-            .run()
+        let query = inquire::Text::new("Enter pool search query (leave empty for latest pools):")
+            .with_autocomplete(autocompleter)
+            .prompt()
             .context("Failed to get pool search query")?;
 
         Ok(query.trim().to_string())
@@ -242,21 +241,26 @@ impl SearchMenu for E6Ui {
     fn get_pool_limit(&self) -> Result<u64> {
         let default_limit = getopt!(search.results).min(getopt!(search.results));
 
-        let input = Input::new("How many pools to return?")
-            .validation(|input| {
-                let err_msg = "Please enter a number between 1 and 20";
+        let input = inquire::Text::new("How many pools to return?")
+            .with_validator(|input: &str| {
+                let err_msg = "Please enter a number between 1 and 100";
+
                 if input.trim().is_empty() {
-                    return Ok(());
+                    return Ok(Validation::Valid);
                 }
+
                 match input.parse::<u64>() {
-                    Ok(n) if n > 0 && n <= 100 => Ok(()),
-                    Ok(_) => Err(err_msg),
-                    Err(_) => Err("Please enter a valid number"),
+                    Ok(n) if n > 0 && n <= 100 => Ok(Validation::Valid),
+                    Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                        err_msg.to_string(),
+                    ))),
+                    Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                        "Please enter a valid number".to_string(),
+                    ))),
                 }
             })
-            .placeholder(&default_limit.to_string())
-            .theme(&ROSE_PINE)
-            .run()
+            .with_placeholder(&default_limit.to_string())
+            .prompt()
             .context("Failed to get pool limit input")?;
 
         let trimmed = input.trim();
@@ -290,14 +294,12 @@ impl SearchMenu for E6Ui {
             })
             .collect();
 
-        let selection = Select::new("Select a pool to view:")
-            .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
-            .theme(&ROSE_PINE)
-            .run()
+        let selection = inquire::Select::new("Select a pool to view:", options)
+            .prompt()
             .context("Failed to get pool selection")?;
 
         let index = pools.iter().position(|p| {
-            &format!(
+            format!(
                 "ID: {} | {} | {} posts | {}",
                 p.id,
                 self.truncate_string(&p.name, 40),
@@ -551,10 +553,7 @@ impl SearchMenu for E6Ui {
     /// handle a post interaction
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
         let use_multi_select = Confirm::new("Select multiple posts?")
-            .theme(&ROSE_PINE)
-            .affirmative("Yes")
-            .negative("No")
-            .run()
+            .prompt()
             .context("Failed to get multi-select confirmation")?;
 
         if use_multi_select {
@@ -702,20 +701,24 @@ impl SearchMenu for E6Ui {
         let default_limit = getopt!(search.results);
 
         if default_limit == 32 {
-            let input = Input::new("How many posts to return?")
-                .validation(|input| {
+            let input = Text::new("How many posts to return?")
+                .with_validator(|input: &str| {
                     if input.trim().is_empty() {
-                        return Ok(());
+                        return Ok(Validation::Valid);
                     }
+
                     match input.parse::<u64>() {
-                        Ok(n) if n > 0 => Ok(()),
-                        Ok(_) => Err("Please enter a positive number"),
-                        Err(_) => Err("Please enter a valid number"),
+                        Ok(n) if n > 0 => Ok(Validation::Valid),
+                        Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Please enter a positive number".to_string(),
+                        ))),
+                        Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Please enter a valid number".to_string(),
+                        ))),
                     }
                 })
-                .placeholder("32")
-                .theme(&ROSE_PINE)
-                .run()
+                .with_placeholder("32")
+                .prompt()
                 .context("Failed to get post limit input")?;
 
             let trimmed = input.trim();
@@ -732,10 +735,7 @@ impl SearchMenu for E6Ui {
     /// ask whether to continue
     fn ask_continue(&self, message: &str) -> Result<bool> {
         Confirm::new(message)
-            .affirmative("Yes")
-            .negative("No")
-            .theme(&ROSE_PINE)
-            .run()
+            .prompt()
             .context("Failed to get user confirmation")
     }
 
@@ -755,14 +755,12 @@ impl SearchMenu for E6Ui {
             })
             .collect();
 
-        let selection = Select::new("Select a post to view:")
-            .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
-            .theme(&ROSE_PINE)
-            .run()
+        let selection = Select::new("Select a post to view:", options)
+            .prompt()
             .context("Failed to get post selection")?;
 
         let index = posts.iter().position(|p| {
-            &format!(
+            format!(
                 "ID: {} | Score: {} | Rating: {}",
                 p.id, p.score.total, p.rating
             ) == selection

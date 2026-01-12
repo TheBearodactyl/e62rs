@@ -48,6 +48,20 @@ crate::menu! {
             },
             online: true
         },
+        /// Make a QR code of the post
+        MakeQr => {
+            label: {
+                english => "Make QR code",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Make a QR code that you can scan to go to the post at e621",
+                japanese => "",
+                spanish => ""
+            },
+            online: true
+        },
         /// View the post in your terminal
         View => {
             label: {

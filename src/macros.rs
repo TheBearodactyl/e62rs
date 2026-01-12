@@ -178,9 +178,41 @@ macro_rules! menu {
 
         impl ::std::fmt::Display for $enum_name {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                use $crate::config::options::Language;
+                use ::owo_colors::OwoColorize;
+
+                let lang = $crate::getopt!(ui.language);
+
                 match self {
                     $(
-                        Self::$variant => write!(f, "{}", $desc),
+                        Self::$variant => {
+                            let label = match lang {
+                                Language::English => $label,
+                                Language::Spanish => Self::select_translation($spanish_label, $label),
+                                Language::Japanese => Self::select_translation($japanese_label, $label),
+                            };
+
+                            let mut description = match lang {
+                                Language::English => format!("({})", ::std::string::String::from($desc).bright_black()),
+                                Language::Spanish => format!("({})", ::std::string::String::from(
+                                    Self::select_translation($spanish_desc, $desc)
+                                ).bright_black()),
+                                Language::Japanese => format!("({})", ::std::string::String::from(
+                                    Self::select_translation($japanese_desc, $desc)
+                                ).bright_black()),
+                            };
+
+                            if $online {
+                                let warning = match lang {
+                                    Language::English => " (REQUIRES INTERNET ACCESS)",
+                                    Language::Spanish => " (SE REQUIERE ACCESO A INTERNET)",
+                                    Language::Japanese => " (<wip>)",
+                                };
+                                description.push_str(&warning.red().to_string());
+                            }
+
+                            write!(f, "{} {}", label, description)
+                        }
                     )*
                 }
             }
@@ -241,53 +273,24 @@ macro_rules! menu {
 
             /// display a menu and return the selected option
             #[must_use]
-            pub fn select(prompt: &str) -> ::demand::Select<'_, Self> {
+            pub fn select(prompt: &str) -> ::inquire::Select<'_, Self> {
+                let variants = vec![$( Self::$variant, )*];
+
+                ::inquire::Select::new(prompt, variants)
+                    .with_page_size(if $filterable { 10 } else { 7 })
+                    .with_help_message(Self::get_help_message())
+            }
+
+            /// get help message based on current language
+            fn get_help_message() -> &'static str {
                 use $crate::config::options::Language;
 
-                let mut selection = ::demand::Select::new(prompt)
-                    .filterable($filterable)
-                    .theme(&$crate::ui::ROSE_PINE);
-
-                $(
-                    {
-                        let lang = $crate::getopt!(ui.language);
-
-                        let label = match lang {
-                            Language::English => $label,
-                            Language::Spanish => Self::select_translation($spanish_label, $label),
-                            Language::Japanese => Self::select_translation($japanese_label, $label),
-                        };
-
-                        let mut description = match lang {
-                            Language::English => ::std::string::String::from($desc),
-                            Language::Spanish => ::std::string::String::from(
-                                Self::select_translation($spanish_desc, $desc)
-                            ),
-                            Language::Japanese => ::std::string::String::from(
-                                Self::select_translation($japanese_desc, $desc)
-                            ),
-                        };
-
-                        if $online {
-                            use ::owo_colors::OwoColorize;
-                            let warning = match lang {
-                                Language::English => " (REQUIRES INTERNET ACCESS)",
-                                Language::Spanish => " (SE REQUIERE ACCESO A INTERNET)",
-                                Language::Japanese => " (<wip>)",
-                            };
-
-                            description.push_str(&warning.red().to_string());
-                        }
-
-                        selection = selection.option(
-                            ::demand::DemandOption::new(Self::$variant)
-                                .label(label)
-                                .description(&description)
-                        );
-                    }
-                )*
-
-                selection
+                let lang = $crate::getopt!(ui.language);
+                match lang {
+                    Language::English => "Use arrow keys to navigate, Enter to select",
+                    Language::Spanish => "Use las flechas para navegar, Enter para seleccionar",
+                    Language::Japanese => "矢印キーで移動、Enterで選択",
+                }
             }
 
             /// get the label of the given variant

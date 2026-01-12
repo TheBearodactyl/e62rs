@@ -16,14 +16,14 @@ use {
                 view::{ViewMenu, print_post_to_terminal, print_posts_to_terminal},
             },
             progress::ProgressManager,
-            themes::ROSE_PINE,
         },
     },
     color_eyre::eyre::{Context, Result, bail},
-    demand::{Confirm, DemandOption, Input, MultiSelect},
     hashbrown::{HashMap, HashSet},
     indicatif::{ProgressBar, ProgressStyle},
+    inquire::{Confirm, MultiSelect, Text},
     owo_colors::OwoColorize,
+    qrcode::QrCode,
     serde::{Deserialize, Serialize},
     std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration},
     tokio::{fs, sync::Semaphore},
@@ -122,12 +122,13 @@ impl E6Ui {
         }
 
         let autocompleter = TagAutocompleter::new(self.tag_db.clone());
-        let tags_input = Input::new("Enter tags:")
-            .description("Space-separated tags. Use - to exclude, ~ for OR. Tab to autocomplete")
-            .placeholder("e.g., cat dog -gore")
-            .theme(&ROSE_PINE)
-            .autocomplete(autocompleter)
-            .run()
+        let tags_input = inquire::Text::new("Enter tags:")
+            .with_help_message(
+                "Space-separated tags. Use - to exclude, ~ for OR. Tab to autocomplete",
+            )
+            .with_placeholder("e.g., cat dog -gore")
+            .with_autocomplete(autocompleter)
+            .prompt()
             .context("failed to get tags input")?;
 
         let mut include_tags = Vec::new();
@@ -196,29 +197,34 @@ impl E6Ui {
     ///
     /// * `posts` - the posts to select from
     pub fn select_multiple_posts<'a>(&self, posts: &'a [E6Post]) -> Result<Vec<&'a E6Post>> {
-        let options: Vec<DemandOption<usize>> = posts
+        let options: Vec<String> = posts
             .iter()
-            .enumerate()
-            .map(|(idx, post)| {
-                DemandOption::new(idx).label(
-                    format!(
-                        "ID: {} | Score: {} | Rating: {}",
-                        post.id, post.score.total, post.rating
-                    )
-                    .as_str(),
+            .map(|post| {
+                format!(
+                    "ID: {} | Score: {} | Rating: {}",
+                    post.id, post.score.total, post.rating
                 )
             })
             .collect();
 
-        let selections = MultiSelect::new("Select posts (Space to select, Enter to confirm):")
-            .description("Use arrow keys to navigate, Space to select/deselect, Enter to confirm")
-            .filterable(true)
-            .options(options)
-            .theme(&ROSE_PINE)
-            .run()
-            .context("Failed to get post selections")?;
+        let selections =
+            MultiSelect::new("Select posts (Space to select, Enter to confirm):", options)
+                .with_help_message(
+                    "Use arrow keys to navigate, Space to select/deselect, Enter to confirm",
+                )
+                .prompt()
+                .context("Failed to get post selections")?;
 
-        let selected_posts: Vec<&E6Post> = selections.iter().map(|&idx| &posts[idx]).collect();
+        let selected_posts: Vec<&E6Post> = selections
+            .iter()
+            .filter_map(|selection| {
+                selection
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|id_str| id_str.parse::<i64>().ok())
+                    .and_then(|id| posts.iter().find(|p| p.id == id))
+            })
+            .collect();
 
         Ok(selected_posts)
     }
@@ -230,8 +236,7 @@ impl E6Ui {
     /// * `post` - the post to interact with
     pub async fn interaction_menu(&self, post: E6Post) -> Result<InteractionMenu> {
         let choice = InteractionMenu::select("What would you like to do?")
-            .theme(&ROSE_PINE)
-            .run()
+            .prompt()
             .context("Failed to get interaction choice")?;
 
         match choice {
@@ -251,6 +256,18 @@ impl E6Ui {
                 print_post_to_terminal(post)
                     .await
                     .context("Failed to view image")?;
+            }
+
+            InteractionMenu::MakeQr => {
+                let url = format!("https://e621.net/posts/{}", post.id);
+                let code = QrCode::new(url.into_bytes())?;
+                let str = code
+                    .render::<char>()
+                    .quiet_zone(true)
+                    .module_dimensions(2, 1)
+                    .build();
+
+                println!("{}", str.replace("#", "█"));
             }
         }
 
@@ -296,8 +313,7 @@ impl E6Ui {
             "What would you like to do with {} selected posts?",
             posts.len()
         ))
-        .theme(&ROSE_PINE)
-        .run()
+        .prompt()
         .context("Failed to get batch action choice")?;
 
         match choice {
@@ -331,8 +347,7 @@ impl E6Ui {
     /// * `pool` - the pool to interact with
     pub async fn pool_interaction_menu(&self, pool: E6Pool) -> Result<PoolInteractionMenu> {
         let choice = PoolInteractionMenu::select("What would you like to do with this pool?")
-            .theme(&ROSE_PINE)
-            .run()
+            .prompt()
             .context("Failed to get pool interaction choice")?;
 
         match choice {
@@ -343,11 +358,9 @@ impl E6Ui {
                 } else {
                     self.display_posts(&posts.posts);
 
-                    let interact = Confirm::new("Would you like to interact with these posts?")
-                        .theme(&ROSE_PINE)
-                        .affirmative("Yes")
-                        .negative("No")
-                        .run()?;
+                    let interact =
+                        inquire::Confirm::new("Would you like to interact with these posts?")
+                            .prompt()?;
 
                     if interact {
                         let _selected_posts = self.select_multiple_posts(&posts.posts)?;
@@ -684,28 +697,27 @@ impl E6Ui {
         let mut sorted_artists: Vec<_> = artist_post_counts.iter().collect();
         sorted_artists.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
 
-        let artist_options: Vec<DemandOption<String>> = sorted_artists
+        let artist_options: Vec<String> = sorted_artists
             .iter()
             .map(|(artist, count)| {
-                DemandOption::new((*artist).clone())
-                    .label(&format!(
-                        "{} ({} downloaded post{})",
-                        artist,
-                        count,
-                        if **count == 1 { "" } else { "s" }
-                    ))
-                    .selected(true)
+                format!(
+                    "{} ({} downloaded post{})",
+                    artist,
+                    count,
+                    if **count == 1 { "" } else { "s" }
+                )
             })
             .collect();
 
         let selected_artists = MultiSelect::new(
             "Select artists to check for new posts (Space to toggle, Enter to confirm):",
+            artist_options.clone(),
         )
-        .description("All artists are selected by default. Deselect any you don't want to update.")
-        .options(artist_options)
-        .theme(&ROSE_PINE)
-        .filterable(true)
-        .run()
+        .with_help_message(
+            "All artists are selected by default. Deselect any you don't want to update.",
+        )
+        .with_default(&(0..artist_options.len()).collect::<Vec<_>>())
+        .prompt()
         .context("Failed to get artist selection")?;
 
         if selected_artists.is_empty() {
@@ -750,15 +762,12 @@ impl E6Ui {
         }
 
         println!();
-        let confirm = Confirm::new(format!(
+        let confirm = Confirm::new(&format!(
             "Check for and download new posts from these {} artist{}?",
             selected_artists.len(),
             if selected_artists.len() == 1 { "" } else { "s" }
         ))
-        .affirmative("Yes")
-        .negative("No")
-        .theme(&ROSE_PINE)
-        .run()?;
+        .prompt()?;
 
         if !confirm {
             println!("Operation cancelled.");
@@ -766,25 +775,18 @@ impl E6Ui {
         }
 
         let limit_per_artist =
-            demand::Input::new("Maximum NEW posts per artist to download (leave empty for all):")
-                .theme(&ROSE_PINE)
-                .placeholder("e.g., 50")
-                .validation(|input| {
-                    if input.is_empty() {
-                        return Ok(());
-                    }
-                    if input.parse::<u64>().is_ok() {
-                        Ok(())
-                    } else {
-                        Err("Please enter a valid number or leave empty")
-                    }
-                })
-                .run()?;
+            Text::new("Maximum NEW posts per artist to download (leave empty for all):")
+                .with_placeholder("e.g., 50")
+                .prompt_skippable()?;
 
-        let limit: Option<u64> = if limit_per_artist.is_empty() {
-            None
+        let limit: Option<u64> = if let Some(input) = limit_per_artist {
+            if input.is_empty() {
+                None
+            } else {
+                Some(input.parse()?)
+            }
         } else {
-            Some(limit_per_artist.parse()?)
+            None
         };
 
         println!("\n{} Checking for new posts...\n", "→".bright_cyan());

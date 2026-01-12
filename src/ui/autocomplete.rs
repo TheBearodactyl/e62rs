@@ -1,7 +1,7 @@
-//! autocompleters for demand
+//! autocompleters for inquire
 use {
     crate::data::{pools::PoolDb, tags::TagDb},
-    demand::Autocomplete,
+    inquire::{Autocomplete, CustomUserError, autocompletion::Replacement},
     owo_colors::OwoColorize,
     std::sync::Arc,
 };
@@ -188,16 +188,14 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
     pub fn get_completion_impl(
         &self,
         input: &str,
-        highlighted_suggestion: Option<&str>,
-    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        let Some(suggestion) = highlighted_suggestion else {
-            return Ok(None);
-        };
+        highlighted_suggestion: Option<String>,
+    ) -> Option<String> {
+        let suggestion = highlighted_suggestion?;
 
         let prefix = get_prefix(input);
         let current_token = get_current_token(input);
         let (prefix_char, _) = PrefixChar::find_from_str(current_token);
-        let name = extract_name_from_suggestion(suggestion);
+        let name = extract_name_from_suggestion(&suggestion);
         let canonical_name = self.db.resolve_name(name.as_str());
         let mut completion = String::with_capacity(
             prefix.len() + prefix_char.as_str().len() + canonical_name.len() + 1,
@@ -208,7 +206,7 @@ impl<T: AutocompleteDatabase> GenericAutocompleter<T> {
         completion.push_str(&canonical_name);
         completion.push(' ');
 
-        Ok(Some(completion))
+        Some(completion)
     }
 }
 
@@ -268,17 +266,18 @@ impl TagAutocompleter {
 }
 
 impl Autocomplete for TagAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, CustomUserError> {
         Ok(self.inner.get_suggestions_impl(input))
     }
 
     fn get_completion(
         &mut self,
         input: &str,
-        highlighted_suggestion: Option<&str>,
-    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        self.inner
-            .get_completion_impl(input, highlighted_suggestion)
+        highlighted_suggestion: Option<String>,
+    ) -> Result<Replacement, CustomUserError> {
+        Ok(self
+            .inner
+            .get_completion_impl(input, highlighted_suggestion))
     }
 }
 
@@ -327,16 +326,17 @@ impl PoolAutocompleter {
 }
 
 impl Autocomplete for PoolAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, CustomUserError> {
         Ok(self.inner.get_suggestions_impl(input))
     }
 
     fn get_completion(
         &mut self,
         input: &str,
-        highlighted_suggestion: Option<&str>,
-    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        self.inner
-            .get_completion_impl(input, highlighted_suggestion)
+        highlighted_suggestion: Option<String>,
+    ) -> Result<Replacement, CustomUserError> {
+        Ok(self
+            .inner
+            .get_completion_impl(input, highlighted_suggestion))
     }
 }

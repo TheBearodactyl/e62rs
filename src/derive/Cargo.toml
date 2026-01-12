@@ -2,6 +2,13 @@
 name = "bearive"
 version = "0.1.0"
 edition = "2024"
+license-file = "../../LICENSE"
+readme = "README.md"
+description = "some derive macros i wrote"
+categories = ["rust-patterns"]
+homepage = "https://github.com/TheBearodactyl/e62rs"
+repository = "https://github.com/TheBearodactyl/e62rs"
+keywords = ["derivemacros", "documentation"]
 
 [lib]
 proc-macro = true

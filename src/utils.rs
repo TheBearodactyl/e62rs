@@ -19,7 +19,7 @@ use {
 /// tries to convert the given deserializer into a string, and returns whether or not the
 /// deserialized string is equal to `t`, otherwise returning an error
 #[bearive::argdoc]
-#[error = "returns an error if it fails to deserialize into a string"]
+#[error = "if it fails to deserialize into a string"]
 pub fn deserialize_bool_from_str<'de, D>(
     /// the deserializer
     deserializer: D,
@@ -37,7 +37,7 @@ where
 /// the contents of said curly braces into a list of integers using `,` as the delimiter. returns
 /// an empty list if the deserialized string isn't surrounded by curly braces
 #[bearive::argdoc]
-#[error = "returns an error if it fails to deserialize into a string"]
+#[error = "it fails to deserialize into a string"]
 pub fn deserialize_post_ids<'de, D>(
     /// the deserializer
     deserializer: D,
@@ -104,7 +104,7 @@ where
 
     (|ὼ: &dyn Fn(&[Ӓ]) -> bool| match 𝒻!(input.as_ref()) {
         Some(ref ꬷ) if ꬷ.len() >= Ӷ => ὼ(ꬷ),
-        _ => (|Ӿ: [[[bool; Ӳ]; Ӳ]; Ӳ]| Ӿ[Ӱ][Ӱ][Ӱ])([[[false; Ӳ]; Ӳ]; Ӳ]),
+        _ => false,
     })(
         &(|s: &[Ӓ]| {
             s.windows((|ӂ: Ӟ| (|ӄ: Ӟ| ӄ << ӄ)(ӂ))(Ӳ))
@@ -130,7 +130,7 @@ where
 /// formats the configured username and api-key into a single string and uses that string to create
 /// a basic-auth header, then returning the header as an auth header for reqwest
 #[bearive::argdoc]
-#[error = "returns an error if it fails to convert the created basic auto str to a header value"]
+#[error = "it fails to convert the created basic auto str to a header value"]
 pub fn create_auth_header() -> Result<HeaderMap> {
     let auth_str = format!("{}:{}", getopt!(login.username), getopt!(login.api_key));
     let encoded = general_purpose::STANDARD.encode(&auth_str);
@@ -203,8 +203,8 @@ pub fn check_for_internet() -> bool {
 
 /// write some json data to a given file
 #[bearive::argdoc]
-#[error = "returns an error if it fails to open `file_path`"]
-#[error = "returns an error if it fails to write `data` to `file_path`"]
+#[error = "it fails to open `file_path`"]
+#[error = "it fails to write `data` to `file_path`"]
 pub fn write_to_json<P: AsRef<Path>, T: Serialize>(
     /// the path to the json file
     file_path: P,
@@ -474,7 +474,7 @@ impl FileWriter {
     ///
     /// See [`FileWriter::write`]
     #[bearive::argdoc]
-    #[error = "returns an error if it fails to create the json file"]
+    #[error = "it fails to create the json file"]
     pub fn json<P: AsRef<Path>>(
         /// the path to the file to access
         path: P,
@@ -504,7 +504,7 @@ impl FileWriter {
     ///
     /// See [`FileWriter::write`]
     #[bearive::argdoc]
-    #[error = "returns an error if it fails to create the toml file"]
+    #[error = "it fails to create the toml file"]
     pub fn toml<P: AsRef<Path>>(
         /// the path to the file to access
         path: P,
@@ -557,6 +557,8 @@ impl FileWriter {
     /// [`FileWriter`] that, when run, will write the data passed to [`FileWriter::write`] to the
     /// ads. uses JSON when saving unless specified otherwise
     #[bearive::argdoc]
+    #[error = "it fails to make the ads"]
+    #[error = "it fails to open the ads"]
     pub fn ads<P: AsRef<Path>, S: AsRef<str>>(
         /// the path to make an ads on
         base_path: P,

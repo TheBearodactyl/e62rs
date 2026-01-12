@@ -12,16 +12,16 @@ use {
                 view::{ViewMenu, print_dl_to_terminal, print_post_to_terminal},
             },
             progress::ProgressManager,
-            themes::ROSE_PINE,
         },
     },
     color_eyre::eyre::{Context, Result, bail},
     crossterm::event::{Event, KeyCode, KeyEventKind},
-    demand::{Confirm, DemandOption, Input, Select},
     futures::lock::Mutex,
     hashbrown::HashMap,
+    inquire::{Confirm, Select},
     jwalk::WalkDir,
     owo_colors::OwoColorize,
+    qrcode::QrCode,
     std::{
         fs::OpenOptions,
         io::Read,
@@ -594,8 +594,7 @@ impl ExploreMenu for E6Ui {
                 "Downloads Explorer ({} posts shown)",
                 state.filtered_posts.len()
             ))
-            .theme(&ROSE_PINE)
-            .run()?;
+            .prompt()?;
 
             let should_break = match action {
                 ExplorerMenu::Browse => {
@@ -607,10 +606,10 @@ impl ExploreMenu for E6Ui {
                     false
                 }
                 ExplorerMenu::Search => {
-                    let query = Input::new(
+                    let query = inquire::Text::new(
                         "Enter search query (tags, file extension, ID, uploader, or description):",
                     )
-                    .run()?;
+                    .prompt()?;
                     state.search(Some(query));
                     println!("Found {} matching posts", state.filtered_posts.len());
                     false
@@ -647,11 +646,7 @@ impl ExploreMenu for E6Ui {
                 break;
             }
 
-            if !Confirm::new("Continue exploring?")
-                .affirmative("Yes")
-                .negative("No")
-                .run()?
-            {
+            if !Confirm::new("Continue exploring?").prompt()? {
                 break;
             }
         }
@@ -888,11 +883,9 @@ impl ExploreMenu for E6Ui {
             options.push("◄ Back to Explorer Menu".to_string());
 
             let selection = Some(
-                Select::new("Select a post to view:")
-                    .options(options.iter().map(DemandOption::new).collect())
-                    .description("Use arrow keys to navigate, Enter to select, Esc to cancel")
-                    .filterable(true)
-                    .run()?,
+                Select::new("Select a post to view:", options)
+                    .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
+                    .prompt()?,
             );
 
             if let Some(selected) = selection {
@@ -907,7 +900,7 @@ impl ExploreMenu for E6Ui {
                 }
 
                 let index = page_posts.iter().position(|lp| {
-                    &format!(
+                    format!(
                         "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
                         lp.post.id,
                         lp.post.score.total,
@@ -942,6 +935,7 @@ impl ExploreMenu for E6Ui {
         }
 
         let opts = [
+            "Make QR",
             "View image in terminal",
             "Open in browser",
             "Open file location",
@@ -950,11 +944,9 @@ impl ExploreMenu for E6Ui {
         ];
 
         loop {
-            let action = Select::new("What would you like to do?")
-                .options(opts.iter().map(DemandOption::new).collect())
-                .run()?;
+            let action = Select::new("What would you like to do?", opts.to_vec()).prompt()?;
 
-            match *action {
+            match action {
                 "View image in terminal" => match print_dl_to_terminal(&local_post.file_path) {
                     Ok(_) => {}
                     Err(e) => {
@@ -975,6 +967,22 @@ impl ExploreMenu for E6Ui {
                     open::that(parent).context("Failed to open file location")?;
                     println!("Opened: {}", parent.display());
                 }
+                "Make QR" => {
+                    let url = format!("https://e621.net/posts/{}", local_post.post.id);
+                    let qr = QrCode::with_version(
+                        url.into_bytes(),
+                        qrcode::Version::Normal(4),
+                        qrcode::EcLevel::L,
+                    )?;
+                    let str = qr
+                        .render::<char>()
+                        .quiet_zone(true)
+                        .module_dimensions(2, 1)
+                        .build()
+                        .replace("#", "█");
+
+                    println!("{}", str);
+                }
                 "Show full metadata" => {
                     println!("\n{}", "=".repeat(70));
                     println!(
@@ -992,7 +1000,7 @@ impl ExploreMenu for E6Ui {
                 _ => {}
             }
 
-            if !Confirm::new("Continue viewing this post?").run()? {
+            if !Confirm::new("Continue viewing this post?").prompt()? {
                 break;
             }
         }
@@ -1003,11 +1011,9 @@ impl ExploreMenu for E6Ui {
     /// filter posts by content rating
     fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
         let options = ["All ratings", "Safe", "Questionable", "Explicit"];
-        let selection = Select::new("Filter by rating:")
-            .options(options.iter().map(DemandOption::new).collect::<Vec<_>>())
-            .run()?;
+        let selection = Select::new("Filter by rating:", options.to_vec()).prompt()?;
 
-        match *selection {
+        match selection {
             "All ratings" => state.filter_by_rating(None),
             "Safe" => state.filter_by_rating(Some("s".to_string())),
             "Questionable" => state.filter_by_rating(Some("q".to_string())),
@@ -1021,9 +1027,7 @@ impl ExploreMenu for E6Ui {
 
     /// sort posts
     fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
-        let sort_by = ExplorerSortBy::select("Sort posts by:")
-            .theme(&ROSE_PINE)
-            .run()?;
+        let sort_by = ExplorerSortBy::select("Sort posts by:").prompt()?;
         state.sort(sort_by);
         println!("Posts sorted");
         Ok(())

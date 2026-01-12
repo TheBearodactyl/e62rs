@@ -3,10 +3,7 @@
 //! See [`Handlers::handle_search`] and [`Handlers::handle_pool_search`]
 use {
     super::Handlers,
-    crate::ui::{
-        menus::{PoolSearchModeMenu, SearchMenu, search::SearchMenu as _},
-        themes::ROSE_PINE,
-    },
+    crate::ui::menus::{PoolSearchModeMenu, SearchMenu, search::SearchMenu as _},
 };
 
 impl Handlers {
@@ -23,10 +20,7 @@ impl Handlers {
     /// returns an error if it fails to get the user selection
     /// returns an error if it fails to run the logic associated with the user selection
     pub async fn handle_search(&self) -> color_eyre::Result<()> {
-        let selection = match SearchMenu::select("What would you like to search for?")
-            .theme(&ROSE_PINE)
-            .run()
-        {
+        let selection = match SearchMenu::select("What would you like to search for?").prompt() {
             Ok(sel) => sel,
             Err(_) if self.was_interrupted() => return Ok(()),
             Err(e) => return Err(e.into()),
@@ -54,14 +48,12 @@ impl Handlers {
     /// returns an error if it fails to get the user selection
     /// returns an error if it fails to run the logic associated with the user selection
     pub async fn handle_pool_search(&self) -> color_eyre::Result<()> {
-        let pool_mode = match PoolSearchModeMenu::select("Which search mode would you like to use?")
-            .theme(&ROSE_PINE)
-            .run()
-        {
-            Ok(sel) => sel,
-            Err(_) if self.was_interrupted() => return Ok(()),
-            Err(e) => return Err(e.into()),
-        };
+        let pool_mode =
+            match PoolSearchModeMenu::select("Which search mode would you like to use?").prompt() {
+                Ok(sel) => sel,
+                Err(_) if self.was_interrupted() => return Ok(()),
+                Err(e) => return Err(e.into()),
+            };
 
         match pool_mode {
             PoolSearchModeMenu::Simple => self.ui.search_pools().await?,

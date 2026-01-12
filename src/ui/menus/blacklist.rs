@@ -3,11 +3,11 @@ use {
     crate::{
         config::blacklist::{add_to_blacklist, clear_blacklist, remove_from_blacklist},
         getopt,
-        ui::{E6Ui, autocomplete::TagAutocompleter, menus::BlacklistManager, themes::ROSE_PINE},
+        ui::{E6Ui, autocomplete::TagAutocompleter, menus::BlacklistManager},
     },
     color_eyre::eyre::{Context, Result},
-    demand::{Confirm, DemandOption, Input, MultiSelect, Select},
     hashbrown::HashSet,
+    inquire::{Confirm, MultiSelect, Select},
     std::sync::Arc,
 };
 
@@ -94,7 +94,7 @@ impl BlacklistMenu for E6Ui {
     async fn manage_blacklist(&self) -> Result<()> {
         loop {
             let blacklist_action = BlacklistManager::select("Blacklist Settings:")
-                .run()
+                .prompt()
                 .wrap_err("Failed to display blacklist menu")?;
 
             let should_continue = match blacklist_action {
@@ -132,10 +132,7 @@ impl BlacklistMenu for E6Ui {
     /// ask whether to continue managing the blacklist
     fn prompt_continue(&self) -> Result<bool> {
         Confirm::new("Continue managing blacklist?")
-            .affirmative("Yes")
-            .negative("No")
-            .theme(&ROSE_PINE)
-            .run()
+            .prompt()
             .wrap_err("Failed to get user input")
     }
 
@@ -144,9 +141,9 @@ impl BlacklistMenu for E6Ui {
         let tag_db = Arc::clone(&self.tag_db);
         let completer = TagAutocompleter::new(tag_db);
 
-        let tag = Input::new("Enter tag to add to blacklist:")
-            .autocomplete(completer)
-            .run()
+        let tag = inquire::Text::new("Enter tag to add to blacklist:")
+            .with_autocomplete(completer)
+            .prompt()
             .wrap_err("Failed to get tag input")?;
 
         let tag = tag.trim();
@@ -177,14 +174,11 @@ impl BlacklistMenu for E6Ui {
     ///
     /// * `tag` - the tag to ask about
     async fn prompt_add_unknown_tag(&self, tag: &str) -> Result<bool> {
-        let use_anyway = Confirm::new(format!(
+        let use_anyway = Confirm::new(&format!(
             "Tag '{}' not found in database. Add to blacklist anyway?",
             tag
         ))
-        .affirmative("Yes")
-        .negative("No")
-        .theme(&ROSE_PINE)
-        .run()
+        .prompt()
         .wrap_err("Failed to get user confirmation")?;
 
         if use_anyway {
@@ -196,11 +190,9 @@ impl BlacklistMenu for E6Ui {
             return Ok(false);
         }
 
-        let opts: Vec<_> = suggestions.iter().map(DemandOption::new).collect();
-        let selected = Select::new("Did you mean one of these tags?")
-            .options(opts)
-            .description("Select a tag or press ESC to cancel")
-            .run()
+        let selected = Select::new("Did you mean one of these tags?", suggestions)
+            .with_help_message("Select a tag or press ESC to cancel")
+            .prompt()
             .wrap_err("Failed to display tag suggestions")?;
 
         if !selected.is_empty() {
@@ -236,22 +228,17 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let opts: Vec<_> = blacklist.iter().map(DemandOption::new).collect();
-        let tag_to_remove = Select::new("Select tag to remove from blacklist:")
-            .options(opts)
-            .description("Use arrow keys to navigate, Enter to select, Esc to cancel")
-            .run()
+        let tag_to_remove = Select::new("Select tag to remove from blacklist:", blacklist)
+            .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
+            .prompt()
             .wrap_err("Failed to display tag selection")?;
 
         if tag_to_remove.is_empty() {
             return Ok(());
         }
 
-        let confirm = Confirm::new(format!("Remove '{}' from blacklist?", tag_to_remove))
-            .affirmative("Yes")
-            .negative("No")
-            .theme(&ROSE_PINE)
-            .run()
+        let confirm = Confirm::new(&format!("Remove '{}' from blacklist?", tag_to_remove))
+            .prompt()
             .wrap_err("Failed to get user confirmation")?;
 
         if !confirm {
@@ -288,14 +275,11 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(format!(
+        let confirm = Confirm::new(&format!(
             "Clear all {} tags from blacklist? This cannot be undone.",
             blacklist_count
         ))
-        .affirmative("Yes")
-        .negative("No")
-        .theme(&ROSE_PINE)
-        .run()
+        .prompt()
         .wrap_err("Failed to get user confirmation")?;
 
         if !confirm {
@@ -360,13 +344,15 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let selected_tags = MultiSelect::new(format!(
-            "Select tags to add to blacklist ({} available):",
-            sorted_tags.len()
-        ))
-        .description("Space to select/deselect, Enter to confirm, Esc to cancel")
-        .options(sorted_tags.iter().map(DemandOption::new).collect())
-        .run()
+        let selected_tags = MultiSelect::new(
+            &format!(
+                "Select tags to add to blacklist ({} available):",
+                sorted_tags.len()
+            ),
+            sorted_tags,
+        )
+        .with_help_message("Space to select/deselect, Enter to confirm, Esc to cancel")
+        .prompt()
         .wrap_err("Failed to display tag selection")?;
 
         if selected_tags.is_empty() {
@@ -374,14 +360,11 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(format!(
+        let confirm = Confirm::new(&format!(
             "Add {} selected tags to blacklist?",
             selected_tags.len()
         ))
-        .affirmative("Yes")
-        .negative("No")
-        .theme(&ROSE_PINE)
-        .run()
+        .prompt()
         .wrap_err("Failed to get user confirmation")?;
 
         if !confirm {
@@ -393,7 +376,7 @@ impl BlacklistMenu for E6Ui {
         let mut errors = Vec::new();
 
         for tag in selected_tags {
-            if blacklist.contains(tag) {
+            if blacklist.contains(&tag) {
                 already_exists += 1;
                 continue;
             }

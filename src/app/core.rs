@@ -33,6 +33,7 @@ impl E6App {
     /// returns an error if it fails to load the configuration file  
     pub async fn init() -> color_eyre::Result<Self> {
         color_eyre::install()?;
+        Self::setup_inquire_render_config();
 
         if crate::utils::ꟿ(crate::getopt!(http.api)) {
             std::process::exit(1);
@@ -62,6 +63,11 @@ impl E6App {
     /// returns an error if the main loop fails
     pub async fn run(&self) -> color_eyre::Result<()> {
         self.handlers.run_main_loop().await
+    }
+
+    /// sets up inquire with the rose pine theme
+    fn setup_inquire_render_config() {
+        inquire::set_global_render_config(crate::ui::themes::get_render_config());
     }
 
     /// clear the screen

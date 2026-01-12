@@ -6,7 +6,7 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 
 # Features
 
-- 80+ available [configuration options](https://github.com/TheBearodactyl/e62rs/wiki/Configuration), and counting
+- 100+ available [configuration options](https://github.com/TheBearodactyl/e62rs/wiki/Configuration), and counting
 - A fully in-terminal image viewer with animation support and no quality loss (via [icy_sixel](https://github.com/mkrueger/icy_sixel/))
 - A completely offline downloads re-organizer
 - A downloads browser, available in both CLI and Web flavors (also completely offline)
@@ -63,5 +63,5 @@ A hyper-customizable in-terminal e621/e926 browser and downloader
 
 - [x] Refactor the whole thing into something that isn't held together with duct tape and a dream
 - [ ] Add unit tests and documentation for like... everything
-  - [ ] Unit tests
-  - [x] Documentation
+    - [ ] Unit tests
+    - [x] Documentation

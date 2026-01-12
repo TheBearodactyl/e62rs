@@ -4,11 +4,11 @@ use {
         config::format::FormatTemplate,
         getopt,
         models::E6Post,
-        ui::{E6Ui, progress::ProgressManager, themes::ROSE_PINE},
+        ui::{E6Ui, progress::ProgressManager},
     },
     color_eyre::eyre::{Context, Result, bail},
-    demand::{Confirm, DemandOption, Input, Select},
     hashbrown::HashMap,
+    inquire::{Confirm, Select, Text},
     smart_default::SmartDefault,
     std::{
         fs::{self, OpenOptions},
@@ -721,34 +721,23 @@ impl RegorganizeMenu for E6Ui {
         let download_dir: String = getopt!(download.path);
         let default_format: String = getopt!(download.format);
 
-        let directory = Input::new("Enter directory to reorganize:")
-            .theme(&ROSE_PINE)
-            .default_value(&download_dir)
-            .run()?;
+        let directory = Text::new("Enter directory to reorganize:")
+            .with_default(&download_dir)
+            .prompt()?;
 
         let directory = Path::new(&directory);
         if !directory.exists() {
             bail!("Directory does not exist: {}", directory.display());
         }
 
-        let recursive = Confirm::new("Search subdirectories recursively?")
-            .affirmative("Yes")
-            .negative("No")
-            .theme(&ROSE_PINE)
-            .run()?;
-
-        let use_current_format = Confirm::new("Use current output format from config?")
-            .affirmative("Yes")
-            .negative("No")
-            .theme(&ROSE_PINE)
-            .run()?;
+        let recursive = Confirm::new("Search subdirectories recursively?").prompt()?;
+        let use_current_format = Confirm::new("Use current output format from config?").prompt()?;
 
         let output_format = if !use_current_format {
             Some(
-                Input::new("Enter output format:")
-                    .default_value(&default_format)
-                    .theme(&ROSE_PINE)
-                    .run()?,
+                Text::new("Enter output format:")
+                    .with_default(&default_format)
+                    .prompt()?,
             )
         } else {
             None
@@ -760,29 +749,22 @@ impl RegorganizeMenu for E6Ui {
             "Auto-rename duplicates",
         ];
 
-        let conflict_choice = Select::new("How should conflicts be handled?")
-            .options(
-                conflict_options
-                    .iter()
-                    .map(DemandOption::new)
-                    .collect::<Vec<_>>(),
-            )
-            .description("Choose what to do when target file already exists")
-            .theme(&ROSE_PINE)
-            .run()?;
+        let conflict_choice = Select::new(
+            "How should conflicts be handled?",
+            conflict_options.to_vec(),
+        )
+        .with_help_message("Choose what to do when target file already exists")
+        .prompt()?;
 
-        let conflict_resolution = match *conflict_choice {
+        let conflict_resolution = match conflict_choice {
             "Skip existing files" => ConflictResolution::Skip,
             "Overwrite existing files" => ConflictResolution::Overwrite,
             "Auto-rename duplicates" => ConflictResolution::AutoRename,
             _ => ConflictResolution::Skip,
         };
 
-        let dry_run = Confirm::new("Perform dry run? (preview changes without moving files)")
-            .affirmative("Yes")
-            .negative("No")
-            .theme(&ROSE_PINE)
-            .run()?;
+        let dry_run =
+            Confirm::new("Perform dry run? (preview changes without moving files)").prompt()?;
 
         let options = ReorganizeOptions {
             dry_run,
@@ -810,11 +792,8 @@ impl RegorganizeMenu for E6Ui {
 
         if options.dry_run && result.successful > 0 {
             println!("\nThis was a dry run. No files were actually moved.");
-            let proceed = Confirm::new("Would you like to perform the reorganization for real?")
-                .affirmative("Yes")
-                .negative("No")
-                .theme(&ROSE_PINE)
-                .run()?;
+            let proceed =
+                Confirm::new("Would you like to perform the reorganization for real?").prompt()?;
 
             if proceed {
                 let real_options = ReorganizeOptions {
