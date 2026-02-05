@@ -6,6 +6,7 @@ use {
         client::E6Client,
         config::instance::reload_config,
         data::{pools::PoolDb, tags::TagDb},
+        error::Result,
         getopt, opt_and,
         ui::E6Ui,
     },
@@ -21,7 +22,17 @@ pub struct E6App {
 }
 
 impl E6App {
-    /// init e62rs
+    /// initialize e62rs
+    ///
+    /// - 1. installs the miette error handler hook
+    /// - 2. sets up the custom inquire render config
+    /// - 3. validates the base api url
+    /// - 4. handles any cli arguments if any
+    /// - 5. clears the screen
+    /// - 6. sets up logging
+    /// - 8. sets up the custom interruption handler if enabled
+    /// - 9. sets up the ui
+    /// - 10. loads the config file
     ///
     /// # Errors
     ///
@@ -31,8 +42,17 @@ impl E6App {
     /// returns an error if it fails to setup the interrupt handler  
     /// returns an error if it fails to setup the UI  
     /// returns an error if it fails to load the configuration file  
-    pub async fn init() -> color_eyre::Result<Self> {
-        color_eyre::install()?;
+    pub async fn init() -> Result<Self> {
+        miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .terminal_links(true)
+                    .unicode(true)
+                    .context_lines(3)
+                    .tab_width(4)
+                    .build(),
+            )
+        }))?;
         Self::setup_inquire_render_config();
 
         if crate::utils::ꟿ(crate::getopt!(http.api)) {
@@ -61,7 +81,7 @@ impl E6App {
     /// # Errors
     ///
     /// returns an error if the main loop fails
-    pub async fn run(&self) -> color_eyre::Result<()> {
+    pub async fn run(&self) -> Result<()> {
         self.handlers.run_main_loop().await
     }
 
@@ -77,7 +97,7 @@ impl E6App {
     }
 
     /// setup the interruption handler
-    fn setup_interrupt_handler() -> color_eyre::Result<InterruptHandler> {
+    fn setup_interrupt_handler() -> Result<InterruptHandler> {
         let handler = InterruptHandler::new();
         let handler_clone = handler.clone();
 
@@ -92,7 +112,7 @@ impl E6App {
     }
 
     /// setup the UI
-    async fn setup_ui() -> color_eyre::Result<E6Ui> {
+    async fn setup_ui() -> Result<E6Ui> {
         let client = Arc::new(E6Client::default());
 
         opt_and!(autoupdate.tags, client.update_tags().await?);

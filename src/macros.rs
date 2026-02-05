@@ -133,7 +133,7 @@ macro_rules! retry {
                     last_error = Some(e);
 
                     if attempts >= max_retries {
-                        break Err(last_error.unwrap());
+                        break Err(last_error.expect("Couldn't find an error"));
                     }
 
                     std::thread::sleep(delay);
@@ -229,32 +229,32 @@ macro_rules! menu {
                 }
 
                 $(
-                    stats.get_mut("english").unwrap().total_variants += 1;
-                    stats.get_mut("spanish").unwrap().total_variants += 1;
-                    stats.get_mut("japanese").unwrap().total_variants += 1;
+                    stats.get_mut("english").unwrap_or(&mut TranslationStats::default()).total_variants += 1;
+                    stats.get_mut("spanish").unwrap_or(&mut TranslationStats::default()).total_variants += 1;
+                    stats.get_mut("japanese").unwrap_or(&mut TranslationStats::default()).total_variants += 1;
 
                     if !$label.is_empty() {
-                        stats.get_mut("english").unwrap().labels_translated += 1;
+                        stats.get_mut("english").unwrap_or(&mut TranslationStats::default()).labels_translated += 1;
                     }
 
                     if !$desc.is_empty() {
-                        stats.get_mut("english").unwrap().descriptions_translated += 1;
+                        stats.get_mut("english").unwrap_or(&mut TranslationStats::default()).descriptions_translated += 1;
                     }
 
                     if !$japanese_label.is_empty() {
-                        stats.get_mut("japanese").unwrap().labels_translated += 1;
+                        stats.get_mut("japanese").unwrap_or(&mut TranslationStats::default()).labels_translated += 1;
                     }
 
                     if !$japanese_desc.is_empty() {
-                        stats.get_mut("japanese").unwrap().descriptions_translated += 1;
+                        stats.get_mut("japanese").unwrap_or(&mut TranslationStats::default()).descriptions_translated += 1;
                     }
 
                     if !$spanish_label.is_empty() {
-                        stats.get_mut("spanish").unwrap().labels_translated += 1;
+                        stats.get_mut("spanish").unwrap_or(&mut TranslationStats::default()).labels_translated += 1;
                     }
 
                     if !$spanish_desc.is_empty() {
-                        stats.get_mut("spanish").unwrap().descriptions_translated += 1;
+                        stats.get_mut("spanish").unwrap_or(&mut TranslationStats::default()).descriptions_translated += 1;
                     }
                 )*
 

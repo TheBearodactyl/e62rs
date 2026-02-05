@@ -9,15 +9,17 @@ use {
         fmt::Debug,
         fs::{File, OpenOptions},
         io::{BufWriter, Write},
-        path::{Path, PathBuf},
+        path::{Component, Path, PathBuf},
+        sync::{Mutex, RwLock},
+        time::Duration,
     },
-    tracing::Level,
 };
 
 /// deserialize into a boolean
 ///
 /// tries to convert the given deserializer into a string, and returns whether or not the
 /// deserialized string is equal to `t`, otherwise returning an error
+#[inline]
 #[bearive::argdoc]
 #[error = "if it fails to deserialize into a string"]
 pub fn deserialize_bool_from_str<'de, D>(
@@ -27,7 +29,7 @@ pub fn deserialize_bool_from_str<'de, D>(
 where
     D: serde::Deserializer<'de>,
 {
-    let s = String::deserialize(deserializer)?;
+    let s = std::borrow::Cow::<str>::deserialize(deserializer)?;
     Ok(s == "t")
 }
 
@@ -36,6 +38,7 @@ where
 /// tries to convert the given deserializer into a string, checks for curly braces, then separates
 /// the contents of said curly braces into a list of integers using `,` as the delimiter. returns
 /// an empty list if the deserialized string isn't surrounded by curly braces
+#[inline]
 #[bearive::argdoc]
 #[error = "it fails to deserialize into a string"]
 pub fn deserialize_post_ids<'de, D>(
@@ -45,7 +48,7 @@ pub fn deserialize_post_ids<'de, D>(
 where
     D: serde::Deserializer<'de>,
 {
-    let s = String::deserialize(deserializer)?;
+    let s = std::borrow::Cow::<str>::deserialize(deserializer)?;
 
     if s.starts_with('{') && s.ends_with('}') {
         let inner = &s[1..s.len() - 1];
@@ -53,12 +56,10 @@ where
             return Ok(Vec::new());
         }
 
-        let ids: Result<Vec<i64>, _> = inner
+        inner
             .split(',')
-            .map(|id| id.trim().parse::<i64>())
-            .collect();
-
-        ids.map_err(serde::de::Error::custom)
+            .map(|id| id.trim().parse::<i64>().map_err(serde::de::Error::custom))
+            .collect()
     } else {
         Ok(Vec::new())
     }
@@ -129,19 +130,17 @@ where
 ///
 /// formats the configured username and api-key into a single string and uses that string to create
 /// a basic-auth header, then returning the header as an auth header for reqwest
+#[must_use]
 #[bearive::argdoc]
 #[error = "it fails to convert the created basic auto str to a header value"]
 pub fn create_auth_header() -> Result<HeaderMap> {
     let auth_str = format!("{}:{}", getopt!(login.username), getopt!(login.api_key));
-    let encoded = general_purpose::STANDARD.encode(&auth_str);
-    let auth_value = format!("Basic {}", encoded);
-    let mut headers = HeaderMap::new();
+    let encoded = general_purpose::STANDARD.encode(auth_str.as_bytes());
+    let mut headers = HeaderMap::with_capacity(1);
+    let auth_value = reqwest::header::HeaderValue::from_str(&format!("Basic {}", encoded))
+        .wrap_err("failed to create authorization header value")?;
 
-    headers.insert(
-        AUTHORIZATION,
-        reqwest::header::HeaderValue::from_str(&auth_value)?,
-    );
-
+    headers.insert(AUTHORIZATION, auth_value);
     Ok(headers)
 }
 
@@ -155,21 +154,34 @@ pub fn shorten_path(
     /// the max length for each component
     max_len: usize,
 ) -> String {
-    let shortened = Path::new(path)
-        .components()
-        .map(|component| {
-            let s = component.as_os_str().to_string_lossy();
-            if s.len() > max_len {
-                s[..max_len].to_string()
-            } else {
-                s.to_string()
-            }
-        })
-        .collect::<PathBuf>()
-        .to_string_lossy()
-        .to_string();
+    let mut result = String::with_capacity(path.len().min(path.len()));
+    let mut first = true;
 
-    shortened.replace("\\", "/")
+    for component in Path::new(path).components() {
+        if !first {
+            result.push('/');
+        }
+
+        first = false;
+
+        match component {
+            Component::Normal(os_str) => {
+                let s = os_str.to_string_lossy();
+
+                if s.len() > max_len {
+                    result.push_str(&s[..max_len]);
+                } else {
+                    result.push_str(&s);
+                }
+            }
+            Component::RootDir => result.push('/'),
+            Component::CurDir => result.push('.'),
+            Component::ParentDir => result.push_str(".."),
+            Component::Prefix(pfx) => result.push_str(&pfx.as_os_str().to_string_lossy()),
+        }
+    }
+
+    result
 }
 
 /// create and write to an ADS stream (windows only)
@@ -190,15 +202,26 @@ where
     P: AsRef<Path>,
     T: Serialize,
 {
-    let mut ads_writer = FileWriter::ads(file_path, stream_name, true)?;
+    let mut ads_writer = FileWriter::ads(file_path, stream_name, false)?;
     ads_writer.write(&data)?;
+    ads_writer.flush()?;
 
     Ok(())
 }
 
 /// check if there's internet access
+#[must_use]
 pub fn check_for_internet() -> bool {
-    reqwest::blocking::get(crate::getopt!(http.api)).is_ok()
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::blocking::Client::new());
+
+    client
+        .head(crate::getopt!(http.api))
+        .send()
+        .map(|resp| resp.status().is_success())
+        .unwrap_or(false)
 }
 
 /// write some json data to a given file
@@ -226,12 +249,19 @@ pub fn string_to_log_level(
     /// the string rep of the log level
     lvl: &str,
 ) -> tracing::Level {
-    match lvl.to_lowercase().as_str() {
-        "d" | "debug" | "dbg" => Level::DEBUG,
-        "t" | "trace" | "trc" => Level::TRACE,
-        "e" | "error" | "err" => Level::ERROR,
-        "i" | "info" | "inf" => Level::INFO,
-        "w" | "warn" | "wrn" => Level::WARN,
+    use tracing::Level;
+
+    let s = lvl.trim();
+    if s.is_empty() {
+        return Level::ERROR;
+    }
+
+    match s.to_lowercase().as_str() {
+        "d" | "dbg" | "debug" => Level::DEBUG,
+        "t" | "trc" | "trace" => Level::TRACE,
+        "e" | "err" | "error" => Level::ERROR,
+        "i" | "inf" | "info" => Level::INFO,
+        "w" | "wrn" | "warn" => Level::WARN,
         _ => Level::ERROR,
     }
 }
@@ -628,9 +658,9 @@ impl FileWriter {
                 pretty,
             } => {
                 let serialized = if *pretty {
-                    toml::to_string(data)
-                } else {
                     toml::to_string_pretty(data)
+                } else {
+                    toml::to_string(data)
                 }
                 .wrap_err_with(|| {
                     format!("failed to serialize data to toml for {}", path.display())
@@ -757,5 +787,158 @@ impl<F: FnOnce()> Drop for DeferGuard<F> {
         if let Some(func) = self.func.take() {
             func();
         }
+    }
+}
+
+/// a mutable static maker :3
+pub struct MutableStatic<T> {
+    /// the inner type
+    inner: RwLock<T>,
+}
+
+impl<T> MutableStatic<T> {
+    /// make a new MutableStatic
+    pub const fn new(value: T) -> Self {
+        Self {
+            inner: RwLock::new(value),
+        }
+    }
+
+    /// gives mut access to the inner value
+    pub fn with_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.inner.write().unwrap();
+        f(&mut *guard)
+    }
+
+    /// gives immut access to inner value
+    pub fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.inner.read().unwrap();
+        f(&*guard)
+    }
+
+    /// tries to get write access without blocking  
+    /// returns None if the lock is currently held
+    pub fn try_with_mut<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        self.inner.try_write().ok().map(|mut guard| f(&mut *guard))
+    }
+
+    /// tries to get read access without blocking  
+    /// returns None if the lock is currently held by a writer
+    pub fn try_with<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&T) -> R,
+    {
+        self.inner.try_read().ok().map(|guard| f(&*guard))
+    }
+
+    /// replace the current val with a new one
+    pub fn replace(&self, new_value: T) -> T {
+        let mut guard = self.inner.write().unwrap();
+        std::mem::replace(&mut *guard, new_value)
+    }
+
+    /// updates the val using a func
+    pub fn update<F>(&self, f: F)
+    where
+        F: FnOnce(&mut T),
+    {
+        let mut guard = self.inner.write().unwrap();
+        f(&mut *guard);
+    }
+
+    /// gets a copy of the current val (requires T: Clone)
+    pub fn get(&self) -> T
+    where
+        T: Clone,
+    {
+        let guard = self.inner.read().unwrap();
+        guard.clone()
+    }
+
+    /// sets a new val
+    pub fn set(&self, value: T) {
+        let mut guard = self.inner.write().unwrap();
+        *guard = value;
+    }
+
+    /// maps the val to a new type using an ro function
+    pub fn map<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.inner.read().unwrap();
+        f(&*guard)
+    }
+
+    /// modifies the value and returns a result
+    pub fn modify<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.inner.write().unwrap();
+        f(&mut *guard)
+    }
+}
+
+/// a simpler version of [`MutableStatic`]
+pub struct SimpleMutableStatic<T> {
+    /// the inner type
+    inner: Mutex<T>,
+}
+
+impl<T> SimpleMutableStatic<T> {
+    /// make a new mut static with a given value
+    pub const fn new(value: T) -> Self {
+        Self {
+            inner: Mutex::new(value),
+        }
+    }
+
+    /// gives mut access to the inner val
+    pub fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.inner.lock().unwrap();
+        f(&mut *guard)
+    }
+
+    /// tries to give mut access to the inner val without blocking  
+    /// returns None if it fails to get access
+    pub fn try_with<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        self.inner.try_lock().ok().map(|mut guard| f(&mut *guard))
+    }
+
+    /// replace the current val with a new one
+    pub fn replace(&self, new_value: T) -> T {
+        let mut guard = self.inner.lock().unwrap();
+        std::mem::replace(&mut *guard, new_value)
+    }
+
+    /// get the current value (requires Clone)
+    pub fn get(&self) -> T
+    where
+        T: Clone,
+    {
+        let guard = self.inner.lock().unwrap();
+        guard.clone()
+    }
+
+    /// set a value
+    pub fn set(&self, value: T) {
+        let mut guard = self.inner.lock().unwrap();
+        *guard = value;
     }
 }

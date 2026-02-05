@@ -7,13 +7,19 @@
 //! * highly customizable filename formatting
 use {
     crate::{
-        config::format::FormatTemplate, getopt, models::E6Post, ui::progress::ProgressManager,
-        utils,
+        bail,
+        config::format::FormatTemplate,
+        error::*,
+        getopt,
+        models::E6Post,
+        ui::progress::ProgressManager,
+        utils::{self, MutableStatic as MutStatic},
     },
-    color_eyre::eyre::{Context, ContextCompat, Result, bail},
+    color_eyre::eyre::Context,
     futures::StreamExt,
     hashbrown::HashMap,
     indicatif::ProgressBar,
+    miette::Context as _,
     reqwest::Client,
     std::{
         path::{Path, PathBuf},
@@ -23,6 +29,107 @@ use {
     tracing::warn,
     url::Url,
 };
+
+/// the download progress for a given post
+#[derive(Clone)]
+pub struct DownloadProgress {
+    /// the file path of the download
+    pub path: PathBuf,
+
+    /// whether or not the download failed
+    pub failed: bool,
+
+    /// id for this download
+    id: u64,
+}
+
+/// all currently progressing downloads
+pub static IN_PROGRESS_DOWNLOADS: MutStatic<Vec<DownloadProgress>> = MutStatic::new(Vec::new());
+/// atomic counter for unique dl ids
+static DOWNLOAD_ID_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[ctor::dtor]
+unsafe fn terminate() {
+    IN_PROGRESS_DOWNLOADS.with(|downloads| {
+        for download in downloads.iter() {
+            if download.failed && download.path.exists() {
+                if let Err(e) = std::fs::remove_file(&download.path) {
+                    eprintln!(
+                        "Failed to remove incomplete download '{}': {}",
+                        download.path.display(),
+                        e
+                    );
+                } else {
+                    eprintln!(
+                        "Cleaned up incomplete download: {}",
+                        download.path.display()
+                    );
+                }
+            }
+        }
+    });
+}
+
+/// raii guard to make sure downloads are cleaned up on panic or early return
+struct DownloadGuard {
+    /// the id of this guard
+    id: u64,
+    /// the path to this download
+    path: PathBuf,
+}
+
+impl DownloadGuard {
+    /// make a new download guard
+    fn new(path: PathBuf) -> Self {
+        let id = DOWNLOAD_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        IN_PROGRESS_DOWNLOADS.update(|items| {
+            items.push(DownloadProgress {
+                path: path.clone(),
+                failed: true,
+                id,
+            });
+        });
+
+        Self { id, path }
+    }
+
+    /// mark the download as successful
+    fn mark_success(&self) {
+        IN_PROGRESS_DOWNLOADS.update(|items| {
+            if let Some(download) = items.iter_mut().find(|d| d.id == self.id) {
+                download.failed = false;
+            }
+        });
+    }
+
+    /// clean up the file if it exists and is marked as failed
+    fn cleanup_if_failed(&self) {
+        let should_remove = IN_PROGRESS_DOWNLOADS.map(|items| {
+            items
+                .iter()
+                .find(|d| d.id == self.id)
+                .is_some_and(|d| d.failed)
+        });
+
+        if should_remove
+            && self.path.exists()
+            && let Err(e) = std::fs::remove_file(&self.path)
+        {
+            warn!(
+                "Failed to clean up incomplete download '{}': {}",
+                self.path.display(),
+                e
+            );
+        }
+    }
+}
+
+impl Drop for DownloadGuard {
+    fn drop(&mut self) {
+        self.cleanup_if_failed();
+    }
+}
 
 /// a post downloader
 ///
@@ -206,7 +313,7 @@ impl PostDownloader {
         for (i, result) in results.into_iter().enumerate() {
             match result {
                 Ok(Ok(_)) => {}
-                Ok(Err(e)) => warn!("download {} failed: {}", i, e),
+                Ok(Err(_)) => {}
                 Err(e) => warn!("task {} failed: {}", i, e),
             }
         }
@@ -234,10 +341,12 @@ impl PostDownloader {
             .file
             .url
             .clone()
-            .context("Post has no downloadable file URL")?;
+            .context("post has no downloadable file url")
+            .map_err(Report::new)?;
 
         let filename = self.format_filename(&post)?;
         let filepath = self.get_filepath(&filename)?;
+        let guard = DownloadGuard::new(filepath.clone());
 
         let prog_message = match getopt!(ui.progress.message).as_str() {
             "id" => post.id.to_string(),
@@ -251,27 +360,43 @@ impl PostDownloader {
             .mk_dl_bar(&pb_key, 0, &format!("Downloading {}", prog_message))
             .await?;
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context(format!("Failed to download from '{}'", url))?;
+        let response = match self.client.get(&url).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                pb.finish_with_message(format!("✗ Failed: {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                return Err(e.into());
+            }
+        };
 
         let total_size = response.content_length().unwrap_or(0);
         pb.set_length(total_size);
 
-        let response = response
-            .error_for_status()
-            .with_context(|| format!("Server returned error for '{}'", url))?;
+        let response = match response.error_for_status() {
+            Ok(r) => r,
+            Err(e) => {
+                pb.finish_with_message(format!("✗ Server error: {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                return Err(e.into());
+            }
+        };
 
-        self.save_to_file(response, &filepath, pb.clone(), &post)
-            .await?;
-
-        pb.finish_with_message(format!("Downloaded {}", filename));
-        self.progress_manager.remove_bar(&pb_key).await;
-
-        Ok(())
+        match self
+            .save_to_file(response, &filepath, pb.clone(), &post)
+            .await
+        {
+            Ok(_) => {
+                guard.mark_success();
+                pb.finish_with_message(format!("✓ Downloaded {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                Ok(())
+            }
+            Err(e) => {
+                pb.finish_with_message(format!("✗ Save failed: {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                Err(e)
+            }
+        }
     }
 
     /// save a post to a file
@@ -291,21 +416,14 @@ impl PostDownloader {
         /// post metadata to save alongside the file
         post: &E6Post,
     ) -> Result<()> {
-        let mut file = File::create(filepath)
+        let temp_path = filepath.with_extension("tmp");
+        let mut file = File::create(&temp_path)
             .await
-            .context(format!("Failed to create file '{}'", filepath.display()))?;
-
-        if getopt!(download.save_metadata) {
-            #[cfg(target_os = "windows")]
-            {
-                utils::write_to_ads(filepath, "metadata", post)?;
-            }
-
-            #[cfg(not(target_os = "windows"))]
-            {
-                utils::write_to_json(filepath, post)?;
-            }
-        }
+            .context(format!(
+                "failed to create temp file '{}'",
+                temp_path.display()
+            ))
+            .map_err(Report::new)?;
 
         let mut stream = response.bytes_stream();
         let mut downloaded = 0u64;
@@ -318,7 +436,7 @@ impl PostDownloader {
 
             file.write_all(&chunk)
                 .await
-                .with_context(|| format!("Error writing to file '{}'", filepath.display()))?;
+                .with_context(|| format!("Error writing to temp file '{}'", temp_path.display()))?;
 
             if downloaded - last_update >= UPDATE_THRESHOLD {
                 pb.set_position(downloaded);
@@ -327,6 +445,46 @@ impl PostDownloader {
         }
 
         file.flush().await.context("Failed to flush file to disk")?;
+        file.sync_all()
+            .await
+            .context("Failed to sync file to disk")?;
+
+        drop(file);
+
+        tokio::fs::rename(&temp_path, filepath)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to move temp file '{}' to '{}'",
+                    temp_path.display(),
+                    filepath.display()
+                )
+            })
+            .map_err(Report::new)?;
+
+        if getopt!(download.save_metadata) {
+            #[cfg(target_os = "windows")]
+            {
+                if let Err(e) = utils::write_to_ads(filepath, "metadata", post) {
+                    warn!(
+                        "Failed to write metadata ADS for '{}': {}",
+                        filepath.display(),
+                        e
+                    );
+                }
+            }
+
+            #[cfg(not(target_os = "windows"))]
+            {
+                if let Err(e) = utils::write_to_json(filepath, post) {
+                    warn!(
+                        "Failed to write metadata JSON for '{}': {}",
+                        filepath.display(),
+                        e
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
@@ -426,14 +584,12 @@ impl PostDownloader {
     ) -> Result<()> {
         let concurrent_limit = getopt!(download.threads);
         let total = posts.len();
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
         let pad_width = total.to_string().len().max(3);
-
         let total_pb = self
             .progress_manager
             .create_count_bar("total", total as u64, "Total Downloads")
             .await?;
-
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrent_limit));
 
         let tasks: Vec<_> = posts
             .into_iter()
@@ -462,7 +618,7 @@ impl PostDownloader {
         for (i, result) in results.into_iter().enumerate() {
             match result {
                 Ok(Ok(_)) => {}
-                Ok(Err(e)) => warn!("download {} failed: {}", i + 1, e),
+                Ok(Err(_)) => {}
                 Err(e) => warn!("task {} failed: {}", i + 1, e),
             }
         }
@@ -501,33 +657,50 @@ impl PostDownloader {
         );
         let filepath = self.get_filepath(&filename)?;
 
+        let guard = DownloadGuard::new(filepath.clone());
         let pb_key = format!("download_{}", sequence_num);
         let pb = self
             .progress_manager
             .mk_dl_bar(&pb_key, 0, &format!("Downloading {}", filename))
             .await?;
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context(format!("Failed to download from '{}'", url))?;
+        let response = match self.client.get(&url).send().await {
+            Ok(r) => r,
+            Err(e) => {
+                pb.finish_with_message(format!("✗ Failed: {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                return Err(e.into());
+            }
+        };
 
         let total_size = response.content_length().unwrap_or(0);
         pb.set_length(total_size);
 
-        let response = response
-            .error_for_status()
-            .with_context(|| format!("Server returned error for '{}'", url))?;
+        let response = match response.error_for_status() {
+            Ok(r) => r,
+            Err(e) => {
+                pb.finish_with_message(format!("✗ Server error: {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                return Err(e.into());
+            }
+        };
 
-        self.save_to_file(response, &filepath, pb.clone(), &post)
-            .await?;
-
-        pb.finish_with_message(format!("Downloaded {}", filename));
-        self.progress_manager.remove_bar(&pb_key).await;
-
-        Ok(())
+        match self
+            .save_to_file(response, &filepath, pb.clone(), &post)
+            .await
+        {
+            Ok(_) => {
+                guard.mark_success();
+                pb.finish_with_message(format!("✓ Downloaded {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                Ok(())
+            }
+            Err(e) => {
+                pb.finish_with_message(format!("✗ Save failed: {}", filename));
+                self.progress_manager.remove_bar(&pb_key).await;
+                Err(e)
+            }
+        }
     }
 }
 

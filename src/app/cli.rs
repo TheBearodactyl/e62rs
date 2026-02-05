@@ -1,8 +1,10 @@
 //! cli stuff
 use {
-    crate::config::options::E62Rs,
+    crate::{
+        config::options::E62Rs,
+        error::{Report, Result},
+    },
     clap::Parser,
-    color_eyre::{Report, eyre::Result},
     schemars::generate::SchemaSettings,
     std::{
         fs::OpenOptions,
@@ -140,7 +142,7 @@ mod tests {
     use {super::*, tempfile::NamedTempFile};
 
     #[test]
-    fn test_write_to_file() -> color_eyre::Result<()> {
+    fn test_write_to_file() -> crate::error::Result<()> {
         let exfile = NamedTempFile::new()?;
         let res = Cli::write_to_file(exfile.path(), "woah");
         let contents = std::fs::read_to_string(exfile.path())?;

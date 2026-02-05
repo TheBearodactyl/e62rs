@@ -142,7 +142,10 @@ use {
     schemars::JsonSchema,
     serde::{Deserialize, Serialize},
     smart_default::SmartDefault,
-    std::path::{Path, PathBuf},
+    std::{
+        io::Write,
+        path::{Path, PathBuf},
+    },
     tracing::info,
 };
 
@@ -566,7 +569,7 @@ pub struct CompletionCfg {
 #[schemars(default)]
 #[serde(rename_all = "kebab-case")]
 pub struct LoginCfg {
-    #[default(Some(true))]
+    #[default(Some(false))]
     /// Whether to login or not
     pub login: Option<bool>,
 
@@ -929,60 +932,102 @@ pub struct E62Rs {
 }
 
 impl E62Rs {
-    /// load config from default locations
-    ///
-    /// load prio: local > global > defaults
+    /// load configuration
     pub fn load() -> Result<Self> {
-        let global_config_path = Self::global_config_path()?;
+        let global_path = Self::global_config_path()?;
         let defaults = Self::load_defaults()?;
-        let mut builder = Self::create_builder(defaults.clone())?;
+
+        if !global_path.exists() {
+            info!("No global configuration found. Creating default config...");
+            Self::make_default_config(&global_path, &defaults)
+                .wrap_err("Failed to create default configuration file")
+                .suggestion("Check that you have write permissions to the config directory")
+                .suggestion("Try creating the config directory manually")?;
+
+            if !global_path.exists() {
+                return Err(eyre!("Config file was not created successfully"))
+                    .suggestion("Check file system permissions")
+                    .suggestion("Try running with elevated privileges if needed");
+            }
+
+            info!(
+                "✓ Default configuration created at: {}",
+                global_path.display()
+            );
+            info!("  You can edit this file to customize your settings.");
+        }
+
+        let mut builder = Self::create_builder(defaults)?;
 
         builder = builder.add_source(
-            config::File::with_name(global_config_path.to_str().unwrap()).required(false),
+            config::File::with_name(global_path.to_str().unwrap_or("")).required(false),
         );
 
         if let Some(local_config) = Self::find_local_config()? {
+            info!(
+                "Loading local configuration from: {}",
+                local_config.display()
+            );
             builder = builder.add_source(
-                config::File::with_name(local_config.to_str().unwrap()).required(false),
+                config::File::with_name(local_config.to_str().unwrap_or("")).required(false),
             );
         }
 
         builder = builder.add_source(config::Environment::with_prefix("E62RS"));
+        let settings = builder
+            .build()
+            .wrap_err("Failed to build configuration from all sources")?;
 
-        let settings = builder.build().wrap_err("Failed to build configuration")?;
         let cfg: E62Rs = settings
             .try_deserialize::<E62Rs>()
-            .wrap_err("Failed to deserialize configuration")?;
+            .wrap_err("Failed to deserialize configuration")
+            .suggestion("Check that your config file uses valid TOML syntax")
+            .suggestion(
+                "Compare with the default config to ensure all required fields are present",
+            )?;
 
-        match cfg.run_validation() {
-            Ok(_) => {
-                info!("Configuration validation successful");
-                print!("\x1B[2J\x1B[3J\x1B[H");
-                std::io::Write::flush(&mut std::io::stdout())?;
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        }
+        Self::run_validation(&cfg)?;
 
-        if !global_config_path.exists() {
-            Self::create_default_config(&global_config_path, &defaults)?;
-        }
+        print!("\x1B[2J\x1B[3J\x1B[H");
+        std::io::stdout()
+            .flush()
+            .wrap_err("Failed to clear terminal screen")?;
 
+        info!("Configuration loaded successfully!");
         Ok(cfg)
     }
 
-    /// get the global config file path
-    fn global_config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .ok_or_eyre("Unable to determine system config directory")
-            .suggestion("Ensure XDG_CONFIG_HOME or HOME environment variables are set")
-            .suggestion("On Windows, APPDATA should be set")?;
+    /// initialize configuration without fully loading the app
+    pub fn init() -> Result<bool> {
+        let global_path = Self::global_config_path()?;
 
-        Ok(config_dir.join("e62rs.toml"))
+        if global_path.exists() {
+            info!("Configuration already exists at: {}", global_path.display());
+            return Ok(false);
+        }
+
+        info!("Initializing e62rs configuration...");
+        let defaults = Self::load_defaults()?;
+
+        Self::make_default_config(&global_path, &defaults)
+            .wrap_err("Failed to initialize configuration")?;
+
+        info!("✓ Configuration initialized at: {}", global_path.display());
+        info!("  Edit this file to customize your settings.");
+
+        Ok(true)
     }
 
-    /// load default config from embedded default config file
+    /// get the global config path
+    pub fn global_config_path() -> Result<PathBuf> {
+        dirs::config_dir()
+            .ok_or_eyre("Unable to find system config directory")
+            .map(|dir| dir.join("e62rs.toml"))
+            .suggestion("Ensure XDG_CONFIG_HOME or HOME environment vars are set")
+            .suggestion("On Windows, APPDATA should be set")
+    }
+
+    /// load the default config from the embedded default config file
     fn load_defaults() -> Result<Self> {
         toml::from_str(include_str!("../../resources/e62rs.default.toml"))
             .wrap_err("Failed to parse embedded default configuration")
@@ -991,23 +1036,23 @@ impl E62Rs {
 
     /// create a config builder with defaults
     fn create_builder(defaults: E62Rs) -> Result<ConfigBuilder<config::builder::DefaultState>> {
-        let builder = Config::builder();
-        let config_source = config::Config::try_from(&defaults)
-            .wrap_err("Failed to convert default E62Rs struct to config source")?;
-
-        Ok(builder.add_source(config_source))
+        Ok(Config::builder().add_source(
+            config::Config::try_from(&defaults)
+                .wrap_err("Failed to convert default E62Rs struct to config source")?,
+        ))
     }
 
-    /// run validation and return a pretty error if it fails
-    fn run_validation(&self) -> Result<()> {
-        self.validate()
+    /// run validation and return an error if it fails
+    fn run_validation(cfg: &Self) -> Result<()> {
+        cfg.validate()
             .map_err(|errors| {
                 let formatted = format_validation_errors(&errors);
                 eyre!(formatted)
             })
-            .wrap_err("config validation failed")
+            .wrap_err("Configuration validation failed")
             .suggestion("Check your e62rs.toml for invalid values")
-            .suggestion("Run with default config to see valid options")
+            .suggestion("Compare with the default config to see valid options")
+            .suggestion("Try deleting the config file to regenerate defaults")
     }
 
     /// find the local config file
@@ -1026,8 +1071,10 @@ impl E62Rs {
         Ok(None)
     }
 
-    /// create the default config file
-    fn create_default_config(path: &Path, defaults: &E62Rs) -> Result<()> {
+    /// creates the default config file
+    ///
+    /// writes to a temp file first, then renames it to the final path
+    fn make_default_config(path: &Path, defaults: &E62Rs) -> Result<()> {
         let config_dir = path
             .parent()
             .ok_or_eyre("Unable to determine parent directory of config path")?;
@@ -1036,26 +1083,41 @@ impl E62Rs {
             .wrap_err("Failed to create config directory")
             .with_section(|| format!("{}", config_dir.display()).header("Directory:"))?;
 
-        defaults
-            .save_to_file(path)
-            .wrap_err("Failed to write default configuration file")?;
+        let temp_path = path.with_extension("toml.tmp");
+        let mut temp_writer = FileWriter::toml(&temp_path, true)
+            .wrap_err("Failed to create temporary config file")?;
+
+        temp_writer
+            .write(defaults)
+            .wrap_err("Failed to write default config to temp file")?;
+
+        temp_writer
+            .flush()
+            .wrap_err("Failed to flush temp config file")?;
+
+        std::fs::rename(&temp_path, path)
+            .wrap_err("Failed to rename temp file to final config path")
+            .with_section(|| {
+                format!("temp: {}, final: {}", temp_path.display(), path.display()).header("Paths:")
+            })?;
 
         Ok(())
     }
 
-    /// save config to a file
+    /// save the current config to a file
     pub fn save_to_file(&self, path: impl AsRef<Path>) -> Result<()> {
         let mut toml_writer = FileWriter::toml(path, true)?;
         toml_writer
             .write(self)
-            .wrap_err("failed to write config file")?;
+            .wrap_err("Failed to write config file")?;
+        toml_writer.flush()?;
 
         Ok(())
     }
 
-    /// save config to the global config location
+    /// save the current config to the global config location
     pub fn save(&self) -> Result<()> {
         let path = Self::global_config_path()?;
-        self.save_to_file(path)
+        self.save_to_file(&path)
     }
 }

@@ -2,12 +2,14 @@
 use {
     crate::{
         config::blacklist::{add_to_blacklist, clear_blacklist, remove_from_blacklist},
+        error::{Report, Result},
         getopt,
         ui::{E6Ui, autocomplete::TagAutocompleter, menus::BlacklistManager},
     },
-    color_eyre::eyre::{Context, Result},
+    color_eyre::eyre::Context,
+    demand::Confirm,
     hashbrown::HashSet,
-    inquire::{Confirm, MultiSelect, Select},
+    inquire::{MultiSelect, Select},
     std::sync::Arc,
 };
 
@@ -132,8 +134,9 @@ impl BlacklistMenu for E6Ui {
     /// ask whether to continue managing the blacklist
     fn prompt_continue(&self) -> Result<bool> {
         Confirm::new("Continue managing blacklist?")
-            .prompt()
+            .run()
             .wrap_err("Failed to get user input")
+            .map_err(Report::new)
     }
 
     /// add a tag to the blacklist
@@ -174,11 +177,11 @@ impl BlacklistMenu for E6Ui {
     ///
     /// * `tag` - the tag to ask about
     async fn prompt_add_unknown_tag(&self, tag: &str) -> Result<bool> {
-        let use_anyway = Confirm::new(&format!(
+        let use_anyway = Confirm::new(format!(
             "Tag '{}' not found in database. Add to blacklist anyway?",
             tag
         ))
-        .prompt()
+        .run()
         .wrap_err("Failed to get user confirmation")?;
 
         if use_anyway {
@@ -237,8 +240,8 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(&format!("Remove '{}' from blacklist?", tag_to_remove))
-            .prompt()
+        let confirm = Confirm::new(format!("Remove '{}' from blacklist?", tag_to_remove))
+            .run()
             .wrap_err("Failed to get user confirmation")?;
 
         if !confirm {
@@ -256,9 +259,11 @@ impl BlacklistMenu for E6Ui {
                 println!("Tag '{}' was not found in blacklist.", tag_to_remove);
             }
             Err(e) => {
-                return Err(e).wrap_err_with(|| {
-                    format!("failed to remove '{}' from blacklist", tag_to_remove)
-                });
+                return Err(e)
+                    .wrap_err_with(|| {
+                        format!("failed to remove '{}' from blacklist", tag_to_remove)
+                    })
+                    .map_err(Report::new);
             }
         }
 
@@ -275,11 +280,11 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(&format!(
+        let confirm = Confirm::new(format!(
             "Clear all {} tags from blacklist? This cannot be undone.",
             blacklist_count
         ))
-        .prompt()
+        .run()
         .wrap_err("Failed to get user confirmation")?;
 
         if !confirm {
@@ -360,11 +365,11 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(&format!(
+        let confirm = Confirm::new(format!(
             "Add {} selected tags to blacklist?",
             selected_tags.len()
         ))
-        .prompt()
+        .run()
         .wrap_err("Failed to get user confirmation")?;
 
         if !confirm {

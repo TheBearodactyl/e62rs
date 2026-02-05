@@ -2,11 +2,12 @@
 use {
     crate::{
         client::E6Client,
+        error::{Report, Result},
         getopt,
         models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
     },
     chrono::{Datelike, Days, Local},
-    color_eyre::eyre::{Context, Result},
+    color_eyre::eyre::Context,
     flate2::read::GzDecoder,
     sha2::{Digest, Sha256},
     std::{io::Read, path::Path},
@@ -102,7 +103,9 @@ impl E6Client {
         let url = format!("{}/pools.json?limit={}", self.base_url, limit);
 
         let bytes = self.get_cached_or_fetch(&url).await?;
-        serde_json::from_slice(&bytes).context("Failed to deserialize pools response")
+        serde_json::from_slice(&bytes)
+            .context("Failed to deserialize pools response")
+            .map_err(Report::new)
     }
 
     #[instrument(skip(self))]
@@ -111,7 +114,9 @@ impl E6Client {
         let url = format!("{}/pools/{}.json", self.base_url, id);
         let bytes = self.get_cached_or_fetch(&url).await?;
 
-        serde_json::from_slice(&bytes).with_context(|| format!("Failed to deserialize pool {}", id))
+        serde_json::from_slice(&bytes)
+            .with_context(|| format!("Failed to deserialize pool {}", id))
+            .map_err(Report::new)
     }
 
     #[instrument(skip(self))]
@@ -156,11 +161,15 @@ impl E6Client {
             .await
     }
 
-    /// search for pools with a given search type
+    #[bearive::argdoc]
+    /// search for pools (internal method)
     pub async fn search_pools_internal(
         &self,
+        /// the search type
         search_type: &str,
+        /// the search query
         query: &str,
+        /// the limit of posts to return (default: 20)
         limit: Option<u64>,
     ) -> Result<E6PoolsResponse> {
         let limit = limit.unwrap_or(20).min(320);
@@ -175,6 +184,6 @@ impl E6Client {
         debug!(url, "Searching pools");
         let bytes = self.get_cached_or_fetch(&url).await?;
 
-        serde_json::from_slice(&bytes).context("Failed to deserialize pool search response")
+        Ok(serde_json::from_slice(&bytes).context("Failed to deserialize pools response")?)
     }
 }

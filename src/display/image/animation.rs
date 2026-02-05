@@ -38,14 +38,14 @@ pub struct AnimatedImage {
 }
 
 impl AnimatedImage {
-    /// load an animated gif from a file path
+    /// load an animated GIF from a file path
     pub fn from_gif_path(path: &Path) -> Result<Self> {
         let file = File::open(path).context(format!("Failed to open gif: {}", path.display()))?;
         let reader = BufReader::new(file);
         Self::from_gif_reader(reader)
     }
 
-    /// load an animated gif from bytes
+    /// load an animated GIF from bytes
     pub fn from_gif_bytes(bytes: &[u8]) -> Result<Self> {
         let cursor = Cursor::new(bytes);
         Self::from_gif_reader(cursor)
@@ -61,7 +61,7 @@ impl AnimatedImage {
         &self,
         encoder: &crate::display::image::encoder::SixelEncoder,
         writer: &mut W,
-    ) -> color_eyre::eyre::Result<()> {
+    ) -> Result<()> {
         let line_count = self.terminal_line_count();
         let mut is_first_frame = true;
 
@@ -144,7 +144,7 @@ impl AnimatedImage {
     /// load an animated webp from any reader
     fn from_webp_reader<R>(reader: R) -> Result<Self>
     where
-        R: std::io::Read + std::io::Seek + BufRead,
+        R: std::io::Read + Seek + BufRead,
     {
         let decoder = WebPDecoder::new(reader).context("failed to decode webp")?;
         let (width, height) = decoder.dimensions();

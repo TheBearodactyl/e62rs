@@ -1,9 +1,11 @@
 //! tui stuff for e62rs
 use {
     crate::{
+        bail,
         client::E6Client,
         config::{blacklist::get_blacklist, options::E62Rs},
         data::{pools::PoolDb, tags::TagDb},
+        error::{Report, Result},
         getopt,
         models::{E6Pool, E6Post},
         serve::{cfg::ServerConfig, server::MediaServer},
@@ -18,10 +20,12 @@ use {
             progress::ProgressManager,
         },
     },
-    color_eyre::eyre::{Context, Result, bail},
+    boundbook::BbfBuilder,
+    color_eyre::eyre::Context,
+    demand::Confirm,
     hashbrown::{HashMap, HashSet},
     indicatif::{ProgressBar, ProgressStyle},
-    inquire::{Confirm, MultiSelect, Text},
+    inquire::{MultiSelect, Text},
     owo_colors::OwoColorize,
     qrcode::QrCode,
     serde::{Deserialize, Serialize},
@@ -69,7 +73,7 @@ impl E6Ui {
     ///
     /// # Arguments
     ///
-    /// * `client` - an e621 api client (see [`crate::client::E6Client`])
+    /// * `client` - an e621 api client (see [`E6Client`])
     /// * `tag_db` - a loaded tag database
     /// * `pool_db` - a loaded pool database
     pub fn new(client: Arc<E6Client>, tag_db: Arc<TagDb>, pool_db: Arc<PoolDb>) -> Self {
@@ -89,6 +93,109 @@ impl E6Ui {
             tag_db,
             pool_db,
         }
+    }
+
+    // Add this to the impl E6Ui block in mod.rs:
+
+    /// Create a BBF (Bound Book Format) file from a pool
+    ///
+    /// # Arguments
+    ///
+    /// * `pool` - the pool to create a BBF from
+    pub async fn create_bbf_from_pool(&self, pool: &E6Pool) -> Result<()> {
+        if pool.post_ids.is_empty() {
+            println!("This pool has no posts to create a BBF from.");
+            return Ok(());
+        }
+
+        let pools_dir: PathBuf = getopt!(download.pools_path).into();
+        if !pools_dir.exists() {
+            fs::create_dir_all(&pools_dir).await.context(format!(
+                "Failed to create pools directory at '{}'",
+                pools_dir.display()
+            ))?;
+        }
+
+        let pool_name_sanitized = sanitize_pool_name(&pool.name);
+        let temp_pool_dir = pools_dir.join("temp").join(&pool_name_sanitized);
+        let bbf_output_path = pools_dir.join(format!("{}.bbf", pool_name_sanitized));
+        let mut builder = BbfBuilder::with_defaults(bbf_output_path.clone())?;
+
+        if bbf_output_path.exists() {
+            let overwrite = Confirm::new(format!(
+                "BBF file '{}' already exists. Overwrite?",
+                bbf_output_path.display()
+            ))
+            .run()?;
+
+            if !overwrite {
+                println!("BBF creation cancelled.");
+                return Ok(());
+            }
+        }
+
+        println!("Creating BBF file from pool '{}'...", pool.name);
+        println!("Fetching {} posts...", pool.post_ids.len());
+
+        let posts = self.fetch_pool_posts(pool).await?;
+
+        if posts.is_empty() {
+            bail!("Failed to fetch any posts from this pool.");
+        }
+
+        fs::create_dir_all(&temp_pool_dir).await.context(format!(
+            "Failed to create temp directory at '{}'",
+            temp_pool_dir.display()
+        ))?;
+
+        println!("Downloading posts to temporary directory...");
+
+        let downloader = Arc::new(PostDownloader::for_pool(pools_dir.join("temp"), &pool.name));
+        downloader.download_pool_posts(posts.clone()).await?;
+
+        builder.add_metadata("Title", &pool.name, None);
+        builder.add_metadata("Pool ID", &pool.id.to_string(), None);
+        builder.add_metadata("Post Count", &pool.post_count.to_string(), None);
+        builder.add_metadata("Category", &pool.category, None);
+        builder.add_metadata("Created At", &pool.created_at, None);
+        builder.add_metadata("Creator", &pool.creator_name, None);
+
+        if !pool.description.is_empty() {
+            builder.add_metadata(
+                "Description",
+                &pool.description.replace('"', "'").replace('\n', " "),
+                None,
+            );
+        }
+
+        println!("Creating BBF file using boundbook...");
+
+        if let Ok(dir_entries) = std::fs::read_dir(&temp_pool_dir) {
+            for entry in dir_entries.flatten() {
+                builder.add_page(entry.path(), 0, 0)?;
+            }
+        }
+
+        builder.finalize()?;
+
+        println!("Cleaning up temporary files...");
+        fs::remove_dir_all(&temp_pool_dir)
+            .await
+            .context("Failed to remove temporary directory")?;
+
+        println!(
+            "\n✓ Successfully created BBF file: {}",
+            bbf_output_path.display()
+        );
+        println!("  Pool: {}", pool.name);
+        println!("  Posts: {}", pool.post_count);
+
+        if let Ok(metadata) = std::fs::metadata(&bbf_output_path) {
+            let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
+            println!("  Size: {:.2} MB", size_mb);
+        }
+
+        Ok(())
     }
 
     /// get tags to be searched via user input (has autocompletion)
@@ -121,19 +228,19 @@ impl E6Ui {
             );
         }
 
-        let autocompleter = TagAutocompleter::new(self.tag_db.clone());
+        let autocomplete = TagAutocompleter::new(self.tag_db.clone());
         let tags_input = inquire::Text::new("Enter tags:")
             .with_help_message(
                 "Space-separated tags. Use - to exclude, ~ for OR. Tab to autocomplete",
             )
             .with_placeholder("e.g., cat dog -gore")
-            .with_autocomplete(autocompleter)
+            .with_autocomplete(autocomplete)
             .prompt()
             .context("failed to get tags input")?;
 
-        let mut include_tags = Vec::new();
-        let mut exclude_tags = Vec::new();
-        let mut or_tags = Vec::new();
+        let mut includes = Vec::new();
+        let mut excludes = Vec::new();
+        let mut wildcards = Vec::new();
 
         for tag in tags_input.split_whitespace() {
             let tag = tag.trim();
@@ -144,51 +251,51 @@ impl E6Ui {
 
             if let Some(stripped) = tag.strip_prefix('-') {
                 let canonical = self.tag_db.get_canon_name(stripped);
-                if !exclude_tags.contains(&canonical) {
-                    exclude_tags.push(canonical);
+                if !excludes.contains(&canonical) {
+                    excludes.push(canonical);
                 }
             } else if let Some(stripped) = tag.strip_prefix('~') {
                 let canonical = self.tag_db.get_canon_name(stripped);
-                if !or_tags.contains(&canonical) {
-                    or_tags.push(canonical);
+                if !wildcards.contains(&canonical) {
+                    wildcards.push(canonical);
                 }
             } else {
                 let stripped = tag.strip_prefix('+').unwrap_or(tag);
                 let canonical = self.tag_db.get_canon_name(stripped);
-                if !include_tags.contains(&canonical) {
-                    include_tags.push(canonical);
+                if !includes.contains(&canonical) {
+                    includes.push(canonical);
                 }
             }
         }
 
         println!();
-        if !include_tags.is_empty() {
+        if !includes.is_empty() {
             println!(
                 "{} Include tags: {}",
                 "✓".green().bold(),
-                include_tags.join(" ").bright_green()
+                includes.join(" ").bright_green()
             );
         }
-        if !exclude_tags.is_empty() {
+        if !excludes.is_empty() {
             println!(
                 "{} Exclude tags: {}",
                 "✓".red().bold(),
-                format!("-{}", exclude_tags.join(" -")).red()
+                format!("-{}", excludes.join(" -")).red()
             );
         }
-        if !or_tags.is_empty() {
+        if !wildcards.is_empty() {
             println!(
                 "{} OR tags: {}",
                 "✓".yellow().bold(),
-                format!("~{}", or_tags.join(" ~")).yellow()
+                format!("~{}", wildcards.join(" ~")).yellow()
             );
         }
 
-        if include_tags.is_empty() && exclude_tags.is_empty() && or_tags.is_empty() {
+        if includes.is_empty() && excludes.is_empty() && wildcards.is_empty() {
             println!("{}", "No tags entered.".bright_black().italic());
         }
 
-        Ok((include_tags, or_tags, exclude_tags))
+        Ok((includes, wildcards, excludes))
     }
 
     /// shows a list of posts and allows the user to select from them
@@ -290,8 +397,16 @@ impl E6Ui {
 
         let new_cfg_text = fs::read_to_string(&temp_file).await?;
 
+        let config_path = match (
+            E62Rs::global_config_path()?.exists(),
+            PathBuf::from_str("e62rs.toml")?.exists(),
+        ) {
+            (true, true) | (false, false) | (false, true) => "e62rs.toml",
+            (true, false) => &E62Rs::global_config_path()?.display().to_string(),
+        };
+
         if let Ok(new_cfg) = toml::from_str::<E62Rs>(new_cfg_text.as_str()) {
-            fs::write("e62rs.toml", toml::to_string_pretty(&new_cfg)?).await?;
+            fs::write(config_path, toml::to_string_pretty(&new_cfg)?).await?;
             fs::remove_file(&temp_file).await?;
         } else {
             eprintln!("Error validating new config text");
@@ -359,8 +474,7 @@ impl E6Ui {
                     self.display_posts(&posts.posts);
 
                     let interact =
-                        inquire::Confirm::new("Would you like to interact with these posts?")
-                            .prompt()?;
+                        Confirm::new("Would you like to interact with these posts?").run()?;
 
                     if interact {
                         let _selected_posts = self.select_multiple_posts(&posts.posts)?;
@@ -388,6 +502,9 @@ impl E6Ui {
                     );
                     self.downloader.clone().download_posts(posts.posts).await?;
                 }
+            }
+            PoolInteractionMenu::CreateBBF => {
+                self.create_bbf_from_pool(&pool).await?;
             }
             PoolInteractionMenu::DownloadToPoolsFolder => {
                 self.download_pool_to_pools_folder(&pool).await?;
@@ -593,7 +710,7 @@ impl E6Ui {
             println!("Opening browser at {}", url);
         }
 
-        srv.serve().await
+        srv.serve().await.map_err(Report::new)
     }
 
     /// check if a post contains any blacklisted tags
@@ -762,12 +879,12 @@ impl E6Ui {
         }
 
         println!();
-        let confirm = Confirm::new(&format!(
+        let confirm = Confirm::new(format!(
             "Check for and download new posts from these {} artist{}?",
             selected_artists.len(),
             if selected_artists.len() == 1 { "" } else { "s" }
         ))
-        .prompt()?;
+        .run()?;
 
         if !confirm {
             println!("Operation cancelled.");
@@ -804,13 +921,14 @@ impl E6Ui {
                 selected_artists.len() as u64,
                 "Processing artists",
             )
-            .await?;
+            .await
+            .map_err(Report::new)?;
 
         type ArtistResult = Result<(u64, u64, u64), String>; // (new, skipped, blacklisted)
         let mut handles = Vec::with_capacity(selected_artists.len());
 
         for artist in selected_artists {
-            let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let permit = semaphore.clone().acquire_owned().await?;
             let client = client.clone();
             let downloader = downloader.clone();
             let downloaded_ids = downloaded_ids.clone();
@@ -996,21 +1114,19 @@ impl E6Ui {
     }
 
     /// download new artist posts based on already downloaded posts
-    ///
-    /// # Arguments
-    ///
-    /// * `client` - an e621 api client
-    /// * `downloader` - a post downloader
-    /// * `artist` - the artist to download
-    /// * `limit` - the max amount of new posts to download from the artist
-    /// * `downloaded_post_ids` - a list of already downloaded ids from the artist
-    /// * `blacklist` - the current loaded blacklist
+    #[bearive::argdoc]
     pub async fn download_new_artist_posts(
+        /// an e621 api client
         client: &Arc<E6Client>,
+        /// a post downloader
         downloader: &Arc<PostDownloader>,
+        /// the artist to download
         artist: &str,
+        /// the max number of new posts to download from the artist
         limit: Option<u64>,
+        /// a list of already downloaded ids from the artist
         downloaded_post_ids: &HashSet<i64>,
+        /// the current loaded blacklist
         blacklist: &HashSet<String>,
     ) -> Result<(u64, u64, u64)> {
         let search_tags = vec![format!("~{}", artist), format!("~{}_(artist)", artist)];
@@ -1048,7 +1164,7 @@ impl E6Ui {
             let mut min_id_in_batch: Option<i64> = None;
 
             for post in results.posts {
-                if min_id_in_batch.is_none() || post.id < min_id_in_batch.unwrap() {
+                if min_id_in_batch.is_none() || post.id < min_id_in_batch.unwrap_or(67) {
                     min_id_in_batch = Some(post.id);
                 }
 

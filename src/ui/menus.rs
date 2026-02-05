@@ -18,6 +18,58 @@ pub struct TranslationStats {
 }
 
 crate::menu! {
+    /// Configuration menu
+    pub ConfigMenu {
+        filterable: true,
+
+        /// Edit the current configuration file
+        Edit => {
+            label: {
+                english => "Edit",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Edit your config file",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+
+        /// Reload the config file
+        Reload => {
+            label: {
+                english => "Reload",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Reload your config file",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+
+        /// Go back
+        Back => {
+            label: {
+                english => "Go back to main menu",
+                japanese => "",
+                spanish => "Volver al menú principal"
+            },
+            desc: {
+                english => "Return to the main menu",
+                japanese => "",
+                spanish => "Volver al menú principal"
+            },
+            online: false
+        }
+    }
+}
+
+crate::menu! {
     /// Post interaction menu
     pub InteractionMenu {  filterable: true,
         /// Open the post in a browser
@@ -135,6 +187,20 @@ crate::menu! {
                 english => "Download the entire pool to your dedicated pools folder with metadata",
                 japanese => "",
                 spanish => "Descargar todo el grupo a tu directorio de grupos dedicado con metadatos"
+            },
+            online: true
+        },
+        /// Create BBF file from pool
+        CreateBBF => {
+            label: {
+                english => "Create BBF file from pool",
+                japanese => "",
+                spanish => "Crear archivo BBF del grupo"
+            },
+            desc: {
+                english => "Download and package pool into Bound Book Format (.bbf) file",
+                japanese => "",
+                spanish => "Descargar y empaquetar grupo en formato Bound Book (.bbf)"
             },
             online: true
         },
@@ -506,20 +572,6 @@ crate::menu! {
             },
             online: false
         },
-        /// Edit your configuration file
-        EditConfig => {
-            label: {
-                english => "Edit your config file",
-                japanese => "",
-                spanish => "Edita tu archivo de configuratión"
-            },
-            desc: {
-                english => "Open your configuration file in your default text editor",
-                japanese => "",
-                spanish => "Abre tu archivo de configuración con tu editor de texto predeterminado"
-            },
-            online: false
-        },
         /// Update currently downloaded files based on already downloaded artists
         UpdateDownloads => {
             label: {
@@ -534,17 +586,17 @@ crate::menu! {
             },
             online: true
         },
-        /// Reload the configuration file from disk
-        ReloadConfig => {
+        /// Manage the configuration file
+        ManageConfig => {
             label: {
-                english => "Reload config",
+                english => "Manage config",
                 japanese => "",
-                spanish => "Recargar configuratión"
+                spanish => ""
             },
             desc: {
-                english => "Reload the config file and apply any changes made since last load",
+                english => "Manage your current configuration",
                 japanese => "",
-                spanish => "Vuelve a cargar el archivo de configuración y aplica los cambios realizados desde la última carga"
+                spanish => ""
             },
             online: false
         },

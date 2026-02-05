@@ -326,7 +326,7 @@ pub fn handle_search(chars: &mut Peekable<Chars>, result: &mut String) {
 /// handles headers
 pub fn handle_header(chars: &mut Peekable<Chars>, result: &mut String) {
     chars.next();
-    let level = chars.next().unwrap();
+    let level = chars.next().unwrap_or(' ');
     chars.next();
 
     while chars.peek() == Some(&' ') {

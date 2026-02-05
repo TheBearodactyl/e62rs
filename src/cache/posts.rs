@@ -1,10 +1,7 @@
 //! post cache management stuff
 use {
-    crate::{cache::stats::PostCacheStats, getopt, models::E6Post},
-    color_eyre::{
-        Section,
-        eyre::{Context, Result, bail},
-    },
+    crate::{bail, cache::stats::PostCacheStats, error::*, getopt, models::E6Post},
+    color_eyre::{Section, eyre::Context},
     postcard::{from_bytes, to_allocvec},
     redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition},
     serde::{Deserialize, Serialize},
@@ -16,7 +13,7 @@ use {
 /// the table of cached posts
 const POSTS_TABLE: TableDefinition<i64, &[u8]> = TableDefinition::new("posts");
 
-/// an entry in the post cache
+/// an entry in the post-cache
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CacheEntry {
     /// the cached data
@@ -27,14 +24,14 @@ pub struct CacheEntry {
     pub last_accessed: u64,
     /// the etag of the entry (optional)
     pub etag: Option<String>,
-    /// the amount of times the entry has been accessed
+    /// the number of times the entry has been accessed
     pub access_count: u64,
     /// whether the entry is compressed
     pub compressed: bool,
 }
 
 #[derive(Clone, Debug)]
-/// the post cache
+/// the post-cache
 pub struct PostCache {
     /// the database itself
     db: Arc<RwLock<Option<Database>>>,
@@ -49,7 +46,7 @@ pub struct PostCache {
 }
 
 impl PostCache {
-    /// initialize and/or load the post cache
+    /// initialize and/or load the post-cache
     ///
     /// # Arguments
     ///
@@ -58,7 +55,8 @@ impl PostCache {
     /// # Errors
     ///
     /// returns an error if it fails to make the cache directory  
-    /// returns an error if it fails to create the post cache db
+    /// returns an error if it fails to create the post-cache db
+    #[macroni_n_cheese::mathinator2000]
     pub fn new(cache_dir: &str) -> Result<Self> {
         let cache_path = PathBuf::from(cache_dir).join("posts.redb");
 
@@ -77,9 +75,9 @@ impl PostCache {
         create_dir_all(cache_dir).context(format!("failed to make cache dir: {}", cache_dir))?;
 
         let cache_size_mb = getopt!(cache.max_size_mb);
-        let cahce_size_bytes = (cache_size_mb / 4 * 1024 * 1024) as usize;
+        let cache_size_bytes = (cache_size_mb / 4 * 1024 * 1024) as usize;
         let db = Database::builder()
-            .set_cache_size(cahce_size_bytes)
+            .set_cache_size(cache_size_bytes)
             .create(&cache_path)
             .context(format!("failed to make post cache db at {:?}", cache_path))
             .suggestion(format!(
@@ -105,11 +103,11 @@ impl PostCache {
         })
     }
 
-    /// print a list of entries currently in the post cache
+    /// print a list of entries currently in the post-cache
     ///
     /// # Errors
     ///
-    /// returns an error if it fails to read the post cache db  
+    /// returns an error if it fails to read the post-cache db
     /// returns an error if it fails to open the posts table in the db  
     /// returns an error if it fails to iterate over the posts table in the db
     pub async fn list_entries(&self) -> Result<()> {
@@ -126,7 +124,7 @@ impl PostCache {
             Ok(txn) => txn,
             Err(e) => {
                 error!("failed to start read transaction on db");
-                return Err(e);
+                return Err(e.into());
             }
         };
 
@@ -134,7 +132,7 @@ impl PostCache {
             Ok(t) => t,
             Err(e) => {
                 warn!("no posts table found in cache");
-                return Err(color_eyre::eyre::Report::new(e));
+                return Err(e.into());
             }
         };
 
@@ -144,6 +142,16 @@ impl PostCache {
         const CHUNK_SIZE: usize = 100;
 
         let mut chunk: Vec<(i64, Vec<u8>)> = Vec::with_capacity(CHUNK_SIZE);
+        let print_post_data = |chunk: &mut Vec<(i64, Vec<u8>)>| {
+            for (id, data) in chunk.drain(..) {
+                let size_kb = data.len() as f64 / 1024.0;
+                let title = match from_bytes::<E6Post>(&data) {
+                    Ok(post) => post.description.clone(),
+                    Err(_) => "<Failed to decode>".to_string(),
+                };
+                println!("{:<12} {:<40} {:>10.2}", id, title, size_kb);
+            }
+        };
 
         for entry in table_db.iter()? {
             if let Ok((id, data)) = entry {
@@ -151,25 +159,11 @@ impl PostCache {
             }
 
             if chunk.len() >= CHUNK_SIZE {
-                for (id, data) in chunk.drain(..) {
-                    let size_kb = data.len() as f64 / 1024.0;
-                    let title = match from_bytes::<E6Post>(&data) {
-                        Ok(post) => post.description.clone(),
-                        Err(_) => "<Failed to decode>".to_string(),
-                    };
-                    println!("{:<12} {:<40} {:>10.2}", id, title, size_kb);
-                }
+                print_post_data(&mut chunk);
             }
         }
 
-        for (id, data) in chunk.drain(..) {
-            let size_kb = data.len() as f64 / 1024.0;
-            let title = match from_bytes::<E6Post>(&data) {
-                Ok(post) => post.description.clone(),
-                Err(_) => "<Failed to decode>".to_string(),
-            };
-            println!("{:<12} {:<40} {:>10.2}", id, title, size_kb);
-        }
+        print_post_data(&mut chunk);
 
         Ok(())
     }

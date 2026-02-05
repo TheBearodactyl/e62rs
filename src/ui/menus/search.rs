@@ -1,7 +1,9 @@
 //! search ui stuff
 use {
     crate::{
+        bail,
         display::dtext::parser::format_text,
+        error::{Report, Result},
         getopt,
         models::*,
         ui::{
@@ -10,10 +12,11 @@ use {
             menus::{AdvPoolSearch, view::ViewMenu},
         },
     },
-    color_eyre::eyre::{Context, Result, bail},
+    color_eyre::eyre::Context,
+    demand::Confirm,
     indicatif::{ProgressBar, ProgressStyle},
     inquire::{
-        Confirm, Select, Text,
+        Select, Text,
         validator::{ErrorMessage, Validation},
     },
     std::{collections::HashSet, sync::Arc, time::Duration},
@@ -493,7 +496,7 @@ impl SearchMenu for E6Ui {
 
             for post in results.posts {
                 if seen.insert(post.id) {
-                    if min_id.is_none() || post.id < min_id.unwrap() {
+                    if min_id.is_none() || post.id < min_id.unwrap_or(3) {
                         min_id = Some(post.id);
                     }
                     new_posts.push(post);
@@ -553,7 +556,7 @@ impl SearchMenu for E6Ui {
     /// handle a post interaction
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
         let use_multi_select = Confirm::new("Select multiple posts?")
-            .prompt()
+            .run()
             .context("Failed to get multi-select confirmation")?;
 
         if use_multi_select {
@@ -726,7 +729,10 @@ impl SearchMenu for E6Ui {
                 return Ok(32);
             }
 
-            trimmed.parse::<u64>().context("Failed to parse post limit")
+            trimmed
+                .parse::<u64>()
+                .context("Failed to parse post limit")
+                .map_err(Report::new)
         } else {
             Ok(default_limit)
         }
@@ -735,8 +741,9 @@ impl SearchMenu for E6Ui {
     /// ask whether to continue
     fn ask_continue(&self, message: &str) -> Result<bool> {
         Confirm::new(message)
-            .prompt()
+            .run()
             .context("Failed to get user confirmation")
+            .map_err(Report::new)
     }
 
     /// select a post from a list of posts

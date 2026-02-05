@@ -2,11 +2,12 @@
 use {
     color_eyre::eyre::{Context, Result, bail},
     image::{DynamicImage, ImageReader},
+    macroni_n_cheese::Construct,
     std::{io::Cursor, path::Path},
 };
 
 /// raw rgba888 image data with dimensions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Construct)]
 pub struct ImageData {
     /// raw rgba888 pixel data
     pub rgb_data: Vec<u8>,
@@ -17,15 +18,6 @@ pub struct ImageData {
 }
 
 impl ImageData {
-    /// create new image data from raw components
-    pub fn new(rgb_data: Vec<u8>, width: usize, height: usize) -> Self {
-        Self {
-            rgb_data,
-            width,
-            height,
-        }
-    }
-
     /// convert `DynamicImage` to `ImageData`
     pub fn from_dynamic_image(img: DynamicImage) -> Self {
         let rgba8 = img.to_rgba8();

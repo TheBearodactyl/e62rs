@@ -56,7 +56,9 @@ pub async fn index_handler() -> RawHtml<String> {
 pub async fn css_handler() -> RawCss<String> {
     let configured_theme = getopt!(gallery.theme);
     let registry = ThemeRegistry::new();
-    let css_vars = registry.get_theme_css_vars(&configured_theme).unwrap();
+    let css_vars = registry
+        .get_theme_css_vars(&configured_theme)
+        .unwrap_or("".to_string());
     let css_code = CSS.replace("/* {{THEME_CSS_VARS}} */", &css_vars);
     RawCss(css_code)
 }

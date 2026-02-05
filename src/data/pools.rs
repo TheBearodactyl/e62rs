@@ -62,7 +62,7 @@ impl PoolDb {
             .collect();
 
         if getopt!(search.sort_pools_by_post_count) {
-            sorted_pools.sort_by(|a, b| b.post_ids.len().cmp(&a.post_ids.len()));
+            sorted_pools.sort_by_key(|b| std::cmp::Reverse(b.post_ids.len()));
         }
 
         Ok(Self {
@@ -104,7 +104,7 @@ impl PoolDb {
             })
             .collect();
 
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
         scored
             .into_iter()
             .take(limit)

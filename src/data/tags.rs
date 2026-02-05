@@ -1,12 +1,11 @@
 //! tag db with alias/implication resolution
-
 use {
     crate::{
         data::Entry,
+        error::Result,
         getopt,
         models::{TagAliasEntry, TagEntry, TagImplicationEntry},
     },
-    color_eyre::Result,
     hashbrown::{HashMap, HashSet},
     nucleo_matcher::{
         Config, Matcher,
@@ -134,7 +133,7 @@ impl TagDb {
             .collect();
 
         if getopt!(search.sort_tags_by_post_count) {
-            sorted_tags.sort_by(|a, b| b.post_count.cmp(&a.post_count));
+            sorted_tags.sort_by_key(|b| std::cmp::Reverse(b.post_count));
         }
 
         if getopt!(search.reverse_tags_order) {
@@ -201,6 +200,7 @@ impl TagDb {
     /// returns an iterator over tags matching configured filters
     ///
     /// # Safety
+    ///
     /// database must not be modified/dropped while iterating
     #[inline(always)]
     pub unsafe fn iter_tags(&self) -> Result<impl Iterator<Item = &TagEntry>> {
@@ -256,7 +256,7 @@ impl TagDb {
             }
         }
 
-        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
 
         let mut seen = HashSet::new();
         scored
@@ -272,7 +272,7 @@ impl TagDb {
             .collect()
     }
 
-    /// returns autocompletions for tag names
+    /// returns autocompletion possibilities for tag names
     /// (includes: tags and aliases, resolves to: canonical names)
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
         if query.is_empty() {

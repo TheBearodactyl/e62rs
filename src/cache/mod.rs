@@ -1,13 +1,13 @@
 //! post and http cache stuff
 use {
-    crate::{cache::posts::CacheEntry, client::E6Client, getopt},
-    color_eyre::eyre::{Context, Result, bail},
+    crate::{bail, cache::posts::CacheEntry, client::E6Client, error::*, getopt},
+    color_eyre::eyre::Context,
     flate2::{Compression, read::GzDecoder, write::GzEncoder},
     hashbrown::HashMap,
     std::{
         io::{Read, Write},
         sync::atomic::Ordering,
-        time::{Instant, SystemTime, UNIX_EPOCH},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     },
     tracing::{debug, info, warn},
 };
@@ -38,6 +38,7 @@ impl E6Client {
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .wrap_err("couldn't get current time")
+                .map_err(Report::new)
                 .unwrap_or(0);
 
             let cached_data = {
@@ -269,7 +270,10 @@ impl E6Client {
         encoder
             .write_all(data)
             .context("Failed to write data to compressor")?;
-        encoder.finish().context("Failed to finish compression")
+        encoder
+            .finish()
+            .context("Failed to finish compression")
+            .map_err(Report::new)
     }
 
     /// decompress bytes
@@ -386,7 +390,8 @@ impl E6Client {
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())?;
+            .map(|a| Duration::as_secs(&a))
+            .map_err(Report::new)?;
         let ttl = getopt!(cache.ttl_secs);
         let tti = getopt!(cache.tti_secs);
         let mut cache = self.cache.write().await;

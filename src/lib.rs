@@ -7,7 +7,6 @@
 //! * highly customizable downloads organization
 //! * in-terminal image viewer with support for animations
 //! * **__everything__** is documented
-#![allow(uncommon_codepoints, confusable_idents)]
 #![deny(
     clippy::perf,
     clippy::clone_on_copy,
@@ -18,12 +17,14 @@
     unused,
     missing_docs
 )]
+#![allow(uncommon_codepoints, confusable_idents, unused_parens)]
 pub mod app;
 pub mod cache;
 pub mod client;
 pub mod config;
 pub mod data;
 pub mod display;
+pub mod error;
 pub mod macros;
 pub mod models;
 pub mod serve;

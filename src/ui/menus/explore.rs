@@ -3,6 +3,8 @@
 //! provides a menu for browsing downloaded posts
 use {
     crate::{
+        bail,
+        error::Result,
         getopt,
         models::E6Post,
         ui::{
@@ -14,11 +16,12 @@ use {
             progress::ProgressManager,
         },
     },
-    color_eyre::eyre::{Context, Result, bail},
+    color_eyre::eyre::Context,
     crossterm::event::{Event, KeyCode, KeyEventKind},
+    demand::Confirm,
     futures::lock::Mutex,
     hashbrown::HashMap,
-    inquire::{Confirm, Select},
+    inquire::Select,
     jwalk::WalkDir,
     owo_colors::OwoColorize,
     qrcode::QrCode,
@@ -105,6 +108,7 @@ impl LocalPost {
 
         serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse metadata for {}", file_path.display()))
+            .map_err(|e| e.into())
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -124,6 +128,7 @@ impl LocalPost {
 
         serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse metadata for {}", file_path.display()))
+            .map_err(|e| e.into())
     }
 }
 
@@ -199,27 +204,24 @@ impl ExplorerState {
             }
             ExplorerSortBy::ScoreHighest => {
                 self.filtered_posts
-                    .sort_by(|a, b| b.post.score.total.cmp(&a.post.score.total));
+                    .sort_by_key(|b| std::cmp::Reverse(b.post.score.total));
             }
             ExplorerSortBy::ScoreLowest => {
-                self.filtered_posts
-                    .sort_by(|a, b| a.post.score.total.cmp(&b.post.score.total));
+                self.filtered_posts.sort_by_key(|a| a.post.score.total);
             }
             ExplorerSortBy::FavoritesHighest => {
                 self.filtered_posts
-                    .sort_by(|a, b| b.post.fav_count.cmp(&a.post.fav_count));
+                    .sort_by_key(|b| std::cmp::Reverse(b.post.fav_count));
             }
             ExplorerSortBy::FavoritesLowest => {
-                self.filtered_posts
-                    .sort_by(|a, b| a.post.fav_count.cmp(&b.post.fav_count));
+                self.filtered_posts.sort_by_key(|a| a.post.fav_count);
             }
             ExplorerSortBy::IDAscending => {
-                self.filtered_posts
-                    .sort_by(|a, b| a.post.id.cmp(&b.post.id));
+                self.filtered_posts.sort_by_key(|a| a.post.id);
             }
             ExplorerSortBy::IDDescending => {
                 self.filtered_posts
-                    .sort_by(|a, b| b.post.id.cmp(&a.post.id));
+                    .sort_by_key(|b| std::cmp::Reverse(b.post.id));
             }
         }
     }
@@ -646,7 +648,7 @@ impl ExploreMenu for E6Ui {
                 break;
             }
 
-            if !Confirm::new("Continue exploring?").prompt()? {
+            if !Confirm::new("Continue exploring?").run()? {
                 break;
             }
         }
@@ -1000,7 +1002,7 @@ impl ExploreMenu for E6Ui {
                 _ => {}
             }
 
-            if !Confirm::new("Continue viewing this post?").prompt()? {
+            if !Confirm::new("Continue viewing this post?").run()? {
                 break;
             }
         }

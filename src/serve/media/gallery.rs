@@ -52,7 +52,7 @@ impl MediaGallery {
             self.cached_items = Some(items);
         }
 
-        Ok(self.cached_items.as_ref().unwrap())
+        Ok(self.cached_items.as_ref().expect("cached_items is None"))
     }
 
     /// get all media items with the given filters applied
@@ -72,7 +72,7 @@ impl MediaGallery {
     /// refresh the gallery
     pub async fn refresh(&mut self) -> Result<&[MediaItem], std::io::Error> {
         self.cached_items = Some(self.scanner.scan(&self.directory).await?);
-        Ok(self.cached_items.as_ref().unwrap())
+        Ok(self.cached_items.as_ref().expect("cached_items is None"))
     }
 
     /// filter media items by type

@@ -1,6 +1,7 @@
 //! post viewing stuff
 use {
     crate::{
+        bail,
         display::{
             dtext::parser::format_text,
             image::{
@@ -11,11 +12,12 @@ use {
                 source::ImageSource,
             },
         },
+        error::{Report, Result},
         getopt,
         models::E6Post,
         ui::E6Ui,
     },
-    color_eyre::eyre::{Context, Result, bail},
+    color_eyre::eyre::Context,
     std::{
         io::{self, Write},
         path::Path,
@@ -32,8 +34,8 @@ use {
 /// * `ext` - the extension to load as (webp/gif)
 fn load_animated_from_bytes_with_ext(bytes: &[u8], ext: &str) -> Result<AnimatedImage> {
     match ext.to_lowercase().as_str() {
-        "gif" => AnimatedImage::from_gif_bytes(bytes),
-        "webp" => AnimatedImage::from_webp_bytes(bytes),
+        "gif" => AnimatedImage::from_gif_bytes(bytes).map_err(Report::new),
+        "webp" => AnimatedImage::from_webp_bytes(bytes).map_err(Report::new),
         _ => bail!("Unsupported animation format: {}", ext),
     }
 }
@@ -51,7 +53,7 @@ fn play_animation(
     encoder: &SixelEncoder,
 ) -> Result<()> {
     if animated.frame_count() == 1 {
-        let frame = animated.get_frame(0).unwrap();
+        let frame = animated.get_frame(0).expect("No frame");
         let sixel_str = encoder
             .encode(&frame.data)
             .context("failed to encode frame to sixel")?;
@@ -117,7 +119,10 @@ fn play_animation(
 /// * `post` - the post to fetch and display
 #[allow(clippy::await_holding_lock)]
 pub async fn print_post_to_terminal(post: E6Post) -> Result<()> {
-    let post_url = post.file.url.unwrap();
+    let post_url = post.file.url.unwrap_or(
+        "https://static1.e621.net/data/sample/87/23/872340c066697711a8fe432271ef4768_480p.mp4"
+            .to_string(),
+    );
     let cfg = crate::config::instance::config()?;
     let processor = ImageProcessor::with_dimensions(ImageDimensions::from_cfg(&cfg)?);
     let encoder = SixelEncoder::new();

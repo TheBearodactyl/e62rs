@@ -6,10 +6,11 @@ use {
             stats::CacheStats,
         },
         config::options::CacheConfig,
+        error::*,
         getopt, opt_and,
         utils::create_auth_header,
     },
-    color_eyre::eyre::{Context, Result, eyre},
+    color_eyre::eyre::Context,
     hashbrown::HashMap,
     reqwest::Client,
     std::{sync::Arc, time::Duration},
@@ -114,6 +115,7 @@ impl E6Client {
         client_builder
             .build()
             .context("failed to build http client")
+            .map_err(Report::new)
     }
 
     /// run an operation, retrying n times
@@ -141,6 +143,6 @@ impl E6Client {
             }
         }
 
-        Err(last_err.unwrap_or_else(|| eyre!("retry failed without error")))
+        Err(last_err.unwrap_or_else(|| E6Error::from("retry failed without error".to_string())))
     }
 }

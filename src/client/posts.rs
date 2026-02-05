@@ -65,7 +65,12 @@ impl E6Client {
 
         let bytes = self.get_cached_or_fetch(&url).await?;
         let mut posts: E6PostsResponse =
-            serde_json::from_slice(&bytes).context("Failed to deserialize search response")?;
+            match serde_json::from_slice(&bytes).context("Failed to deserialize search response") {
+                Ok(r) => r,
+                Err(e) => {
+                    return Err(e);
+                }
+            };
         let count_before = posts.posts.len();
 
         if !posts.posts.is_empty() {

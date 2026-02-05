@@ -22,11 +22,11 @@ pub enum PrefixChar {
 impl PrefixChar {
     #[inline]
     /// find the prefix symbol of a string
-    ///
-    /// # Arguments
-    ///
-    /// * `s` - the tag string
-    pub fn find_from_str(s: &str) -> (Self, &str) {
+    #[bearive::argdoc]
+    pub fn find_from_str(
+        /// the tag string
+        s: &str,
+    ) -> (Self, &str) {
         match s.as_bytes().first() {
             Some(b'-') => (Self::Exclude, &s[1..]),
             Some(b'~') => (Self::Wildcard, &s[1..]),

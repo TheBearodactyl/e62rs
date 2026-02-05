@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[derive(Debug, Default)]
 /// stats for the post cache
 pub struct PostCacheStats {
-    /// the amount of entries in the cache
+    /// the number of entries in the cache
     pub entry_count: usize,
     /// the size of the post cache
     pub file_size_bytes: u64,
@@ -63,18 +63,19 @@ impl std::fmt::Display for PostCacheStats {
 #[derive(Debug, Default)]
 /// stats for the http cache
 pub struct CacheStats {
-    /// the amount of times an entry has ben found
+    /// the number of times an entry has been found
     pub hits: AtomicU64,
-    /// the amount of times an entry hasn't been found
+    /// the number of times an entry hasn't been found
     pub misses: AtomicU64,
-    /// the amount of entries that've been evicted
+    /// the number of entries that have been evicted
     pub evictions: AtomicU64,
-    /// the amount of entries that've expired
+    /// the number of entries that have expired
     pub expired: AtomicU64,
 }
 
 impl CacheStats {
     /// get the rate at which cache searches result in a hit
+    #[macroni_n_cheese::mathinator2000]
     pub fn hit_rate(&self) -> f64 {
         let hits = self.hits.load(Ordering::Relaxed);
         let total = hits + self.misses.load(Ordering::Relaxed);

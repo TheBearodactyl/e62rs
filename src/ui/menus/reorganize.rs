@@ -1,14 +1,17 @@
 //! reorganization stuff
 use {
     crate::{
+        bail,
         config::format::FormatTemplate,
+        error::{Report, Result},
         getopt,
         models::E6Post,
         ui::{E6Ui, progress::ProgressManager},
     },
-    color_eyre::eyre::{Context, Result, bail},
+    color_eyre::eyre::Context,
+    demand::Confirm,
     hashbrown::HashMap,
-    inquire::{Confirm, Select, Text},
+    inquire::{Select, Text},
     smart_default::SmartDefault,
     std::{
         fs::{self, OpenOptions},
@@ -93,6 +96,7 @@ impl FileReorganizer {
 
         serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse metadata for {}", file_path.display()))
+            .map_err(Report::new)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -112,6 +116,7 @@ impl FileReorganizer {
 
         serde_json::from_str(&contents)
             .with_context(|| format!("Failed to parse metadata for {}", file_path.display()))
+            .map_err(Report::new)
     }
 
     /// search a directory for any files with valid metadata
@@ -218,6 +223,7 @@ impl FileReorganizer {
     }
 
     /// build placeholder context from post metadata
+    #[allow(clippy::arithmetic_side_effects)]
     pub fn build_post_context(
         &self,
         post: &E6Post,
@@ -257,7 +263,8 @@ impl FileReorganizer {
             _ => "SD",
         };
 
-        let size_mb = post.file.size as f64 / (1024.0 * 1024.0);
+        let mb: f64 = (1024.0 * 1024.0);
+        let size_mb = post.file.size as f64 / mb;
         let size_kb = post.file.size as f64 / 1024.0;
 
         let file_type = match post.file.ext.as_str() {
@@ -506,6 +513,7 @@ impl FileReorganizer {
         template
             .render_with_arrays(&simple_ctx, &array_ctx)
             .with_context(|| format!("Failed to render filename for post {}", post.id))
+            .map_err(Report::new)
     }
 
     /// move a file based on its metadata
@@ -730,8 +738,8 @@ impl RegorganizeMenu for E6Ui {
             bail!("Directory does not exist: {}", directory.display());
         }
 
-        let recursive = Confirm::new("Search subdirectories recursively?").prompt()?;
-        let use_current_format = Confirm::new("Use current output format from config?").prompt()?;
+        let recursive = Confirm::new("Search subdirectories recursively?").run()?;
+        let use_current_format = Confirm::new("Use current output format from config?").run()?;
 
         let output_format = if !use_current_format {
             Some(
@@ -764,7 +772,7 @@ impl RegorganizeMenu for E6Ui {
         };
 
         let dry_run =
-            Confirm::new("Perform dry run? (preview changes without moving files)").prompt()?;
+            Confirm::new("Perform dry run? (preview changes without moving files)").run()?;
 
         let options = ReorganizeOptions {
             dry_run,
@@ -793,7 +801,7 @@ impl RegorganizeMenu for E6Ui {
         if options.dry_run && result.successful > 0 {
             println!("\nThis was a dry run. No files were actually moved.");
             let proceed =
-                Confirm::new("Would you like to perform the reorganization for real?").prompt()?;
+                Confirm::new("Would you like to perform the reorganization for real?").run()?;
 
             if proceed {
                 let real_options = ReorganizeOptions {

@@ -3,9 +3,10 @@ use {
     super::Handlers,
     crate::{
         config::instance::reload_config,
+        error::Result,
         ui::menus::{
-            MainMenu, blacklist::BlacklistMenu, explore::ExploreMenu, reorganize::RegorganizeMenu,
-            view::ViewMenu,
+            ConfigMenu, MainMenu, blacklist::BlacklistMenu, explore::ExploreMenu,
+            reorganize::RegorganizeMenu, view::ViewMenu,
         },
     },
 };
@@ -28,7 +29,7 @@ impl Handlers {
     ///
     /// returns an error if it fails to get the user selection in the main menu
     /// returns an error if it fails to run the logic associated with the user selection
-    pub async fn run_main_loop(&self) -> color_eyre::Result<()> {
+    pub async fn run_main_loop(&self) -> Result<()> {
         'main: loop {
             let selection = match MainMenu::select("What would you like to do?").prompt() {
                 Ok(sel) => sel,
@@ -38,14 +39,24 @@ impl Handlers {
 
             match selection {
                 MainMenu::ManageBlacklist => self.ui.manage_blacklist().await?,
-                MainMenu::EditConfig => self.ui.edit_config_file().await?,
                 MainMenu::ViewLatest => self.ui.display_latest_posts().await?,
                 MainMenu::OpenInBrowser => self.ui.serve_downloads().await?,
                 MainMenu::Reorganize => self.ui.reorganize_downloads().await?,
                 MainMenu::ExploreDownloads => self.ui.explore_downloads().await?,
                 MainMenu::UpdateDownloads => self.ui.redownload_by_artists().await?,
                 MainMenu::Search => self.handle_search().await?,
-                MainMenu::ReloadConfig => reload_config()?,
+                MainMenu::ManageConfig => {
+                    match ConfigMenu::select("What would you like to do?").prompt() {
+                        Ok(sel) => match sel {
+                            ConfigMenu::Edit => self.ui.edit_config_file().await?,
+                            ConfigMenu::Reload => reload_config()?,
+                            ConfigMenu::Back => continue 'main,
+                        },
+
+                        Err(_) if self.was_interrupted() => continue 'main,
+                        Err(e) => return Err(e.into()),
+                    }
+                }
                 MainMenu::Exit => break 'main,
             }
         }
