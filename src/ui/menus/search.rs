@@ -103,9 +103,10 @@ impl SearchMenu for E6Ui {
     /// search for pools in an advanced way
     async fn search_pools_adv(&self) -> Result<()> {
         loop {
-            let search_type = AdvPoolSearch::select("How would you like to search for pools")
-                .prompt()
-                .context("Failed to get search type selection")?;
+            let search_type = miette::Context::context(
+                AdvPoolSearch::select("How would you like to search for pools").ask(),
+                "Failed to get search type selection",
+            )?;
 
             let should_break = match search_type {
                 AdvPoolSearch::ByName => {

@@ -364,6 +364,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "bearask"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0b7886ee7cc3bf8749a88e110abcc8f992b4b68150f084903cf65a3480282cc"
+dependencies = [
+ "crossterm",
+ "dyn-clone",
+ "miette",
+ "owo-colors",
+]
+
+[[package]]
 name = "bearive"
 version = "0.1.0"
 dependencies = [
@@ -1356,10 +1368,11 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "e62rs"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "async-trait",
  "base64",
+ "bearask",
  "bearive 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "boundbook",
  "chrono",

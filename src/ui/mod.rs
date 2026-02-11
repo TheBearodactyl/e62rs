@@ -342,9 +342,10 @@ impl E6Ui {
     ///
     /// * `post` - the post to interact with
     pub async fn interaction_menu(&self, post: E6Post) -> Result<InteractionMenu> {
-        let choice = InteractionMenu::select("What would you like to do?")
-            .prompt()
-            .context("Failed to get interaction choice")?;
+        let choice = miette::Context::context(
+            InteractionMenu::select("What would you like to do?").ask(),
+            "Failed to get interaction choice",
+        )?;
 
         match choice {
             InteractionMenu::OpenInBrowser => {
@@ -424,12 +425,14 @@ impl E6Ui {
     ///
     /// * `posts` - the posts to interact with
     pub async fn batch_interaction_menu(&self, posts: Vec<E6Post>) -> Result<BatchAction> {
-        let choice = BatchAction::select(&format!(
-            "What would you like to do with {} selected posts?",
-            posts.len()
-        ))
-        .prompt()
-        .context("Failed to get batch action choice")?;
+        let choice = miette::Context::context(
+            BatchAction::select(&format!(
+                "What would you like to do with {} selected posts?",
+                posts.len()
+            ))
+            .ask(),
+            "Failed to get batch action choice",
+        )?;
 
         match choice {
             BatchAction::DownloadAll => {
@@ -461,9 +464,10 @@ impl E6Ui {
     ///
     /// * `pool` - the pool to interact with
     pub async fn pool_interaction_menu(&self, pool: E6Pool) -> Result<PoolInteractionMenu> {
-        let choice = PoolInteractionMenu::select("What would you like to do with this pool?")
-            .prompt()
-            .context("Failed to get pool interaction choice")?;
+        let choice = miette::Context::context(
+            PoolInteractionMenu::select("What would you like to do with this pool?").ask(),
+            "Failed to get pool interaction choice",
+        )?;
 
         match choice {
             PoolInteractionMenu::ViewPosts => {

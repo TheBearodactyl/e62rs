@@ -9,6 +9,7 @@ use {
             reorganize::RegorganizeMenu, view::ViewMenu,
         },
     },
+    miette::IntoDiagnostic,
 };
 
 impl Handlers {
@@ -31,24 +32,30 @@ impl Handlers {
     /// returns an error if it fails to run the logic associated with the user selection
     pub async fn run_main_loop(&self) -> Result<()> {
         'main: loop {
-            let selection = match MainMenu::select("What would you like to do?").prompt() {
+            let selection = match MainMenu::select("What would you like to do?").ask() {
                 Ok(sel) => sel,
                 Err(_) if self.was_interrupted() => continue 'main,
                 Err(e) => return Err(e.into()),
             };
 
             match selection {
-                MainMenu::ManageBlacklist => self.ui.manage_blacklist().await?,
-                MainMenu::ViewLatest => self.ui.display_latest_posts().await?,
-                MainMenu::OpenInBrowser => self.ui.serve_downloads().await?,
-                MainMenu::Reorganize => self.ui.reorganize_downloads().await?,
-                MainMenu::ExploreDownloads => self.ui.explore_downloads().await?,
-                MainMenu::UpdateDownloads => self.ui.redownload_by_artists().await?,
+                MainMenu::ManageBlacklist => self.ui.manage_blacklist().await.into_diagnostic()?,
+                MainMenu::ViewLatest => self.ui.display_latest_posts().await.into_diagnostic()?,
+                MainMenu::OpenInBrowser => self.ui.serve_downloads().await.into_diagnostic()?,
+                MainMenu::Reorganize => self.ui.reorganize_downloads().await.into_diagnostic()?,
+                MainMenu::ExploreDownloads => {
+                    self.ui.explore_downloads().await.into_diagnostic()?
+                }
+                MainMenu::UpdateDownloads => {
+                    self.ui.redownload_by_artists().await.into_diagnostic()?
+                }
                 MainMenu::Search => self.handle_search().await?,
                 MainMenu::ManageConfig => {
-                    match ConfigMenu::select("What would you like to do?").prompt() {
+                    match ConfigMenu::select("What would you like to do?").ask() {
                         Ok(sel) => match sel {
-                            ConfigMenu::Edit => self.ui.edit_config_file().await?,
+                            ConfigMenu::Edit => {
+                                self.ui.edit_config_file().await.into_diagnostic()?
+                            }
                             ConfigMenu::Reload => reload_config()?,
                             ConfigMenu::Back => continue 'main,
                         },

@@ -4,6 +4,7 @@
 use {
     super::Handlers,
     crate::ui::menus::{PoolSearchModeMenu, SearchMenu, search::SearchMenu as _},
+    miette::IntoDiagnostic,
 };
 
 impl Handlers {
@@ -19,15 +20,15 @@ impl Handlers {
     ///
     /// returns an error if it fails to get the user selection
     /// returns an error if it fails to run the logic associated with the user selection
-    pub async fn handle_search(&self) -> color_eyre::Result<()> {
-        let selection = match SearchMenu::select("What would you like to search for?").prompt() {
+    pub async fn handle_search(&self) -> miette::Result<()> {
+        let selection = match SearchMenu::select("What would you like to search for?").ask() {
             Ok(sel) => sel,
             Err(_) if self.was_interrupted() => return Ok(()),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
         match selection {
-            SearchMenu::Posts => self.ui.search_posts().await?,
+            SearchMenu::Posts => self.ui.search_posts().await.into_diagnostic()?,
             SearchMenu::Pools => self.handle_pool_search().await?,
             SearchMenu::Back => {}
         }
@@ -47,17 +48,17 @@ impl Handlers {
     ///
     /// returns an error if it fails to get the user selection
     /// returns an error if it fails to run the logic associated with the user selection
-    pub async fn handle_pool_search(&self) -> color_eyre::Result<()> {
+    pub async fn handle_pool_search(&self) -> miette::Result<()> {
         let pool_mode =
-            match PoolSearchModeMenu::select("Which search mode would you like to use?").prompt() {
+            match PoolSearchModeMenu::select("Which search mode would you like to use?").ask() {
                 Ok(sel) => sel,
                 Err(_) if self.was_interrupted() => return Ok(()),
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e),
             };
 
         match pool_mode {
-            PoolSearchModeMenu::Simple => self.ui.search_pools().await?,
-            PoolSearchModeMenu::Advanced => self.ui.search_pools_adv().await?,
+            PoolSearchModeMenu::Simple => self.ui.search_pools().await.into_diagnostic()?,
+            PoolSearchModeMenu::Advanced => self.ui.search_pools_adv().await.into_diagnostic()?,
         }
 
         Ok(())

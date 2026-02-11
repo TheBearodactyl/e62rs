@@ -95,9 +95,10 @@ impl BlacklistMenu for E6Ui {
     /// * [`BlacklistManager::Back`] goes back to the main menu
     async fn manage_blacklist(&self) -> Result<()> {
         loop {
-            let blacklist_action = BlacklistManager::select("Blacklist Settings:")
-                .prompt()
-                .wrap_err("Failed to display blacklist menu")?;
+            let blacklist_action = miette::Context::wrap_err(
+                BlacklistManager::select("Blacklist Settings:").ask(),
+                "Failed to display blacklist menu",
+            )?;
 
             let should_continue = match blacklist_action {
                 BlacklistManager::ShowCurrent => {

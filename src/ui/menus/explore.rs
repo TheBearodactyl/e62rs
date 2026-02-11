@@ -596,7 +596,7 @@ impl ExploreMenu for E6Ui {
                 "Downloads Explorer ({} posts shown)",
                 state.filtered_posts.len()
             ))
-            .prompt()?;
+            .ask()?;
 
             let should_break = match action {
                 ExplorerMenu::Browse => {
@@ -1029,7 +1029,7 @@ impl ExploreMenu for E6Ui {
 
     /// sort posts
     fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
-        let sort_by = ExplorerSortBy::select("Sort posts by:").prompt()?;
+        let sort_by = ExplorerSortBy::select("Sort posts by:").ask()?;
         state.sort(sort_by);
         println!("Posts sorted");
         Ok(())

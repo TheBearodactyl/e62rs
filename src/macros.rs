@@ -225,36 +225,36 @@ macro_rules! menu {
                 let languages = ["japanese", "spanish", "english"];
 
                 for lang in languages {
-                    stats.insert(lang, TranslationStats::default());
+                    stats.insert(lang, $crate::ui::menus::TranslationStats::default());
                 }
 
                 $(
-                    stats.get_mut("english").unwrap_or(&mut TranslationStats::default()).total_variants += 1;
-                    stats.get_mut("spanish").unwrap_or(&mut TranslationStats::default()).total_variants += 1;
-                    stats.get_mut("japanese").unwrap_or(&mut TranslationStats::default()).total_variants += 1;
+                    stats.get_mut("english").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).total_variants += 1;
+                    stats.get_mut("spanish").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).total_variants += 1;
+                    stats.get_mut("japanese").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).total_variants += 1;
 
                     if !$label.is_empty() {
-                        stats.get_mut("english").unwrap_or(&mut TranslationStats::default()).labels_translated += 1;
+                        stats.get_mut("english").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).labels_translated += 1;
                     }
 
                     if !$desc.is_empty() {
-                        stats.get_mut("english").unwrap_or(&mut TranslationStats::default()).descriptions_translated += 1;
+                        stats.get_mut("english").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).descriptions_translated += 1;
                     }
 
                     if !$japanese_label.is_empty() {
-                        stats.get_mut("japanese").unwrap_or(&mut TranslationStats::default()).labels_translated += 1;
+                        stats.get_mut("japanese").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).labels_translated += 1;
                     }
 
                     if !$japanese_desc.is_empty() {
-                        stats.get_mut("japanese").unwrap_or(&mut TranslationStats::default()).descriptions_translated += 1;
+                        stats.get_mut("japanese").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).descriptions_translated += 1;
                     }
 
                     if !$spanish_label.is_empty() {
-                        stats.get_mut("spanish").unwrap_or(&mut TranslationStats::default()).labels_translated += 1;
+                        stats.get_mut("spanish").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).labels_translated += 1;
                     }
 
                     if !$spanish_desc.is_empty() {
-                        stats.get_mut("spanish").unwrap_or(&mut TranslationStats::default()).descriptions_translated += 1;
+                        stats.get_mut("spanish").unwrap_or(&mut $crate::ui::menus::TranslationStats::default()).descriptions_translated += 1;
                     }
                 )*
 
@@ -273,10 +273,21 @@ macro_rules! menu {
 
             /// display a menu and return the selected option
             #[must_use]
-            pub fn select(prompt: &str) -> ::inquire::Select<'_, Self> {
+            pub fn select(prompt: &str) -> bearask::Select<Self> {
+                use bearask::AskOption;
+
                 let variants = vec![$( Self::$variant, )*];
 
-                ::inquire::Select::new(prompt, variants)
+                let options: Vec<AskOption<Self>> = variants
+                    .into_iter()
+                    .map(|variant| {
+                        let display = variant.to_string();
+                        AskOption::with_name(display, variant)
+                    })
+                    .collect();
+
+                bearask::Select::new(prompt)
+                    .with_options(options)
                     .with_page_size(if $filterable { 10 } else { 7 })
                     .with_help_message(Self::get_help_message())
             }
