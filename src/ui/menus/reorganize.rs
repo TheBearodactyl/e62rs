@@ -8,8 +8,8 @@ use {
         models::E6Post,
         ui::{E6Ui, progress::ProgressManager},
     },
+    bearask::Confirm,
     color_eyre::eyre::Context,
-    demand::Confirm,
     hashbrown::HashMap,
     inquire::{Select, Text},
     smart_default::SmartDefault,
@@ -738,8 +738,8 @@ impl RegorganizeMenu for E6Ui {
             bail!("Directory does not exist: {}", directory.display());
         }
 
-        let recursive = Confirm::new("Search subdirectories recursively?").run()?;
-        let use_current_format = Confirm::new("Use current output format from config?").run()?;
+        let recursive = Confirm::new("Search subdirectories recursively?").ask()?;
+        let use_current_format = Confirm::new("Use current output format from config?").ask()?;
 
         let output_format = if !use_current_format {
             Some(
@@ -772,7 +772,7 @@ impl RegorganizeMenu for E6Ui {
         };
 
         let dry_run =
-            Confirm::new("Perform dry run? (preview changes without moving files)").run()?;
+            Confirm::new("Perform dry run? (preview changes without moving files)").ask()?;
 
         let options = ReorganizeOptions {
             dry_run,
@@ -801,7 +801,7 @@ impl RegorganizeMenu for E6Ui {
         if options.dry_run && result.successful > 0 {
             println!("\nThis was a dry run. No files were actually moved.");
             let proceed =
-                Confirm::new("Would you like to perform the reorganization for real?").run()?;
+                Confirm::new("Would you like to perform the reorganization for real?").ask()?;
 
             if proceed {
                 let real_options = ReorganizeOptions {

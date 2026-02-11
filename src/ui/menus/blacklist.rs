@@ -6,8 +6,8 @@ use {
         getopt,
         ui::{E6Ui, autocomplete::TagAutocompleter, menus::BlacklistManager},
     },
+    bearask::Confirm,
     color_eyre::eyre::Context,
-    demand::Confirm,
     hashbrown::HashSet,
     inquire::{MultiSelect, Select},
     std::sync::Arc,
@@ -134,10 +134,11 @@ impl BlacklistMenu for E6Ui {
 
     /// ask whether to continue managing the blacklist
     fn prompt_continue(&self) -> Result<bool> {
-        Confirm::new("Continue managing blacklist?")
-            .run()
-            .wrap_err("Failed to get user input")
-            .map_err(Report::new)
+        miette::Context::wrap_err(
+            Confirm::new("Continue managing blacklist?").ask(),
+            "Failed to get user input",
+        )
+        .map_err(Report::new)
     }
 
     /// add a tag to the blacklist
@@ -178,12 +179,14 @@ impl BlacklistMenu for E6Ui {
     ///
     /// * `tag` - the tag to ask about
     async fn prompt_add_unknown_tag(&self, tag: &str) -> Result<bool> {
-        let use_anyway = Confirm::new(format!(
-            "Tag '{}' not found in database. Add to blacklist anyway?",
-            tag
-        ))
-        .run()
-        .wrap_err("Failed to get user confirmation")?;
+        let use_anyway = miette::Context::wrap_err(
+            Confirm::new(format!(
+                "Tag '{}' not found in database. Add to blacklist anyway?",
+                tag
+            ))
+            .ask(),
+            "Failed to get user confirmation",
+        )?;
 
         if use_anyway {
             return Ok(true);
@@ -241,9 +244,10 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(format!("Remove '{}' from blacklist?", tag_to_remove))
-            .run()
-            .wrap_err("Failed to get user confirmation")?;
+        let confirm = miette::Context::wrap_err(
+            Confirm::new(format!("Remove '{}' from blacklist?", tag_to_remove)).ask(),
+            "Failed to get user confirmation",
+        )?;
 
         if !confirm {
             return Ok(());
@@ -281,12 +285,14 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(format!(
-            "Clear all {} tags from blacklist? This cannot be undone.",
-            blacklist_count
-        ))
-        .run()
-        .wrap_err("Failed to get user confirmation")?;
+        let confirm = miette::Context::wrap_err(
+            Confirm::new(format!(
+                "Clear all {} tags from blacklist? This cannot be undone.",
+                blacklist_count
+            ))
+            .ask(),
+            "Failed to get user confirmation",
+        )?;
 
         if !confirm {
             return Ok(());
@@ -366,12 +372,14 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let confirm = Confirm::new(format!(
-            "Add {} selected tags to blacklist?",
-            selected_tags.len()
-        ))
-        .run()
-        .wrap_err("Failed to get user confirmation")?;
+        let confirm = miette::Context::wrap_err(
+            Confirm::new(format!(
+                "Add {} selected tags to blacklist?",
+                selected_tags.len()
+            ))
+            .ask(),
+            "Failed to get user confirmation",
+        )?;
 
         if !confirm {
             return Ok(());

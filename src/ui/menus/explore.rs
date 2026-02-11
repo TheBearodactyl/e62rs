@@ -16,9 +16,9 @@ use {
             progress::ProgressManager,
         },
     },
+    bearask::Confirm,
     color_eyre::eyre::Context,
     crossterm::event::{Event, KeyCode, KeyEventKind},
-    demand::Confirm,
     futures::lock::Mutex,
     hashbrown::HashMap,
     inquire::Select,
@@ -648,7 +648,7 @@ impl ExploreMenu for E6Ui {
                 break;
             }
 
-            if !Confirm::new("Continue exploring?").run()? {
+            if !Confirm::new("Continue exploring?").ask()? {
                 break;
             }
         }
@@ -1002,7 +1002,7 @@ impl ExploreMenu for E6Ui {
                 _ => {}
             }
 
-            if !Confirm::new("Continue viewing this post?").run()? {
+            if !Confirm::new("Continue viewing this post?").ask()? {
                 break;
             }
         }

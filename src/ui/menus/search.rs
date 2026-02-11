@@ -12,8 +12,8 @@ use {
             menus::{AdvPoolSearch, view::ViewMenu},
         },
     },
+    bearask::Confirm,
     color_eyre::eyre::Context,
-    demand::Confirm,
     indicatif::{ProgressBar, ProgressStyle},
     inquire::{
         Select, Text,
@@ -556,9 +556,10 @@ impl SearchMenu for E6Ui {
 
     /// handle a post interaction
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
-        let use_multi_select = Confirm::new("Select multiple posts?")
-            .run()
-            .context("Failed to get multi-select confirmation")?;
+        let use_multi_select = miette::Context::context(
+            Confirm::new("Select multiple posts?").ask(),
+            "Failed to get multi-select confirmation",
+        )?;
 
         if use_multi_select {
             let selected_posts = self.select_multiple_posts(&posts)?;
@@ -741,10 +742,11 @@ impl SearchMenu for E6Ui {
 
     /// ask whether to continue
     fn ask_continue(&self, message: &str) -> Result<bool> {
-        Confirm::new(message)
-            .run()
-            .context("Failed to get user confirmation")
-            .map_err(Report::new)
+        miette::Context::context(
+            Confirm::new(message).ask(),
+            "Failed to get user confirmation",
+        )
+        .map_err(Report::new)
     }
 
     /// select a post from a list of posts

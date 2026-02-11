@@ -20,9 +20,9 @@ use {
             progress::ProgressManager,
         },
     },
+    bearask::Confirm,
     boundbook::BbfBuilder,
     color_eyre::eyre::Context,
-    demand::Confirm,
     hashbrown::{HashMap, HashSet},
     indicatif::{ProgressBar, ProgressStyle},
     inquire::{MultiSelect, Text},
@@ -126,7 +126,7 @@ impl E6Ui {
                 "BBF file '{}' already exists. Overwrite?",
                 bbf_output_path.display()
             ))
-            .run()?;
+            .ask()?;
 
             if !overwrite {
                 println!("BBF creation cancelled.");
@@ -478,7 +478,7 @@ impl E6Ui {
                     self.display_posts(&posts.posts);
 
                     let interact =
-                        Confirm::new("Would you like to interact with these posts?").run()?;
+                        Confirm::new("Would you like to interact with these posts?").ask()?;
 
                     if interact {
                         let _selected_posts = self.select_multiple_posts(&posts.posts)?;
@@ -888,7 +888,7 @@ impl E6Ui {
             selected_artists.len(),
             if selected_artists.len() == 1 { "" } else { "s" }
         ))
-        .run()?;
+        .ask()?;
 
         if !confirm {
             println!("Operation cancelled.");
