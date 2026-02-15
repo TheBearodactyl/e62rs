@@ -38,7 +38,7 @@ impl Handlers {
                 Err(e) => return Err(e.into()),
             };
 
-            match selection {
+            match selection.value {
                 MainMenu::ManageBlacklist => self.ui.manage_blacklist().await.into_diagnostic()?,
                 MainMenu::ViewLatest => self.ui.display_latest_posts().await.into_diagnostic()?,
                 MainMenu::OpenInBrowser => self.ui.serve_downloads().await.into_diagnostic()?,
@@ -52,7 +52,7 @@ impl Handlers {
                 MainMenu::Search => self.handle_search().await?,
                 MainMenu::ManageConfig => {
                     match ConfigMenu::select("What would you like to do?").ask() {
-                        Ok(sel) => match sel {
+                        Ok(sel) => match sel.value {
                             ConfigMenu::Edit => {
                                 self.ui.edit_config_file().await.into_diagnostic()?
                             }

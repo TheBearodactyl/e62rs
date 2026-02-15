@@ -12,13 +12,9 @@ use {
             menus::{AdvPoolSearch, view::ViewMenu},
         },
     },
-    bearask::Confirm,
+    bearask::{AskOption, Confirm, ErrorMessage, Select, TextInput, Validation},
     color_eyre::eyre::Context,
     indicatif::{ProgressBar, ProgressStyle},
-    inquire::{
-        Select, Text,
-        validator::{ErrorMessage, Validation},
-    },
     std::{collections::HashSet, sync::Arc, time::Duration},
     tracing::{debug, warn},
 };
@@ -108,7 +104,7 @@ impl SearchMenu for E6Ui {
                 "Failed to get search type selection",
             )?;
 
-            let should_break = match search_type {
+            let should_break = match search_type.value {
                 AdvPoolSearch::ByName => {
                     if let Err(e) = self.perform_pool_search().await {
                         warn!("Pool name search error: {:#}", e);
@@ -154,9 +150,10 @@ impl SearchMenu for E6Ui {
 
     /// search pools by their description
     async fn perform_pool_description_search(&self) -> Result<()> {
-        let query = Text::new("Enter pool description search:")
-            .prompt()
-            .context("Failed to get description search input")?;
+        let query = miette::Context::context(
+            TextInput::new("Enter pool description search:").ask(),
+            "Failed to get description search input",
+        )?;
 
         let query = query.trim();
         if query.is_empty() {
@@ -176,9 +173,10 @@ impl SearchMenu for E6Ui {
 
     /// search pools by creator
     async fn perform_pool_creator_search(&self) -> Result<()> {
-        let creator = Text::new("Enter creator name:")
-            .prompt()
-            .context("Failed to get creator name input")?;
+        let creator = miette::Context::context(
+            TextInput::new("Enter creator name:").ask(),
+            "Failed to get creator name input",
+        )?;
 
         let creator = creator.trim();
         if creator.is_empty() {
@@ -233,10 +231,12 @@ impl SearchMenu for E6Ui {
     /// get the search query for finding pools
     fn get_pool_search_query(&self) -> Result<String> {
         let autocompleter = PoolAutocompleter::new(self.pool_db.clone());
-        let query = inquire::Text::new("Enter pool search query (leave empty for latest pools):")
-            .with_autocomplete(autocompleter)
-            .prompt()
-            .context("Failed to get pool search query")?;
+        let query = miette::Context::context(
+            TextInput::new("Enter pool search query (leave empty for latest pools):")
+                .with_autocomplete(autocompleter)
+                .ask(),
+            "Failed to get pool search query",
+        )?;
 
         Ok(query.trim().to_string())
     }
@@ -245,27 +245,29 @@ impl SearchMenu for E6Ui {
     fn get_pool_limit(&self) -> Result<u64> {
         let default_limit = getopt!(search.results).min(getopt!(search.results));
 
-        let input = inquire::Text::new("How many pools to return?")
-            .with_validator(|input: &str| {
-                let err_msg = "Please enter a number between 1 and 100";
+        let input = miette::Context::context(
+            TextInput::new("How many pools to return?")
+                .with_validation(|input: &str| {
+                    let err_msg = "Please enter a number between 1 and 100";
 
-                if input.trim().is_empty() {
-                    return Ok(Validation::Valid);
-                }
+                    if input.trim().is_empty() {
+                        return Ok(Validation::Valid);
+                    }
 
-                match input.parse::<u64>() {
-                    Ok(n) if n > 0 && n <= 100 => Ok(Validation::Valid),
-                    Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
-                        err_msg.to_string(),
-                    ))),
-                    Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
-                        "Please enter a valid number".to_string(),
-                    ))),
-                }
-            })
-            .with_placeholder(&default_limit.to_string())
-            .prompt()
-            .context("Failed to get pool limit input")?;
+                    match input.parse::<u64>() {
+                        Ok(n) if n > 0 && n <= 100 => Ok(Validation::Valid),
+                        Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                            err_msg.to_string(),
+                        ))),
+                        Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Please enter a valid number".to_string(),
+                        ))),
+                    }
+                })
+                .with_placeholder(default_limit.to_string())
+                .ask(),
+            "Failed to get pool limit input",
+        )?;
 
         let trimmed = input.trim();
         if trimmed.is_empty() {
@@ -285,34 +287,22 @@ impl SearchMenu for E6Ui {
             return Ok(None);
         }
 
-        let options: Vec<String> = pools
+        let options = pools
             .iter()
-            .map(|pool| {
-                format!(
-                    "ID: {} | {} | {} posts | {}",
-                    pool.id,
-                    self.truncate_string(&pool.name, 40),
-                    pool.post_ids.len(),
-                    pool.category
-                )
-            })
+            .map(|pool| AskOption::with_name(pool.name.clone(), pool))
             .collect();
 
-        let selection = inquire::Select::new("Select a pool to view:", options)
-            .prompt()
-            .context("Failed to get pool selection")?;
+        let selection = match miette::Context::context(
+            Select::new("Select a pool to view:")
+                .with_options(options)
+                .ask(),
+            "Failed to get pool selection",
+        ) {
+            Ok(pool) => Some(pool.value),
+            Err(e) => return Err(e.into()),
+        };
 
-        let index = pools.iter().position(|p| {
-            format!(
-                "ID: {} | {} | {} posts | {}",
-                p.id,
-                self.truncate_string(&p.name, 40),
-                p.post_ids.len(),
-                p.category
-            ) == selection
-        });
-
-        Ok(index.map(|i| &pools[i]))
+        Ok(selection)
     }
 
     /// convert a PoolEntry to an E6Pool
@@ -706,25 +696,27 @@ impl SearchMenu for E6Ui {
         let default_limit = getopt!(search.results);
 
         if default_limit == 32 {
-            let input = Text::new("How many posts to return?")
-                .with_validator(|input: &str| {
-                    if input.trim().is_empty() {
-                        return Ok(Validation::Valid);
-                    }
+            let input = miette::Context::context(
+                TextInput::new("How many posts to return?")
+                    .with_validation(|input: &str| {
+                        if input.trim().is_empty() {
+                            return Ok(Validation::Valid);
+                        }
 
-                    match input.parse::<u64>() {
-                        Ok(n) if n > 0 => Ok(Validation::Valid),
-                        Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
-                            "Please enter a positive number".to_string(),
-                        ))),
-                        Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
-                            "Please enter a valid number".to_string(),
-                        ))),
-                    }
-                })
-                .with_placeholder("32")
-                .prompt()
-                .context("Failed to get post limit input")?;
+                        match input.parse::<u64>() {
+                            Ok(n) if n > 0 => Ok(Validation::Valid),
+                            Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                                "Please enter a positive number".to_string(),
+                            ))),
+                            Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                                "Please enter a valid number".to_string(),
+                            ))),
+                        }
+                    })
+                    .with_placeholder("32")
+                    .ask(),
+                "Failed to get post limit input",
+            )?;
 
             let trimmed = input.trim();
             if trimmed.is_empty() {
@@ -755,28 +747,30 @@ impl SearchMenu for E6Ui {
             return Ok(None);
         }
 
-        let options: Vec<String> = posts
+        let options: Vec<_> = posts
             .iter()
             .map(|post| {
-                format!(
-                    "ID: {} | Score: {} | Rating: {}",
-                    post.id, post.score.total, post.rating
+                AskOption::with_name(
+                    format!(
+                        "ID: {} | Score: {} | Rating: {}",
+                        post.id, post.score.total, post.rating
+                    ),
+                    post,
                 )
             })
             .collect();
 
-        let selection = Select::new("Select a post to view:", options)
-            .prompt()
-            .context("Failed to get post selection")?;
+        let selection = match miette::Context::context(
+            Select::new("Select a post to view:")
+                .with_options(options)
+                .ask(),
+            "Failed to get post selection",
+        ) {
+            Ok(p) => Some(p.value),
+            Err(e) => return Err(e.into()),
+        };
 
-        let index = posts.iter().position(|p| {
-            format!(
-                "ID: {} | Score: {} | Rating: {}",
-                p.id, p.score.total, p.rating
-            ) == selection
-        });
-
-        Ok(index.map(|i| &posts[i]))
+        Ok(selection)
     }
 
     /// display a pools info

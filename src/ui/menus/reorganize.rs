@@ -6,12 +6,11 @@ use {
         error::{Report, Result},
         getopt,
         models::E6Post,
-        ui::{E6Ui, progress::ProgressManager},
+        ui::{E6Ui, menus::ConflictMenu, progress::ProgressManager},
     },
-    bearask::Confirm,
+    bearask::{Confirm, TextInput},
     color_eyre::eyre::Context,
     hashbrown::HashMap,
-    inquire::{Select, Text},
     smart_default::SmartDefault,
     std::{
         fs::{self, OpenOptions},
@@ -41,9 +40,9 @@ pub struct ReorganizeOptions {
     /// whether to just do a dry-run (only show what would change)
     pub dry_run: bool,
 
-    #[default(ConflictResolution::Skip)]
+    #[default(ConflictMenu::AutoRename)]
     /// the conflict resolution method
-    pub conflict_resolution: ConflictResolution,
+    pub conflict_resolution: ConflictMenu,
 
     #[default(None)]
     /// the output format to use
@@ -521,7 +520,7 @@ impl FileReorganizer {
         &self,
         old_path: &Path,
         new_path: &Path,
-        conflict_resolution: ConflictResolution,
+        conflict_resolution: ConflictMenu,
     ) -> Result<PathBuf> {
         if let Some(parent) = new_path.parent() {
             fs::create_dir_all(parent)
@@ -530,11 +529,11 @@ impl FileReorganizer {
 
         let final_path = if new_path.exists() {
             match conflict_resolution {
-                ConflictResolution::Skip => {
+                ConflictMenu::Skip => {
                     bail!("File already exists: {}", new_path.display());
                 }
-                ConflictResolution::Overwrite => new_path.to_path_buf(),
-                ConflictResolution::AutoRename => self.find_unique_path(new_path)?,
+                ConflictMenu::Overwrite => new_path.to_path_buf(),
+                ConflictMenu::AutoRename => self.find_unique_path(new_path)?,
             }
         } else {
             new_path.to_path_buf()
@@ -729,9 +728,9 @@ impl RegorganizeMenu for E6Ui {
         let download_dir: String = getopt!(download.path);
         let default_format: String = getopt!(download.format);
 
-        let directory = Text::new("Enter directory to reorganize:")
+        let directory = TextInput::new("Enter directory to reorganize:")
             .with_default(&download_dir)
-            .prompt()?;
+            .ask()?;
 
         let directory = Path::new(&directory);
         if !directory.exists() {
@@ -743,33 +742,19 @@ impl RegorganizeMenu for E6Ui {
 
         let output_format = if !use_current_format {
             Some(
-                Text::new("Enter output format:")
+                TextInput::new("Enter output format:")
                     .with_default(&default_format)
-                    .prompt()?,
+                    .ask()?,
             )
         } else {
             None
         };
 
-        let conflict_options = [
-            "Skip existing files",
-            "Overwrite existing files",
-            "Auto-rename duplicates",
-        ];
-
-        let conflict_choice = Select::new(
-            "How should conflicts be handled?",
-            conflict_options.to_vec(),
-        )
-        .with_help_message("Choose what to do when target file already exists")
-        .prompt()?;
-
-        let conflict_resolution = match conflict_choice {
-            "Skip existing files" => ConflictResolution::Skip,
-            "Overwrite existing files" => ConflictResolution::Overwrite,
-            "Auto-rename duplicates" => ConflictResolution::AutoRename,
-            _ => ConflictResolution::Skip,
-        };
+        let conflict_resolution =
+            ConflictMenu::select("Choose what to do when target file already exists")
+                .with_default(2)
+                .ask()?
+                .value;
 
         let dry_run =
             Confirm::new("Perform dry run? (preview changes without moving files)").ask()?;

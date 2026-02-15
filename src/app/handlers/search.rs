@@ -27,7 +27,7 @@ impl Handlers {
             Err(e) => return Err(e),
         };
 
-        match selection {
+        match selection.value {
             SearchMenu::Posts => self.ui.search_posts().await.into_diagnostic()?,
             SearchMenu::Pools => self.handle_pool_search().await?,
             SearchMenu::Back => {}
@@ -56,7 +56,7 @@ impl Handlers {
                 Err(e) => return Err(e),
             };
 
-        match pool_mode {
+        match pool_mode.value {
             PoolSearchModeMenu::Simple => self.ui.search_pools().await.into_diagnostic()?,
             PoolSearchModeMenu::Advanced => self.ui.search_pools_adv().await.into_diagnostic()?,
         }

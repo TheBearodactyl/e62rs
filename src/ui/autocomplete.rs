@@ -1,7 +1,7 @@
-//! autocompleters for inquire
+//! autocompleters for bearask
 use {
     crate::data::{pools::PoolDb, tags::TagDb},
-    inquire::{Autocomplete, CustomUserError, autocompletion::Replacement},
+    bearask::{Autocomplete, Replacement},
     owo_colors::OwoColorize,
     std::sync::Arc,
 };
@@ -266,7 +266,7 @@ impl TagAutocompleter {
 }
 
 impl Autocomplete for TagAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, CustomUserError> {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, String> {
         Ok(self.inner.get_suggestions_impl(input))
     }
 
@@ -274,7 +274,7 @@ impl Autocomplete for TagAutocompleter {
         &mut self,
         input: &str,
         highlighted_suggestion: Option<String>,
-    ) -> Result<Replacement, CustomUserError> {
+    ) -> Result<Replacement, String> {
         Ok(self
             .inner
             .get_completion_impl(input, highlighted_suggestion))
@@ -326,7 +326,7 @@ impl PoolAutocompleter {
 }
 
 impl Autocomplete for PoolAutocompleter {
-    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, CustomUserError> {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, String> {
         Ok(self.inner.get_suggestions_impl(input))
     }
 
@@ -334,7 +334,7 @@ impl Autocomplete for PoolAutocompleter {
         &mut self,
         input: &str,
         highlighted_suggestion: Option<String>,
-    ) -> Result<Replacement, CustomUserError> {
+    ) -> Result<Replacement, String> {
         Ok(self
             .inner
             .get_completion_impl(input, highlighted_suggestion))

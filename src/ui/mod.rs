@@ -20,12 +20,11 @@ use {
             progress::ProgressManager,
         },
     },
-    bearask::Confirm,
+    bearask::{AskOption, Confirm, MultiSelect, Number, TextInput},
     boundbook::BbfBuilder,
     color_eyre::eyre::Context,
     hashbrown::{HashMap, HashSet},
     indicatif::{ProgressBar, ProgressStyle},
-    inquire::{MultiSelect, Text},
     owo_colors::OwoColorize,
     qrcode::QrCode,
     serde::{Deserialize, Serialize},
@@ -37,7 +36,6 @@ use {
 pub mod autocomplete;
 pub mod menus;
 pub mod progress;
-pub mod themes;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 /// a post download
@@ -229,14 +227,14 @@ impl E6Ui {
         }
 
         let autocomplete = TagAutocompleter::new(self.tag_db.clone());
-        let tags_input = inquire::Text::new("Enter tags:")
-            .with_help_message(
-                "Space-separated tags. Use - to exclude, ~ for OR. Tab to autocomplete",
-            )
-            .with_placeholder("e.g., cat dog -gore")
-            .with_autocomplete(autocomplete)
-            .prompt()
-            .context("failed to get tags input")?;
+        let tags_input = miette::Context::context(
+            TextInput::new("Enter tags:")
+                .with_help_message("Space-separated tags. Use - to exclude, ~ for OR.")
+                .with_placeholder("e.g., anthro solo -gore")
+                .with_autocomplete(autocomplete)
+                .ask(),
+            "failed to get tags input",
+        )?;
 
         let mut includes = Vec::new();
         let mut excludes = Vec::new();
@@ -304,36 +302,30 @@ impl E6Ui {
     ///
     /// * `posts` - the posts to select from
     pub fn select_multiple_posts<'a>(&self, posts: &'a [E6Post]) -> Result<Vec<&'a E6Post>> {
-        let options: Vec<String> = posts
+        let options: Vec<AskOption<&E6Post>> = posts
             .iter()
             .map(|post| {
-                format!(
-                    "ID: {} | Score: {} | Rating: {}",
-                    post.id, post.score.total, post.rating
+                AskOption::with_name(
+                    format!(
+                        "ID: {} | Score: {} | Rating: {}",
+                        post.id, post.score.total, post.rating
+                    ),
+                    post,
                 )
             })
             .collect();
 
-        let selections =
-            MultiSelect::new("Select posts (Space to select, Enter to confirm):", options)
+        let selections = miette::Context::context(
+            MultiSelect::new("Select posts (Space to select, Enter to confirm):")
+                .with_options(options)
                 .with_help_message(
                     "Use arrow keys to navigate, Space to select/deselect, Enter to confirm",
                 )
-                .prompt()
-                .context("Failed to get post selections")?;
+                .ask(),
+            "Failed to get post selections",
+        )?;
 
-        let selected_posts: Vec<&E6Post> = selections
-            .iter()
-            .filter_map(|selection| {
-                selection
-                    .split_whitespace()
-                    .nth(1)
-                    .and_then(|id_str| id_str.parse::<i64>().ok())
-                    .and_then(|id| posts.iter().find(|p| p.id == id))
-            })
-            .collect();
-
-        Ok(selected_posts)
+        Ok(selections.clone().iter().map(|p| p.value).collect())
     }
 
     /// shows the interaction menu for a post
@@ -347,7 +339,7 @@ impl E6Ui {
             "Failed to get interaction choice",
         )?;
 
-        match choice {
+        match choice.value {
             InteractionMenu::OpenInBrowser => {
                 self.open_in_browser(&post)?;
             }
@@ -379,7 +371,7 @@ impl E6Ui {
             }
         }
 
-        Ok(choice)
+        Ok(choice.value)
     }
 
     /// opens the current configuration in the default editor
@@ -434,7 +426,7 @@ impl E6Ui {
             "Failed to get batch action choice",
         )?;
 
-        match choice {
+        match choice.value {
             BatchAction::DownloadAll => {
                 self.downloader.clone().download_posts(posts).await?;
             }
@@ -455,7 +447,7 @@ impl E6Ui {
             }
         }
 
-        Ok(choice)
+        Ok(choice.value)
     }
 
     /// display a menu for interacting with posts
@@ -469,7 +461,7 @@ impl E6Ui {
             "Failed to get pool interaction choice",
         )?;
 
-        match choice {
+        match choice.value {
             PoolInteractionMenu::ViewPosts => {
                 let posts = self.client.get_pool_posts(pool.id).await?;
                 if posts.posts.is_empty() {
@@ -523,7 +515,7 @@ impl E6Ui {
             }
         }
 
-        Ok(choice)
+        Ok(choice.value)
     }
 
     /// download pool posts to `<pools_dir>/<pool_name>/`
@@ -818,28 +810,31 @@ impl E6Ui {
         let mut sorted_artists: Vec<_> = artist_post_counts.iter().collect();
         sorted_artists.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
 
-        let artist_options: Vec<String> = sorted_artists
-            .iter()
+        let artist_options: Vec<AskOption<String>> = sorted_artists
+            .into_iter()
             .map(|(artist, count)| {
-                format!(
-                    "{} ({} downloaded post{})",
-                    artist,
-                    count,
-                    if **count == 1 { "" } else { "s" }
+                AskOption::with_name(
+                    format!(
+                        "{} ({} downloaded post{})",
+                        artist,
+                        count,
+                        if *count == 1 { "" } else { "s" }
+                    ),
+                    artist.clone(),
                 )
             })
             .collect();
 
-        let selected_artists = MultiSelect::new(
-            "Select artists to check for new posts (Space to toggle, Enter to confirm):",
-            artist_options.clone(),
-        )
-        .with_help_message(
-            "All artists are selected by default. Deselect any you don't want to update.",
-        )
-        .with_default(&(0..artist_options.len()).collect::<Vec<_>>())
-        .prompt()
-        .context("Failed to get artist selection")?;
+        let selected_artists = miette::Context::context(
+            MultiSelect::new("Select artists to check for new posts:")
+                .with_options(artist_options.clone())
+                .with_help_message(
+                    "All artists are selected by default. Deselect any you don't want to update",
+                )
+                .with_default_selections(&(0..artist_options.clone().len()).collect::<Vec<_>>())
+                .ask(),
+            "Failed to get artist selection",
+        )?;
 
         if selected_artists.is_empty() {
             println!("No artists selected. Operation cancelled.");
@@ -853,7 +848,7 @@ impl E6Ui {
             if selected_artists.len() == 1 { "" } else { "s" }
         );
 
-        for (i, artist) in selected_artists.iter().enumerate() {
+        for (i, artist) in selected_artists.iter().map(|o| &o.value).enumerate() {
             let count = artist_post_counts.get(artist).unwrap_or(&0);
             if i < 20 {
                 println!(
@@ -895,17 +890,14 @@ impl E6Ui {
             return Ok(());
         }
 
-        let limit_per_artist =
-            Text::new("Maximum NEW posts per artist to download (leave empty for all):")
-                .with_placeholder("e.g., 50")
-                .prompt_skippable()?;
+        let limit_per_artist: u64 =
+            Number::new("Maximum NEW posts per artist to download (leave empty for all):")
+                .with_help_message("e.g., 50")
+                .with_default(0)
+                .ask()?;
 
-        let limit: Option<u64> = if let Some(input) = limit_per_artist {
-            if input.is_empty() {
-                None
-            } else {
-                Some(input.parse()?)
-            }
+        let limit: Option<u64> = if limit_per_artist != 0 {
+            Some(limit_per_artist)
         } else {
             None
         };
@@ -943,7 +935,7 @@ impl E6Ui {
                 let result = Self::download_new_artist_posts(
                     &client,
                     &downloader,
-                    &artist,
+                    &artist.value,
                     limit,
                     &downloaded_ids,
                     &blacklist,
@@ -977,13 +969,15 @@ impl E6Ui {
                     total_new_posts += new_count;
                     total_already_downloaded += skipped_count;
                     total_blacklisted += blacklisted_count;
-                    artist_results
-                        .push((artist, Ok((new_count, skipped_count, blacklisted_count))));
+                    artist_results.push((
+                        artist.value,
+                        Ok((new_count, skipped_count, blacklisted_count)),
+                    ));
                 }
                 Ok((artist, Err(error_msg))) => {
                     total_errors += 1;
-                    artist_results.push((artist.clone(), Err(error_msg.clone())));
-                    warn!("Failed to check posts from {}: {}", artist, error_msg);
+                    artist_results.push((artist.value.clone(), Err(error_msg.clone())));
+                    warn!("Failed to check posts from {}: {}", artist.value, error_msg);
                 }
                 Err(e) => {
                     total_errors += 1;

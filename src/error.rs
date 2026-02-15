@@ -52,10 +52,6 @@ pub enum E6Error {
     #[error("reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
 
-    /// an inquire error
-    #[error("inquire error: {0}")]
-    Inquire(#[from] inquire::InquireError),
-
     /// a qr code error
     #[error("qr code error: {0}")]
     QR(#[from] qrcode::types::QrError),

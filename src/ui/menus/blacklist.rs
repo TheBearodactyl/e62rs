@@ -6,10 +6,9 @@ use {
         getopt,
         ui::{E6Ui, autocomplete::TagAutocompleter, menus::BlacklistManager},
     },
-    bearask::Confirm,
+    bearask::{AskOption, Confirm, MultiSelect, Select, TextInput},
     color_eyre::eyre::Context,
     hashbrown::HashSet,
-    inquire::{MultiSelect, Select},
     std::sync::Arc,
 };
 
@@ -100,7 +99,7 @@ impl BlacklistMenu for E6Ui {
                 "Failed to display blacklist menu",
             )?;
 
-            let should_continue = match blacklist_action {
+            let should_continue = match blacklist_action.value {
                 BlacklistManager::ShowCurrent => {
                     self.show_blacklist_info()?;
                     self.prompt_continue()?
@@ -146,10 +145,12 @@ impl BlacklistMenu for E6Ui {
         let tag_db = Arc::clone(&self.tag_db);
         let completer = TagAutocompleter::new(tag_db);
 
-        let tag = inquire::Text::new("Enter tag to add to blacklist:")
-            .with_autocomplete(completer)
-            .prompt()
-            .wrap_err("Failed to get tag input")?;
+        let tag = miette::Context::wrap_err(
+            TextInput::new("Enter a tag to add to the blacklist:")
+                .with_autocomplete(completer)
+                .ask(),
+            "Failed to get tag input",
+        )?;
 
         let tag = tag.trim();
 
@@ -192,18 +193,27 @@ impl BlacklistMenu for E6Ui {
             return Ok(true);
         }
 
-        let suggestions = self.tag_db.search(tag, 5);
+        let suggestions = self
+            .tag_db
+            .search(tag, 5)
+            .iter()
+            .map(|s| AskOption::with_name(s.clone(), s.clone()))
+            .collect::<Vec<_>>();
         if suggestions.is_empty() {
             return Ok(false);
         }
 
-        let selected = Select::new("Did you mean one of these tags?", suggestions)
-            .with_help_message("Select a tag or press ESC to cancel")
-            .prompt()
-            .wrap_err("Failed to display tag suggestions")?;
+        let selected = miette::Context::wrap_err(
+            Select::new("Did you mean one of these tags?")
+                .with_options(suggestions)
+                .with_help_message("Select a tag or press ESC to cancel")
+                .ask(),
+            "Failed to display tag suggestions",
+        )?
+        .value;
 
         if !selected.is_empty() {
-            self.add_validated_tag_to_blacklist(selected.clone())
+            self.add_validated_tag_to_blacklist(selected.to_string())
                 .await?;
         }
 
@@ -235,10 +245,19 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let tag_to_remove = Select::new("Select tag to remove from blacklist:", blacklist)
-            .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-            .prompt()
-            .wrap_err("Failed to display tag selection")?;
+        let tag_to_remove = miette::Context::wrap_err(
+            Select::new("Select tag to remove from blacklist:")
+                .with_options(
+                    blacklist
+                        .iter()
+                        .map(|t| AskOption::with_name(t.clone(), t.clone()))
+                        .collect(),
+                )
+                .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
+                .ask(),
+            "Failed to display tag selection",
+        )?
+        .value;
 
         if tag_to_remove.is_empty() {
             return Ok(());
@@ -356,16 +375,21 @@ impl BlacklistMenu for E6Ui {
             return Ok(());
         }
 
-        let selected_tags = MultiSelect::new(
-            &format!(
+        let sorted_options = sorted_tags
+            .iter()
+            .map(|opt| AskOption::with_name(opt.clone(), opt.clone()))
+            .collect::<Vec<_>>();
+
+        let selected_tags = miette::Context::wrap_err(
+            MultiSelect::new(format!(
                 "Select tags to add to blacklist ({} available):",
                 sorted_tags.len()
-            ),
-            sorted_tags,
-        )
-        .with_help_message("Space to select/deselect, Enter to confirm, Esc to cancel")
-        .prompt()
-        .wrap_err("Failed to display tag selection")?;
+            ))
+            .with_options(sorted_options)
+            .with_help_message("Space to select/deselect, Enter to confirm, Esc to cancel")
+            .ask(),
+            "Failed to display tag selection",
+        )?;
 
         if selected_tags.is_empty() {
             println!("No tags selected.");
@@ -390,6 +414,7 @@ impl BlacklistMenu for E6Ui {
         let mut errors = Vec::new();
 
         for tag in selected_tags {
+            let tag = tag.value;
             if blacklist.contains(&tag) {
                 already_exists += 1;
                 continue;

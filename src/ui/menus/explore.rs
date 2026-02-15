@@ -10,18 +10,17 @@ use {
         ui::{
             E6Ui,
             menus::{
-                ExplorerMenu, ExplorerSortBy,
+                ExplorerFilterBy, ExplorerMenu, ExplorerSortBy, LocalPostInteractionMenu,
                 view::{ViewMenu, print_dl_to_terminal, print_post_to_terminal},
             },
             progress::ProgressManager,
         },
     },
-    bearask::Confirm,
+    bearask::{AskOption, Confirm, Select, TextInput},
     color_eyre::eyre::Context,
     crossterm::event::{Event, KeyCode, KeyEventKind},
     futures::lock::Mutex,
     hashbrown::HashMap,
-    inquire::Select,
     jwalk::WalkDir,
     owo_colors::OwoColorize,
     qrcode::QrCode,
@@ -598,7 +597,7 @@ impl ExploreMenu for E6Ui {
             ))
             .ask()?;
 
-            let should_break = match action {
+            let should_break = match action.value {
                 ExplorerMenu::Browse => {
                     if state.filtered_posts.is_empty() {
                         println!("No posts match the current filters.");
@@ -608,10 +607,10 @@ impl ExploreMenu for E6Ui {
                     false
                 }
                 ExplorerMenu::Search => {
-                    let query = inquire::Text::new(
+                    let query = TextInput::new(
                         "Enter search query (tags, file extension, ID, uploader, or description):",
                     )
-                    .prompt()?;
+                    .ask()?;
                     state.search(Some(query));
                     println!("Found {} matching posts", state.filtered_posts.len());
                     false
@@ -858,46 +857,66 @@ impl ExploreMenu for E6Ui {
             let end = (start + posts_per_page).min(posts.len());
             let page_posts = &posts[start..end];
 
-            let mut options: Vec<String> = page_posts
+            let mut options: Vec<AskOption<_>> = page_posts
                 .iter()
                 .map(|local_post| {
                     let post = &local_post.post;
-                    format!(
-                        "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
-                        post.id,
-                        post.score.total,
-                        post.rating,
-                        post.fav_count,
-                        post.tags.artist.first().unwrap_or(&"unknown".to_string())
+                    AskOption::with_name(
+                        format!(
+                            "ID: {} | Score: {} | Rating: {} | Favs: {} | {}",
+                            post.id,
+                            post.score.total,
+                            post.rating,
+                            post.fav_count,
+                            post.tags.artist.first().unwrap_or(&"unknown".to_string())
+                        ),
+                        post,
                     )
                 })
                 .collect();
 
+            let default_post = E6Post::default();
+
             if total_pages > 1 {
-                options.push(format!("--- Page {}/{} ---", current_page + 1, total_pages));
+                options.push(AskOption::with_name(
+                    format!("--- Page {}/{} ---", current_page + 1, total_pages),
+                    &default_post,
+                ));
+
                 if current_page > 0 {
-                    options.push("◄ Previous Page".to_string());
+                    options.push(AskOption::with_name(
+                        "󰁍 Previous page".to_string(),
+                        &default_post,
+                    ));
                 }
                 if current_page < total_pages - 1 {
-                    options.push("Next Page ►".to_string());
+                    options.push(AskOption::with_name(
+                        "Next page 󰁔".to_string(),
+                        &default_post,
+                    ));
                 }
             }
-            options.push("◄ Back to Explorer Menu".to_string());
+            options.push(AskOption::with_name(
+                "󰓕 Back to explorer menu".to_string(),
+                &default_post,
+            ));
 
             let selection = Some(
-                Select::new("Select a post to view:", options)
+                Select::new("Select a post to view:")
+                    .with_options(options)
                     .with_help_message("Use arrow keys to navigate, Enter to select, Esc to cancel")
-                    .prompt()?,
+                    .ask()?,
             );
 
             if let Some(selected) = selection {
-                if selected.starts_with("Next Page") {
+                if selected.name.starts_with("Next Page") {
                     current_page = (current_page + 1).min(total_pages - 1);
                     continue;
-                } else if selected.starts_with("◄ Previous Page") {
+                } else if selected.name.starts_with("◄ Previous Page") {
                     current_page = current_page.saturating_sub(1);
                     continue;
-                } else if selected.starts_with("◄ Back") || selected.starts_with("---") {
+                } else if selected.name.starts_with("◄ Back") || selected.name.starts_with("---")
+                {
                     break;
                 }
 
@@ -913,7 +932,7 @@ impl ExploreMenu for E6Ui {
                             .artist
                             .first()
                             .unwrap_or(&"unknown".to_string())
-                    ) == selected
+                    ) == selected.name
                 });
 
                 if let Some(idx) = index {
@@ -936,40 +955,35 @@ impl ExploreMenu for E6Ui {
             warn!("Failed to auto-display image: {}", e);
         }
 
-        let opts = [
-            "Make QR",
-            "View image in terminal",
-            "Open in browser",
-            "Open file location",
-            "Show full metadata",
-            "Back to list",
-        ];
-
         loop {
-            let action = Select::new("What would you like to do?", opts.to_vec()).prompt()?;
+            let action = LocalPostInteractionMenu::select("What would you like to do?")
+                .ask()?
+                .value;
 
             match action {
-                "View image in terminal" => match print_dl_to_terminal(&local_post.file_path) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("Failed to display local image: {}", e);
-                        if let Some(ref _url) = local_post.post.file.url {
-                            println!("Trying to fetch from URL instead...");
-                            print_post_to_terminal(local_post.post.clone())
-                                .await
-                                .context("Failed to view image from URL")?;
+                LocalPostInteractionMenu::ViewInTerminal => {
+                    match print_dl_to_terminal(&local_post.file_path) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("Failed to display local image: {}", e);
+                            if let Some(ref _url) = local_post.post.file.url {
+                                println!("Trying to fetch from URL instead...");
+                                print_post_to_terminal(local_post.post.clone())
+                                    .await
+                                    .context("Failed to view image from URL")?;
+                            }
                         }
                     }
-                },
-                "Open in browser" => {
+                }
+                LocalPostInteractionMenu::OpenInBrowser => {
                     self.open_in_browser(&local_post.post)?;
                 }
-                "Open file location" => {
+                LocalPostInteractionMenu::OpenFileLocation => {
                     let parent = local_post.file_path.parent().unwrap_or(Path::new("."));
                     open::that(parent).context("Failed to open file location")?;
                     println!("Opened: {}", parent.display());
                 }
-                "Make QR" => {
+                LocalPostInteractionMenu::MakeQR => {
                     let url = format!("https://e621.net/posts/{}", local_post.post.id);
                     let qr = QrCode::with_version(
                         url.into_bytes(),
@@ -985,7 +999,7 @@ impl ExploreMenu for E6Ui {
 
                     println!("{}", str);
                 }
-                "Show full metadata" => {
+                LocalPostInteractionMenu::ShowFullMetadata => {
                     println!("\n{}", "=".repeat(70));
                     println!(
                         "{}",
@@ -994,12 +1008,11 @@ impl ExploreMenu for E6Ui {
                     );
                     println!("{}", "=".repeat(70));
                 }
-                "Back to list" => {
+                LocalPostInteractionMenu::Back => {
                     print!("\x1B[2J\x1B[3J\x1B[H");
                     std::io::Write::flush(&mut std::io::stdout()).unwrap();
                     break;
                 }
-                _ => {}
             }
 
             if !Confirm::new("Continue viewing this post?").ask()? {
@@ -1012,15 +1025,13 @@ impl ExploreMenu for E6Ui {
 
     /// filter posts by content rating
     fn filter_by_rating(&self, state: &mut ExplorerState) -> Result<()> {
-        let options = ["All ratings", "Safe", "Questionable", "Explicit"];
-        let selection = Select::new("Filter by rating:", options.to_vec()).prompt()?;
+        let selection = ExplorerFilterBy::select("Filter by rating:").ask()?.value;
 
         match selection {
-            "All ratings" => state.filter_by_rating(None),
-            "Safe" => state.filter_by_rating(Some("s".to_string())),
-            "Questionable" => state.filter_by_rating(Some("q".to_string())),
-            "Explicit" => state.filter_by_rating(Some("e".to_string())),
-            _ => {}
+            ExplorerFilterBy::AllRatings => state.filter_by_rating(None),
+            ExplorerFilterBy::Safe => state.filter_by_rating(Some("s".to_string())),
+            ExplorerFilterBy::Questionable => state.filter_by_rating(Some("q".to_string())),
+            ExplorerFilterBy::Explicit => state.filter_by_rating(Some("e".to_string())),
         }
 
         println!("Showing {} posts", state.filtered_posts.len());
@@ -1029,7 +1040,7 @@ impl ExploreMenu for E6Ui {
 
     /// sort posts
     fn sort_posts(&self, state: &mut ExplorerState) -> Result<()> {
-        let sort_by = ExplorerSortBy::select("Sort posts by:").ask()?;
+        let sort_by = ExplorerSortBy::select("Sort posts by:").ask()?.value;
         state.sort(sort_by);
         println!("Posts sorted");
         Ok(())

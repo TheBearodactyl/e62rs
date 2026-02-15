@@ -18,6 +18,158 @@ pub struct TranslationStats {
 }
 
 crate::menu! {
+    /// Interact with a local post in the explorer
+    pub LocalPostInteractionMenu {
+        filterable: true,
+
+        /// Make a QR to the posts E621 URL
+        MakeQR => {
+            label: {
+                english => "Make QR",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Make a QR code based on the post ID",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+
+        /// View the posts image in your terminal
+        ViewInTerminal => {
+            label: {
+                english => "View in terminal",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Display the post image in your terminal via SIXEL",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+
+        /// Open the post in your terminal
+        OpenInBrowser => {
+            label: {
+                english => "Open in browser",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Open the post in e621 on your browser",
+                japanese => "",
+                spanish => ""
+            },
+
+            online: false
+        },
+
+        /// Show the post in your file manager
+        OpenFileLocation => {
+            label: {
+                english => "Open file location",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Reveal in your file manager",
+                japanese => "",
+                spanish => ""
+            },
+
+            online: false
+        },
+
+        /// Print the full post metadata to your terminal
+        ShowFullMetadata => {
+            label: {
+                english => "Show the full post metadata",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Print full metadata as formatted JSON",
+                japanese => "",
+                spanish => ""
+            },
+
+            online: false
+        },
+
+        /// Go back
+        Back => {
+            label: {
+                english => "Go back to the download list",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Return to the post downloads list",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        }
+    }
+}
+
+crate::menu! {
+    /// Reorganization conflict resolution menu
+    pub ConflictMenu {
+        filterable: true,
+
+        /// Skip existing files
+        Skip => {
+            label: {
+                english => "Skip existing",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Don't reorganize a file if its destination exists",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+
+        /// Overwrite existing files
+        Overwrite => {
+            label: {
+                english => "Overwrite existing",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Overwrite the destination path when reorganizing",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+
+        /// Auto-rename duplicates
+        AutoRename => {
+            label: {
+                english => "Auto-rename duplicates",
+                japanese => "",
+                spanish => ""
+            },
+            desc: {
+                english => "Rename duplicate files when reorganizing",
+                japanese => "",
+                spanish => ""
+            },
+            online: false
+        },
+    }
+}
+
+crate::menu! {
     /// Configuration menu
     pub ConfigMenu {
         filterable: true,

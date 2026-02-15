@@ -25,14 +25,13 @@ impl E6App {
     /// initialize e62rs
     ///
     /// - 1. installs the miette error handler hook
-    /// - 2. sets up the custom inquire render config
-    /// - 3. validates the base api url
-    /// - 4. handles any cli arguments if any
-    /// - 5. clears the screen
-    /// - 6. sets up logging
-    /// - 8. sets up the custom interruption handler if enabled
-    /// - 9. sets up the ui
-    /// - 10. loads the config file
+    /// - 2. validates the base api url
+    /// - 3. handles any cli arguments if any
+    /// - 4. clears the screen
+    /// - 5. sets up logging
+    /// - 6. sets up the custom interruption handler if enabled
+    /// - 7. sets up the ui
+    /// - 8. loads the config file
     ///
     /// # Errors
     ///
@@ -53,7 +52,6 @@ impl E6App {
                     .build(),
             )
         }))?;
-        Self::setup_inquire_render_config();
 
         if crate::utils::ꟿ(crate::getopt!(http.api)) {
             std::process::exit(1);
@@ -83,11 +81,6 @@ impl E6App {
     /// returns an error if the main loop fails
     pub async fn run(&self) -> Result<()> {
         self.handlers.run_main_loop().await
-    }
-
-    /// sets up inquire with the rose pine theme
-    fn setup_inquire_render_config() {
-        inquire::set_global_render_config(crate::ui::themes::get_render_config());
     }
 
     /// clear the screen

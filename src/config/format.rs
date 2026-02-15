@@ -270,7 +270,7 @@ impl FormatTemplate {
         })
     }
 
-    /// apply index spec to an array
+    /// apply an index spec to an array
     fn apply_index_spec(&self, array: &[String], spec: &IndexSpec) -> String {
         let mut items: Vec<&String> = match &spec.selection {
             IndexSelection::First(n) => array.iter().take(*n).collect(),
@@ -286,7 +286,7 @@ impl FormatTemplate {
             IndexSelection::Random(n) => {
                 let mut rng = rand::rng();
                 let count = (*n).min(array.len());
-                array.choose_multiple(&mut rng, count).collect()
+                array.sample(&mut rng, count).collect()
             }
         };
 
