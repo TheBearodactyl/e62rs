@@ -6,6 +6,7 @@ use {
     std::{fs::File, slice, sync::Arc},
 };
 
+pub mod history;
 pub mod pools;
 pub mod tags;
 
@@ -191,7 +192,7 @@ impl<T: Entry> Db<T> {
         unsafe {
             for entry in self.buf.iter() {
                 let name_lower = Self::lowercase(entry.name());
-                let name_sim = fuzz::ratio(name_lower.chars(), query_lower.chars());
+                let name_sim = fuzz::ratio(name_lower.chars(), query_lower.chars()) / 100.0;
 
                 if name_sim > getopt!(completion.tag_similarity_threshold) {
                     results.push(entry.name().to_string());

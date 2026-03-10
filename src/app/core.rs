@@ -64,6 +64,8 @@ impl E6App {
             logging::setup()?;
         }
 
+        owo_colors::set_override(getopt!(ui.colored_output));
+
         let interrupt = Self::setup_interrupt_handler()?;
         let ui = Self::setup_ui().await?;
 

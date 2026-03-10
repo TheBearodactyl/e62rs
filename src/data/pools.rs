@@ -113,21 +113,47 @@ impl PoolDb {
     }
 
     /// returns autocompletions for pool names
+    ///
+    /// uses fuzzy matching via nucleo for typo-tolerant completions,
+    /// with prefix matches prioritized
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
         if query.is_empty() {
             return Vec::new();
         }
 
         let query_lower = query.to_lowercase();
-        let mut results = Vec::with_capacity(limit);
+        let mut seen = HashSet::new();
+        let mut scored: Vec<(u32, String)> = Vec::new();
 
+        // prefix matches get a bonus to appear first
         if let Some(subtrie) = self.pool_trie.get_raw_descendant(&query_lower) {
-            for (_, pool) in subtrie.iter().take(limit) {
-                results.push(pool.name.clone());
+            for (_, pool) in subtrie.iter().take(limit * 4) {
+                if seen.insert(pool.name.clone()) {
+                    scored.push((u32::MAX, pool.name.clone()));
+                }
             }
         }
 
-        results
+        // fuzzy matching for non-prefix matches
+        let mut matcher = Matcher::new(Config::DEFAULT);
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+
+        for pool in &self.sorted_pools {
+            if seen.contains(&pool.name) {
+                continue;
+            }
+            let mut buf = Vec::new();
+            if let Some(score) = pattern.score(
+                nucleo_matcher::Utf32Str::new(&pool.name, &mut buf),
+                &mut matcher,
+            ) {
+                seen.insert(pool.name.clone());
+                scored.push((score, pool.name.clone()));
+            }
+        }
+
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
+        scored.into_iter().take(limit).map(|(_, n)| n).collect()
     }
 
     /// checks if a pool with the given name exists

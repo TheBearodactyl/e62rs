@@ -286,9 +286,10 @@ macro_rules! menu {
                     })
                     .collect();
 
+                let page_size = $crate::getopt!(ui.pagination_size);
                 bearask::Select::new(prompt)
                     .with_options(options)
-                    .with_page_size(if $filterable { 10 } else { 7 })
+                    .with_page_size(page_size)
                     .with_help_message(Self::get_help_message())
             }
 

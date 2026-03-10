@@ -274,42 +274,71 @@ impl TagDb {
 
     /// returns autocompletion possibilities for tag names
     /// (includes: tags and aliases, resolves to: canonical names)
+    ///
+    /// uses fuzzy matching via nucleo for typo-tolerant completions,
+    /// with prefix matches prioritized
     pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
         if query.is_empty() {
             return Vec::new();
         }
 
         let query_lower = query.to_lowercase();
-        let mut results = Vec::with_capacity(limit);
         let mut seen = HashSet::new();
+        let mut scored: Vec<(u32, String)> = Vec::new();
 
+        // prefix matches get a bonus to appear first
         if let Some(subtrie) = self.tag_trie.get_raw_descendant(&query_lower) {
-            for (key, _) in subtrie.iter().take(limit * 2) {
+            for (key, _) in subtrie.iter().take(limit * 4) {
                 if seen.insert(key.clone()) {
-                    results.push(key.clone());
-                    if results.len() >= limit {
-                        break;
-                    }
+                    scored.push((u32::MAX, key.clone()));
                 }
             }
         }
 
-        if results.len() < limit
-            && let Some(subtrie) = self.alias_trie.get_raw_descendant(&query_lower)
-        {
-            for (_, canonical) in subtrie.iter().take(limit) {
+        if let Some(subtrie) = self.alias_trie.get_raw_descendant(&query_lower) {
+            for (_, canonical) in subtrie.iter().take(limit * 2) {
                 let resolved = self.resolve_alias(canonical);
                 if seen.insert(resolved.clone()) {
-                    results.push(resolved);
-                    if results.len() >= limit {
-                        break;
-                    }
+                    scored.push((u32::MAX - 1, resolved));
                 }
             }
         }
 
-        results.truncate(limit);
-        results
+        // fuzzy matching for non-prefix matches
+        let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+        let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
+
+        for tag in &self.sorted_tags {
+            if seen.contains(&tag.name) {
+                continue;
+            }
+            let mut buf = Vec::new();
+            if let Some(score) = pattern.score(
+                nucleo_matcher::Utf32Str::new(&tag.name, &mut buf),
+                &mut matcher,
+            ) {
+                seen.insert(tag.name.clone());
+                scored.push((score, tag.name.clone()));
+            }
+        }
+
+        for (alias, canonical) in &self.alias_map {
+            let resolved = self.resolve_alias(canonical);
+            if seen.contains(&resolved) {
+                continue;
+            }
+            let mut buf = Vec::new();
+            if let Some(score) = pattern.score(
+                nucleo_matcher::Utf32Str::new(alias, &mut buf),
+                &mut matcher,
+            ) {
+                seen.insert(resolved.clone());
+                scored.push((score, resolved));
+            }
+        }
+
+        scored.sort_by_key(|b| std::cmp::Reverse(b.0));
+        scored.into_iter().take(limit).map(|(_, n)| n).collect()
     }
 
     /// checks if a tag/alias exists with the given name

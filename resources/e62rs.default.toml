@@ -74,6 +74,7 @@ min-post-score = 0
 max-post-score = 9223372036854775807
 reverse-tags-order = false
 fetch-threads = 8
+search-history = false
 
 [login]
 login = true

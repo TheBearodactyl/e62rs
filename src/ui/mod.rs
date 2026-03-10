@@ -4,7 +4,7 @@ use {
         bail,
         client::E6Client,
         config::{blacklist::get_blacklist, options::E62Rs},
-        data::{pools::PoolDb, tags::TagDb},
+        data::{history::SearchHistory, pools::PoolDb, tags::TagDb},
         error::{Report, Result},
         getopt,
         models::{E6Pool, E6Post},
@@ -28,7 +28,7 @@ use {
     owo_colors::OwoColorize,
     qrcode::QrCode,
     serde::{Deserialize, Serialize},
-    std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration},
+    std::{path::PathBuf, str::FromStr, sync::{Arc, Mutex}, time::Duration},
     tokio::{fs, sync::Semaphore},
     tracing::{debug, info, warn},
 };
@@ -53,8 +53,8 @@ pub struct DownloadData {
     pub posts: Vec<Download>,
 }
 
-#[derive(Default, Clone)]
 /// the ui for e62rs
+#[derive(Clone)]
 pub struct E6Ui {
     /// the e6 api client
     pub client: Arc<E6Client>,
@@ -64,6 +64,8 @@ pub struct E6Ui {
     pub tag_db: Arc<TagDb>,
     /// the pools db
     pub pool_db: Arc<PoolDb>,
+    /// search history
+    pub history: Arc<Mutex<SearchHistory>>,
 }
 
 impl E6Ui {
@@ -85,11 +87,16 @@ impl E6Ui {
                 .expect("Failed to create output directory");
         }
 
+        let history = Arc::new(Mutex::new(
+            SearchHistory::load().unwrap_or_default(),
+        ));
+
         Self {
             client,
             downloader,
             tag_db,
             pool_db,
+            history,
         }
     }
 
@@ -224,6 +231,19 @@ impl E6Ui {
                 "•".bright_blue(),
                 "'alias -> canonical'".italic().bright_black()
             );
+        }
+
+        if getopt!(search.search_history) {
+            if let Ok(history) = self.history.lock() {
+                let recent = history.suggestions("");
+                if !recent.is_empty() {
+                    println!("{}", "Recent searches:".bright_black());
+                    for (i, entry) in recent.iter().take(5).enumerate() {
+                        println!("  {} {}", format!("{}.", i + 1).bright_black(), entry.bright_black());
+                    }
+                    println!();
+                }
+            }
         }
 
         let autocomplete = TagAutocompleter::new(self.tag_db.clone());

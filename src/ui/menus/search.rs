@@ -243,7 +243,7 @@ impl SearchMenu for E6Ui {
 
     /// get the max number of pools to display
     fn get_pool_limit(&self) -> Result<u64> {
-        let default_limit = getopt!(search.results).min(getopt!(search.results));
+        let default_limit = getopt!(search.results);
 
         let input = miette::Context::context(
             TextInput::new("How many pools to return?")
@@ -295,6 +295,7 @@ impl SearchMenu for E6Ui {
         let selection = match miette::Context::context(
             Select::new("Select a pool to view:")
                 .with_options(options)
+                .with_page_size(getopt!(ui.pagination_size))
                 .ask(),
             "Failed to get pool selection",
         ) {
@@ -428,6 +429,13 @@ impl SearchMenu for E6Ui {
 
         debug!("Searching with tags: {:?}", all_tags);
 
+        if getopt!(search.search_history) {
+            if let Ok(mut history) = self.history.lock() {
+                history.add(&all_tags.join(" "));
+                let _ = history.save();
+            }
+        }
+
         let posts = self.fetch_posts_paginated(all_tags, total_limit).await?;
 
         if posts.is_empty() {
@@ -546,6 +554,18 @@ impl SearchMenu for E6Ui {
 
     /// handle a post interaction
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
+        // prefetch post details in background while user browses the list
+        if getopt!(performance.prefetch_enabled) {
+            let batch_size = getopt!(performance.prefetch_batch_size);
+            let client = self.client.clone();
+            let prefetch_ids: Vec<i64> = posts.iter().take(batch_size).map(|p| p.id).collect();
+            tokio::spawn(async move {
+                for id in prefetch_ids {
+                    let _ = client.get_post_by_id(id).await;
+                }
+            });
+        }
+
         let use_multi_select = miette::Context::context(
             Confirm::new("Select multiple posts?").ask(),
             "Failed to get multi-select confirmation",
@@ -695,41 +715,37 @@ impl SearchMenu for E6Ui {
     fn get_post_limit(&self) -> Result<u64> {
         let default_limit = getopt!(search.results);
 
-        if default_limit == 32 {
-            let input = miette::Context::context(
-                TextInput::new("How many posts to return?")
-                    .with_validation(|input: &str| {
-                        if input.trim().is_empty() {
-                            return Ok(Validation::Valid);
-                        }
+        let input = miette::Context::context(
+            TextInput::new("How many posts to return?")
+                .with_validation(|input: &str| {
+                    if input.trim().is_empty() {
+                        return Ok(Validation::Valid);
+                    }
 
-                        match input.parse::<u64>() {
-                            Ok(n) if n > 0 => Ok(Validation::Valid),
-                            Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
-                                "Please enter a positive number".to_string(),
-                            ))),
-                            Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
-                                "Please enter a valid number".to_string(),
-                            ))),
-                        }
-                    })
-                    .with_placeholder("32")
-                    .ask(),
-                "Failed to get post limit input",
-            )?;
+                    match input.parse::<u64>() {
+                        Ok(n) if n > 0 => Ok(Validation::Valid),
+                        Ok(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Please enter a positive number".to_string(),
+                        ))),
+                        Err(_) => Ok(Validation::Invalid(ErrorMessage::Custom(
+                            "Please enter a valid number".to_string(),
+                        ))),
+                    }
+                })
+                .with_placeholder(default_limit.to_string())
+                .ask(),
+            "Failed to get post limit input",
+        )?;
 
-            let trimmed = input.trim();
-            if trimmed.is_empty() {
-                return Ok(32);
-            }
-
-            trimmed
-                .parse::<u64>()
-                .context("Failed to parse post limit")
-                .map_err(Report::new)
-        } else {
-            Ok(default_limit)
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return Ok(default_limit);
         }
+
+        trimmed
+            .parse::<u64>()
+            .context("Failed to parse post limit")
+            .map_err(Report::new)
     }
 
     /// ask whether to continue
@@ -763,6 +779,7 @@ impl SearchMenu for E6Ui {
         let selection = match miette::Context::context(
             Select::new("Select a post to view:")
                 .with_options(options)
+                .with_page_size(getopt!(ui.pagination_size))
                 .ask(),
             "Failed to get post selection",
         ) {

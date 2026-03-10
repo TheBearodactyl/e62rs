@@ -78,6 +78,7 @@
 //! max-post-score = 9223372036854775807
 //! reverse-tags-order = false
 //! fetch-threads = 8
+//! search-history = false
 //!
 //! [login]
 //! login = true
@@ -534,6 +535,10 @@ pub struct SearchCfg {
     /// The number of threads to use when fetching post data
     #[default(Some(8))]
     pub fetch_threads: Option<usize>,
+
+    /// Enable persistent search history (opt-in)
+    #[default(Some(false))]
+    pub search_history: Option<bool>,
 }
 
 /// Configuration options for completion in menus
