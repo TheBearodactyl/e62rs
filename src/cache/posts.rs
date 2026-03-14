@@ -1,6 +1,6 @@
 //! post cache management stuff
 use {
-    crate::{bail, cache::stats::PostCacheStats, error::*, getopt, models::E6Post},
+    crate::{bail, cache::stats::PostCacheStats, error::*, models::E6Post},
     color_eyre::{Section, eyre::Context},
     postcard::{from_bytes, to_allocvec},
     redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition},
@@ -46,21 +46,33 @@ pub struct PostCache {
 }
 
 impl PostCache {
-    /// initialize and/or load the post-cache
+    /// initialize and/or load the post-cache with explicit configuration
     ///
     /// # Arguments
     ///
     /// * `cache_dir` - the directory where the cache will be initialized
+    /// * `enabled` - whether the post cache is enabled
+    /// * `max_size_mb` - the maximum cache size in megabytes
+    /// * `max_posts` - the maximum number of posts to cache
+    /// * `auto_compact` - whether to automatically compact the cache
+    /// * `compact_threshold` - the threshold at which to compact
     ///
     /// # Errors
     ///
-    /// returns an error if it fails to make the cache directory  
+    /// returns an error if it fails to make the cache directory
     /// returns an error if it fails to create the post-cache db
     #[macroni_n_cheese::mathinator2000]
-    pub fn new(cache_dir: &str) -> Result<Self> {
+    pub fn with_config(
+        cache_dir: &str,
+        enabled: bool,
+        max_size_mb: u64,
+        max_posts: usize,
+        auto_compact: bool,
+        compact_threshold: u8,
+    ) -> Result<Self> {
         let cache_path = PathBuf::from(cache_dir).join("posts.redb");
 
-        if !getopt!(cache.posts.enabled) {
+        if !enabled {
             info!("Post cache disabled by config");
 
             return Ok(Self {
@@ -74,8 +86,7 @@ impl PostCache {
 
         create_dir_all(cache_dir).context(format!("failed to make cache dir: {}", cache_dir))?;
 
-        let cache_size_mb = getopt!(cache.max_size_mb);
-        let cache_size_bytes = (cache_size_mb / 4 * 1024 * 1024) as usize;
+        let cache_size_bytes = (max_size_mb / 4 * 1024 * 1024) as usize;
         let db = Database::builder()
             .set_cache_size(cache_size_bytes)
             .create(&cache_path)
@@ -85,13 +96,10 @@ impl PostCache {
                 cache_path.display()
             ))?;
         let db = Arc::new(RwLock::new(Some(db)));
-        let max_posts = getopt!(cache.posts.max_posts);
-        let auto_compact = getopt!(cache.posts.auto_compact);
-        let compact_threshold = getopt!(cache.posts.compact_threshold);
 
         info!(
             "initialized post cache at {:?} (max: {} posts, cache: {} MB)",
-            cache_path, max_posts, cache_size_mb
+            cache_path, max_posts, max_size_mb
         );
 
         Ok(Self {
@@ -101,6 +109,19 @@ impl PostCache {
             auto_compact,
             compact_threshold,
         })
+    }
+
+    /// initialize and/or load the post-cache using the loaded configuration
+    #[cfg(feature = "cli")]
+    pub fn new(cache_dir: &str) -> Result<Self> {
+        Self::with_config(
+            cache_dir,
+            crate::getopt!(cache.posts.enabled),
+            crate::getopt!(cache.max_size_mb),
+            crate::getopt!(cache.posts.max_posts),
+            crate::getopt!(cache.posts.auto_compact),
+            crate::getopt!(cache.posts.compact_threshold),
+        )
     }
 
     /// print a list of entries currently in the post-cache

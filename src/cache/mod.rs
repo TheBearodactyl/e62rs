@@ -1,6 +1,6 @@
 //! post and http cache stuff
 use {
-    crate::{bail, cache::posts::CacheEntry, client::E6Client, error::*, getopt},
+    crate::{bail, cache::posts::CacheEntry, client::E6Client, error::*},
     color_eyre::eyre::Context,
     flate2::{Compression, read::GzDecoder, write::GzEncoder},
     hashbrown::HashMap,
@@ -32,8 +32,9 @@ impl E6Client {
     /// * `Ok(Vec<u8>)` - the data of the cache entry or fetched post
     pub async fn get_cached_or_fetch(&self, url: &str) -> Result<Vec<u8>> {
         let cache_key = url.to_string();
+        let cache_enabled = self.cache_config.enabled.unwrap_or(true);
 
-        if getopt!(cache.enabled) {
+        if cache_enabled {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_secs())
@@ -41,17 +42,19 @@ impl E6Client {
                 .map_err(Report::new)
                 .unwrap_or(0);
 
+            let ttl = self.cache_config.ttl_secs.unwrap_or(3600);
+            let tti = self.cache_config.tti_secs.unwrap_or(1800);
+            let enable_stats = self.cache_config.enable_stats.unwrap_or(true);
+
             let cached_data = {
                 let cache = self.cache.read().await;
 
                 cache.get(&cache_key).and_then(|entry| {
-                    let ttl = getopt!(cache.ttl_secs);
-                    let tti = getopt!(cache.tti_secs);
                     let age = now.saturating_sub(entry.timestamp);
                     let idle = now.saturating_sub(entry.last_accessed);
 
                     if age < ttl && idle < tti {
-                        if getopt!(cache.enable_stats) {
+                        if enable_stats {
                             self.cache_stats.hits.fetch_add(1, Ordering::Relaxed);
                         }
 
@@ -63,7 +66,7 @@ impl E6Client {
                             url, age, idle
                         );
 
-                        if getopt!(cache.enable_stats) {
+                        if enable_stats {
                             self.cache_stats.expired.fetch_add(1, Ordering::Relaxed);
                         }
 
@@ -89,7 +92,7 @@ impl E6Client {
                 };
             }
 
-            if getopt!(cache.enable_stats) {
+            if enable_stats {
                 self.cache_stats.misses.fetch_add(1, Ordering::Relaxed);
             }
         }
@@ -124,7 +127,7 @@ impl E6Client {
 
         debug!("network fetch completed in {:?} for {}", elapsed, url);
 
-        if getopt!(cache.enabled)
+        if cache_enabled
             && let Err(e) = self.insert_into_cache(cache_key, bytes.clone(), etag).await
         {
             warn!("failed to insert entry into cache: {}", e);
@@ -150,7 +153,7 @@ impl E6Client {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        let should_compress = getopt!(cache.enable_compression);
+        let should_compress = self.cache_config.enable_compression.unwrap_or(false);
         let (final_data, compressed) = if should_compress && data.len() > 1024 {
             match self.compress_data(&data) {
                 Ok(compressed_data) if compressed_data.len() < data.len() => {
@@ -184,7 +187,7 @@ impl E6Client {
 
         cache.insert(cache_key, entry);
 
-        let max_entries = getopt!(cache.max_entries);
+        let max_entries = self.cache_config.max_entries.unwrap_or(10000);
 
         if cache.len() > max_entries {
             self.evict_entries_inner(&mut cache, max_entries);
@@ -206,7 +209,10 @@ impl E6Client {
             return;
         }
 
-        let keys_to_remove: Vec<String> = if getopt!(cache.use_lru_policy) {
+        let use_lru = self.cache_config.use_lru_policy.unwrap_or(false);
+        let enable_stats = self.cache_config.enable_stats.unwrap_or(true);
+
+        let keys_to_remove: Vec<String> = if use_lru {
             let mut entries: Vec<_> = cache.iter().collect();
 
             entries.sort_by_key(|(_, entry)| entry.last_accessed);
@@ -243,7 +249,7 @@ impl E6Client {
             cache.remove(key);
         }
 
-        if getopt!(cache.enable_stats) {
+        if enable_stats {
             self.cache_stats
                 .evictions
                 .fetch_add(keys_to_remove.len() as u64, Ordering::Relaxed);
@@ -263,7 +269,7 @@ impl E6Client {
     /// returns an error if it fails to move the given data into a compressor
     /// returns an error if it fails to compress the given data
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let level = getopt!(cache.compression_level);
+        let level = self.cache_config.compression_level.unwrap_or(6);
         let level = level.clamp(0, 9) as u32;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::new(level));
@@ -301,7 +307,7 @@ impl E6Client {
         let mut cache = self.cache.write().await;
         cache.clear();
 
-        if getopt!(cache.enable_stats) {
+        if self.cache_config.enable_stats.unwrap_or(true) {
             self.cache_stats.reset();
         }
 
@@ -323,7 +329,7 @@ impl E6Client {
     pub async fn get_detailed_cache_stats(&self) -> String {
         let (size, bytes) = self.get_cache_stats().await;
 
-        if getopt!(cache.enable_stats) {
+        if self.cache_config.enable_stats.unwrap_or(true) {
             let hits = self.cache_stats.hits.load(Ordering::Relaxed);
             let misses = self.cache_stats.misses.load(Ordering::Relaxed);
             let evictions = self.cache_stats.evictions.load(Ordering::Relaxed);
@@ -384,7 +390,7 @@ impl E6Client {
     ///
     /// returns an error if it fails to get the system time in seconds
     pub async fn cleanup_expired_entries(&self) -> Result<usize> {
-        if !getopt!(cache.enabled) {
+        if !self.cache_config.enabled.unwrap_or(true) {
             return Ok(0);
         }
 
@@ -392,8 +398,9 @@ impl E6Client {
             .duration_since(UNIX_EPOCH)
             .map(|a| Duration::as_secs(&a))
             .map_err(Report::new)?;
-        let ttl = getopt!(cache.ttl_secs);
-        let tti = getopt!(cache.tti_secs);
+        let ttl = self.cache_config.ttl_secs.unwrap_or(3600);
+        let tti = self.cache_config.tti_secs.unwrap_or(1800);
+        let enable_stats = self.cache_config.enable_stats.unwrap_or(true);
         let mut cache = self.cache.write().await;
         let keys_to_remove: Vec<String> = cache
             .iter()
@@ -413,7 +420,7 @@ impl E6Client {
         drop(cache);
 
         if count > 0 {
-            if getopt!(cache.enable_stats) {
+            if enable_stats {
                 self.cache_stats
                     .expired
                     .fetch_add(count as u64, Ordering::Relaxed);

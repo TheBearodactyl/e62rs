@@ -554,7 +554,6 @@ impl SearchMenu for E6Ui {
 
     /// handle a post interaction
     async fn handle_post_interaction(&self, posts: Vec<E6Post>) -> Result<bool> {
-        // prefetch post details in background while user browses the list
         if getopt!(performance.prefetch_enabled) {
             let batch_size = getopt!(performance.prefetch_batch_size);
             let client = self.client.clone();

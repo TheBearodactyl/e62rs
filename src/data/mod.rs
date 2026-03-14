@@ -1,11 +1,11 @@
 //! db mangament stuff
 use {
-    crate::{getopt, sendsync},
     color_eyre::Result,
     rapidfuzz::fuzz,
     std::{fs::File, slice, sync::Arc},
 };
 
+#[cfg(feature = "cli")]
 pub mod history;
 pub mod pools;
 pub mod tags;
@@ -29,7 +29,17 @@ pub struct Buffer<T: Entry> {
     len: usize,
 }
 
-sendsync!(Buffer<T>);
+/// # Safety
+///
+/// Buffer's data is heap-allocated and not shared mutably.
+/// The raw pointer is only used for read access through the safe `iter()` API.
+unsafe impl<T: Entry> Send for Buffer<T> {}
+
+/// # Safety
+///
+/// Buffer's data is heap-allocated and not shared mutably.
+/// The raw pointer is only used for read access through the safe `iter()` API.
+unsafe impl<T: Entry> Sync for Buffer<T> {}
 
 impl<T: Entry> Drop for Buffer<T> {
     fn drop(&mut self) {
@@ -179,13 +189,14 @@ impl<T: Entry> Db<T> {
             .collect()
     }
 
-    /// returns autocompletions for the query (fuzzy: name and desc apply)
+    /// returns autocompletions for the query with a given threshold
     ///
     /// # Arguments
     ///
     /// * `query` - the search query
     /// * `limit` - the max amount of completions to return
-    pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
+    /// * `threshold` - the similarity threshold for matching
+    pub fn autocomplete_with(&self, query: &str, limit: usize, threshold: f64) -> Vec<String> {
         let query_lower = Self::lowercase(query);
         let mut results = Vec::new();
 
@@ -194,7 +205,7 @@ impl<T: Entry> Db<T> {
                 let name_lower = Self::lowercase(entry.name());
                 let name_sim = fuzz::ratio(name_lower.chars(), query_lower.chars()) / 100.0;
 
-                if name_sim > getopt!(completion.tag_similarity_threshold) {
+                if name_sim > threshold {
                     results.push(entry.name().to_string());
 
                     if results.len() >= limit {
@@ -205,6 +216,12 @@ impl<T: Entry> Db<T> {
         }
 
         results
+    }
+
+    /// returns autocompletions for the query using the configured threshold
+    #[cfg(feature = "cli")]
+    pub fn autocomplete(&self, query: &str, limit: usize) -> Vec<String> {
+        self.autocomplete_with(query, limit, crate::getopt!(completion.tag_similarity_threshold))
     }
 
     /// checks if an entry exists with the given name

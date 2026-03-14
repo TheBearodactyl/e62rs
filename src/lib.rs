@@ -1,6 +1,6 @@
 //! e62rs is a CLI e621/926 client
 //!
-//! features include:  
+//! features include:
 //! * 100+ options with sane defaults (see [`crate::config::options`] for all sections and fields)
 //! * fully offline post explorer
 //! * really fast post and pool downloader with batch support
@@ -18,15 +18,19 @@
     missing_docs
 )]
 #![allow(uncommon_codepoints, confusable_idents, unused_parens)]
+#[cfg(feature = "cli")]
 pub mod app;
 pub mod cache;
 pub mod client;
 pub mod config;
 pub mod data;
+#[cfg(feature = "cli")]
 pub mod display;
 pub mod error;
 pub mod macros;
 pub mod models;
+#[cfg(feature = "cli")]
 pub mod serve;
+#[cfg(feature = "cli")]
 pub mod ui;
 pub mod utils;

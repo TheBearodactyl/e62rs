@@ -31,6 +31,7 @@ macro_rules! defer {
 
 /// format a value (lol)
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! fmt_value {
     () => {
         |v| format!("{}", v)
@@ -42,6 +43,7 @@ macro_rules! fmt_value {
 
 /// implement Send + Sync for a type
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! sendsync {
     ($ty:ty) => {
         unsafe impl<T: $crate::data::Entry> Send for $ty {}
@@ -51,6 +53,7 @@ macro_rules! sendsync {
 
 /// repeat an expression n times
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! repeat {
     ($n:expr, $body:expr) => {
         for _ in 0..$n {
@@ -61,6 +64,7 @@ macro_rules! repeat {
 
 /// make a new `String`
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! mkstr {
     ($n:ident) => {
         let mut $n = String::new();
@@ -73,6 +77,7 @@ macro_rules! mkstr {
 
 /// make a new `Vec`
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! mkvec {
     ($n:ident, $t:ty) => {
         let mut $n: Vec<$t> = Vec::new();
@@ -97,6 +102,7 @@ macro_rules! mkvec {
 /// opt_and!(download.save_metadata, save_metadata());
 /// ```
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! opt_and {
     ($field:ident, $a:expr) => {
         if $crate::getopt!($field) {
@@ -113,6 +119,7 @@ macro_rules! opt_and {
 
 /// run a block of code until it succeeds
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! retry {
     (
         retries: $retries:expr,
@@ -145,6 +152,7 @@ macro_rules! retry {
 
 /// make a menu
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! menu {
     (
         $(#[$enum_meta:meta])*
@@ -320,6 +328,7 @@ macro_rules! menu {
 
 /// implement display for a type
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! impl_display {
     ($type:ty, $name:expr, $color:ident, $($field:ident: $format:expr),*) => {
         impl std::fmt::Display for $type {
@@ -336,6 +345,7 @@ macro_rules! impl_display {
 
 /// make a theme
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! impl_theme {
     ($name:ident, $display_name:expr, $variant:expr, $colors:expr) => {
         /// a theme preset
@@ -360,6 +370,7 @@ macro_rules! impl_theme {
 
 /// helper macro for generating validators
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! validator {
     ($struct_name:ty, $( $field:ident => $requirement:expr, $err_msg:expr );* $(;)? ) => {
         impl Validate for $struct_name {
@@ -386,6 +397,7 @@ macro_rules! validator {
 
 /// helper macro for nested validation
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! validator_nested {
     ($struct_name:ty,
         fields: { $( $field:ident => $requirement:expr, $err_msg:expr );* $(;)? }
@@ -425,6 +437,7 @@ macro_rules! validator_nested {
 
 /// get the current value of a given setting
 #[macro_export]
+#[cfg(feature = "cli")]
 macro_rules! getopt {
     () => {
         $crate::config::instance::config()
@@ -500,6 +513,7 @@ macro_rules! getopt {
 }
 
 #[cfg(test)]
+#[cfg(feature = "cli")]
 mod tests {
     use std::cell::RefCell;
 

@@ -1,6 +1,10 @@
 //! configuration stuff
+#[cfg(feature = "cli")]
 pub mod blacklist;
+#[cfg(feature = "cli")]
 pub mod format;
+#[cfg(feature = "cli")]
 pub mod instance;
 pub mod options;
+#[cfg(feature = "cli")]
 pub mod validate;

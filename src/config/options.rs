@@ -131,6 +131,13 @@
 //! line-numbers = false
 //! ```
 use {
+    schemars::JsonSchema,
+    serde::{Deserialize, Serialize},
+    smart_default::SmartDefault,
+};
+
+#[cfg(feature = "cli")]
+use {
     crate::{
         config::validate::{Validate, format_validation_errors},
         utils::FileWriter,
@@ -140,9 +147,6 @@ use {
         eyre::{Context, OptionExt, Result, eyre},
     },
     config::{Config, ConfigBuilder},
-    schemars::JsonSchema,
-    serde::{Deserialize, Serialize},
-    smart_default::SmartDefault,
     std::{
         io::Write,
         path::{Path, PathBuf},
@@ -936,6 +940,7 @@ pub struct E62Rs {
     pub logging: Option<LoggingConfig>,
 }
 
+#[cfg(feature = "cli")]
 impl E62Rs {
     /// load configuration
     pub fn load() -> Result<Self> {

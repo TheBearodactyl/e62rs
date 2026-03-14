@@ -3,7 +3,6 @@ use {
     crate::{
         data::Entry,
         error::Result,
-        getopt,
         models::{TagAliasEntry, TagEntry, TagImplicationEntry},
     },
     hashbrown::{HashMap, HashSet},
@@ -64,13 +63,26 @@ impl Default for TagDb {
 }
 
 impl TagDb {
-    /// loads tag data from configured csv files
-    pub fn load() -> Result<Self> {
-        let tags_path = getopt!(completion.tags);
-        let aliases_path = getopt!(completion.aliases);
-        let impls_path = getopt!(completion.implications);
+    /// loads tag data from explicit csv file paths
+    ///
+    /// # Arguments
+    ///
+    /// * `tags_path` - path to the tags CSV file
+    /// * `aliases_path` - path to the tag aliases CSV file
+    /// * `impls_path` - path to the tag implications CSV file
+    /// * `min_posts` - minimum post count for a tag to be included
+    /// * `sort_by_count` - whether to sort tags by post count
+    /// * `reverse` - whether to reverse the sort order
+    pub fn load_from(
+        tags_path: &str,
+        aliases_path: &str,
+        impls_path: &str,
+        min_posts: i64,
+        sort_by_count: bool,
+        reverse: bool,
+    ) -> Result<Self> {
         let mut tags: Vec<TagEntry> = Vec::new();
-        let file = File::open(&tags_path)?;
+        let file = File::open(tags_path)?;
         let mut rdr = csv::Reader::from_reader(file);
 
         for res in rdr.deserialize() {
@@ -78,7 +90,7 @@ impl TagDb {
         }
 
         let mut aliases: Vec<TagAliasEntry> = Vec::new();
-        let file = File::open(&aliases_path)?;
+        let file = File::open(aliases_path)?;
         let mut rdr = csv::Reader::from_reader(file);
 
         for res in rdr.deserialize() {
@@ -86,7 +98,7 @@ impl TagDb {
         }
 
         let mut impls: Vec<TagImplicationEntry> = Vec::new();
-        let file = File::open(&impls_path)?;
+        let file = File::open(impls_path)?;
         let mut rdr = csv::Reader::from_reader(file);
 
         for res in rdr.deserialize() {
@@ -125,18 +137,17 @@ impl TagDb {
             }
         }
 
-        let min_posts = getopt!(search.min_posts_on_tag) as i64;
         let mut sorted_tags: Vec<Arc<TagEntry>> = tags
             .into_iter()
             .filter(|t| t.post_count > min_posts)
             .map(Arc::new)
             .collect();
 
-        if getopt!(search.sort_tags_by_post_count) {
+        if sort_by_count {
             sorted_tags.sort_by_key(|b| std::cmp::Reverse(b.post_count));
         }
 
-        if getopt!(search.reverse_tags_order) {
+        if reverse {
             sorted_tags.reverse();
         }
 
@@ -148,6 +159,19 @@ impl TagDb {
             impl_map,
             tag_names,
         })
+    }
+
+    /// loads tag data from configured csv files
+    #[cfg(feature = "cli")]
+    pub fn load() -> Result<Self> {
+        Self::load_from(
+            &crate::getopt!(completion.tags),
+            &crate::getopt!(completion.aliases),
+            &crate::getopt!(completion.implications),
+            crate::getopt!(search.min_posts_on_tag) as i64,
+            crate::getopt!(search.sort_tags_by_post_count),
+            crate::getopt!(search.reverse_tags_order),
+        )
     }
 
     /// resolves a tag name through its alias chain
@@ -286,7 +310,6 @@ impl TagDb {
         let mut seen = HashSet::new();
         let mut scored: Vec<(u32, String)> = Vec::new();
 
-        // prefix matches get a bonus to appear first
         if let Some(subtrie) = self.tag_trie.get_raw_descendant(&query_lower) {
             for (key, _) in subtrie.iter().take(limit * 4) {
                 if seen.insert(key.clone()) {
@@ -304,7 +327,6 @@ impl TagDb {
             }
         }
 
-        // fuzzy matching for non-prefix matches
         let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
 
@@ -328,10 +350,9 @@ impl TagDb {
                 continue;
             }
             let mut buf = Vec::new();
-            if let Some(score) = pattern.score(
-                nucleo_matcher::Utf32Str::new(alias, &mut buf),
-                &mut matcher,
-            ) {
+            if let Some(score) =
+                pattern.score(nucleo_matcher::Utf32Str::new(alias, &mut buf), &mut matcher)
+            {
                 seen.insert(resolved.clone());
                 scored.push((score, resolved));
             }

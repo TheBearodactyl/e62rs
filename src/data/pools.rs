@@ -1,6 +1,6 @@
 //! pool db
 use {
-    crate::{data::Entry, getopt, models::PoolEntry},
+    crate::{data::Entry, models::PoolEntry},
     color_eyre::Result,
     hashbrown::HashSet,
     nucleo_matcher::{
@@ -33,19 +33,27 @@ pub struct PoolDb {
 }
 
 impl PoolDb {
-    /// loads pool data from the path set in `completion.pools`
-    pub fn load() -> Result<Self> {
-        let path = getopt!(completion.pools);
-        let file = File::open(path.as_str())?;
+    /// loads pool data from an explicit path with explicit parameters
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - path to the pools CSV file
+    /// * `min_posts` - minimum number of posts for a pool to be included
+    /// * `show_inactive` - whether to include inactive pools
+    /// * `sort_by_count` - whether to sort pools by post count
+    pub fn load_from(
+        path: &str,
+        min_posts: usize,
+        show_inactive: bool,
+        sort_by_count: bool,
+    ) -> Result<Self> {
+        let file = File::open(path)?;
         let mut rdr = csv::Reader::from_reader(file);
 
         let mut pools: Vec<PoolEntry> = Vec::new();
         for res in rdr.deserialize() {
             pools.push(res?);
         }
-
-        let min_posts = getopt!(search.min_posts_on_pool) as usize;
-        let show_inactive = getopt!(search.show_inactive_pools);
 
         let mut pool_trie = Trie::new();
         let mut pool_names = HashSet::with_capacity(pools.len());
@@ -61,7 +69,7 @@ impl PoolDb {
             })
             .collect();
 
-        if getopt!(search.sort_pools_by_post_count) {
+        if sort_by_count {
             sorted_pools.sort_by_key(|b| std::cmp::Reverse(b.post_ids.len()));
         }
 
@@ -70,6 +78,17 @@ impl PoolDb {
             sorted_pools,
             pool_names,
         })
+    }
+
+    /// loads pool data from the path set in `completion.pools`
+    #[cfg(feature = "cli")]
+    pub fn load() -> Result<Self> {
+        Self::load_from(
+            &crate::getopt!(completion.pools),
+            crate::getopt!(search.min_posts_on_pool) as usize,
+            crate::getopt!(search.show_inactive_pools),
+            crate::getopt!(search.sort_pools_by_post_count),
+        )
     }
 
     #[inline(always)]
@@ -125,7 +144,6 @@ impl PoolDb {
         let mut seen = HashSet::new();
         let mut scored: Vec<(u32, String)> = Vec::new();
 
-        // prefix matches get a bonus to appear first
         if let Some(subtrie) = self.pool_trie.get_raw_descendant(&query_lower) {
             for (_, pool) in subtrie.iter().take(limit * 4) {
                 if seen.insert(pool.name.clone()) {
@@ -134,7 +152,6 @@ impl PoolDb {
             }
         }
 
-        // fuzzy matching for non-prefix matches
         let mut matcher = Matcher::new(Config::DEFAULT);
         let pattern = Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart);
 

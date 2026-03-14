@@ -377,9 +377,9 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "bearask"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "723a68d5c3ac0cbe95b1f416da3144e8740f63aceb992f6c67a781bc67a30ed6"
+checksum = "640c13b13fc45f64a4c5b1d3a8cb1ab6d058923f89b2b39aed60e1062b77b4e5"
 dependencies = [
  "crossterm",
  "dyn-clone",
@@ -1251,7 +1251,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "e62rs"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "async-trait",
  "base64",

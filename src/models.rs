@@ -1,10 +1,7 @@
 //! All data types used by e621 for deserializing/serializing API responses.
 //! (documentation for all models was AI generated)
 use {
-    crate::{
-        getopt,
-        utils::{deserialize_bool_from_str, deserialize_post_ids},
-    },
+    crate::utils::{deserialize_bool_from_str, deserialize_post_ids},
     hashbrown::{HashMap, HashSet},
     serde::{Deserialize, Serialize},
 };
@@ -552,14 +549,17 @@ impl E6Post {
         }
     }
 
-    /// checks if this post is blacklisted
-    pub fn is_blacklisted(&self) -> bool {
-        let blacklist = getopt!(search.blacklist);
+    /// checks if this post is blacklisted against the given blacklist rules
+    ///
+    /// # Arguments
+    ///
+    /// * `blacklist` - the blacklist rules to check against
+    pub fn is_blacklisted_by(&self, blacklist: &[String]) -> bool {
         if blacklist.is_empty() {
             return false;
         }
 
-        for rule in &blacklist {
+        for rule in blacklist {
             if self.matches_blacklist_rule(rule) {
                 return true;
             }
@@ -568,15 +568,21 @@ impl E6Post {
         false
     }
 
+    /// checks if this post is blacklisted using the configured blacklist
+    #[cfg(feature = "cli")]
+    pub fn is_blacklisted(&self) -> bool {
+        self.is_blacklisted_by(&crate::getopt!(search.blacklist))
+    }
+
     /// checks if any of the search tags are blacklisted
     ///
     /// # Arguments
     ///
     /// * `search_tags` - a list of tags to compare to the blacklist
-    pub fn search_includes_blacklisted(search_tags: &[String]) -> bool {
-        let blacklist = getopt!(search.blacklist);
+    /// * `blacklist` - the blacklist rules to check against
+    pub fn search_includes_blacklisted_by(search_tags: &[String], blacklist: &[String]) -> bool {
         for search_tag in search_tags {
-            for rule in &blacklist {
+            for rule in blacklist {
                 let (include_tags, exclude_tags) = Self::parse_blacklist_rule(rule);
                 if include_tags.len() == 1
                     && exclude_tags.is_empty()
@@ -590,12 +596,29 @@ impl E6Post {
         false
     }
 
-    /// returns whether the post meets the configured requirements
-    pub fn meets_score_requirements(&self) -> bool {
-        let min_score = getopt!(search.min_post_score);
-        let max_score = getopt!(search.max_post_score);
+    /// checks if any of the search tags are blacklisted using the configured blacklist
+    #[cfg(feature = "cli")]
+    pub fn search_includes_blacklisted(search_tags: &[String]) -> bool {
+        Self::search_includes_blacklisted_by(search_tags, &crate::getopt!(search.blacklist))
+    }
 
+    /// returns whether the post meets the given score requirements
+    ///
+    /// # Arguments
+    ///
+    /// * `min_score` - the minimum score threshold
+    /// * `max_score` - the maximum score threshold
+    pub fn meets_score_requirements_with(&self, min_score: i64, max_score: i64) -> bool {
         self.score.total >= min_score && self.score.total <= max_score
+    }
+
+    /// returns whether the post meets the configured score requirements
+    #[cfg(feature = "cli")]
+    pub fn meets_score_requirements(&self) -> bool {
+        self.meets_score_requirements_with(
+            crate::getopt!(search.min_post_score),
+            crate::getopt!(search.max_post_score),
+        )
     }
 }
 
@@ -605,18 +628,39 @@ impl E6PostsResponse {
     /// # Arguments
     ///
     /// * `search_tags` - the tags included in the search
-    pub fn filter_blacklisted(mut self, search_tags: &[String]) -> Self {
-        if E6Post::search_includes_blacklisted(search_tags) {
+    /// * `blacklist` - the blacklist rules to check against
+    pub fn filter_blacklisted_by(mut self, search_tags: &[String], blacklist: &[String]) -> Self {
+        if E6Post::search_includes_blacklisted_by(search_tags, blacklist) {
             return self;
         }
 
-        self.posts.retain(|post| !post.is_blacklisted());
+        self.posts.retain(|post| !post.is_blacklisted_by(blacklist));
         self
     }
 
-    /// filters out posts that don't meet the min socre requirements
-    pub fn filter_score(mut self) -> Self {
-        self.posts.retain(|post| post.meets_score_requirements());
+    /// filter blacklisted posts using the configured blacklist
+    #[cfg(feature = "cli")]
+    pub fn filter_blacklisted(self, search_tags: &[String]) -> Self {
+        self.filter_blacklisted_by(search_tags, &crate::getopt!(search.blacklist))
+    }
+
+    /// filters out posts that don't meet the given score requirements
+    ///
+    /// # Arguments
+    ///
+    /// * `min_score` - the minimum score threshold
+    /// * `max_score` - the maximum score threshold
+    pub fn filter_score_with(mut self, min_score: i64, max_score: i64) -> Self {
+        self.posts.retain(|post| post.meets_score_requirements_with(min_score, max_score));
         self
+    }
+
+    /// filters out posts that don't meet the configured score requirements
+    #[cfg(feature = "cli")]
+    pub fn filter_score(self) -> Self {
+        self.filter_score_with(
+            crate::getopt!(search.min_post_score),
+            crate::getopt!(search.max_post_score),
+        )
     }
 }

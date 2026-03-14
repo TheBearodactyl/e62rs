@@ -3,7 +3,6 @@ use {
     crate::{
         client::E6Client,
         error::{Report, Result},
-        getopt,
         models::{E6PoolResponse, E6PoolsResponse, E6PostsResponse},
     },
     chrono::{Datelike, Days, Local},
@@ -16,10 +15,9 @@ use {
 };
 
 impl E6Client {
-    #[instrument(skip(self), name = "update_pools")]
-    /// update the local pool database
-    pub async fn update_pools(&self) -> Result<()> {
-        let local_file = getopt!(completion.pools);
+    #[instrument(skip(self), name = "update_pools_with")]
+    /// update the local pool database using an explicit file path
+    pub async fn update_pools_with(&self, local_file: &str) -> Result<()> {
         let local_hash_file = format!("{}.hash", local_file);
 
         let now = Local::now()
@@ -32,8 +30,15 @@ impl E6Client {
             now.day()
         );
 
-        self.download_and_update_file(&url, &local_file, &local_hash_file, "pools")
+        self.download_and_update_file(&url, local_file, &local_hash_file, "pools")
             .await
+    }
+
+    /// update the local pool database using the configured path
+    #[cfg(feature = "cli")]
+    #[instrument(skip(self), name = "update_pools")]
+    pub async fn update_pools(&self) -> Result<()> {
+        self.update_pools_with(&crate::getopt!(completion.pools)).await
     }
 
     /// generic file download with hash-based update check

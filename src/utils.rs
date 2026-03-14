@@ -1,6 +1,5 @@
 //! utilities used across e62rs
 use {
-    crate::getopt,
     base64::{Engine, engine::general_purpose},
     color_eyre::eyre::{Context, Result},
     reqwest::header::{AUTHORIZATION, HeaderMap},
@@ -126,15 +125,20 @@ where
     )
 }
 
-/// make an auth header based on the loaded config
+/// make an auth header from a username and api key
 ///
-/// formats the configured username and api-key into a single string and uses that string to create
+/// formats the given username and api-key into a single string and uses that string to create
 /// a basic-auth header, then returning the header as an auth header for reqwest
 #[must_use]
 #[bearive::argdoc]
 #[error = "it fails to convert the created basic auto str to a header value"]
-pub fn create_auth_header() -> Result<HeaderMap> {
-    let auth_str = format!("{}:{}", getopt!(login.username), getopt!(login.api_key));
+pub fn create_auth_header(
+    /// the username to authenticate with
+    username: &str,
+    /// the api key to authenticate with
+    api_key: &str,
+) -> Result<HeaderMap> {
+    let auth_str = format!("{}:{}", username, api_key);
     let encoded = general_purpose::STANDARD.encode(auth_str.as_bytes());
     let mut headers = HeaderMap::with_capacity(1);
     let auth_value = reqwest::header::HeaderValue::from_str(&format!("Basic {}", encoded))
@@ -142,6 +146,13 @@ pub fn create_auth_header() -> Result<HeaderMap> {
 
     headers.insert(AUTHORIZATION, auth_value);
     Ok(headers)
+}
+
+/// make an auth header based on the loaded config
+#[cfg(feature = "cli")]
+#[must_use]
+pub fn create_auth_header_from_config() -> Result<HeaderMap> {
+    create_auth_header(&crate::getopt!(login.username), &crate::getopt!(login.api_key))
 }
 
 /// shorten a path to a given length
@@ -209,19 +220,30 @@ where
     Ok(())
 }
 
-/// check if there's internet access
+/// check if there's internet access by hitting the given url
 #[must_use]
-pub fn check_for_internet() -> bool {
+#[bearive::argdoc]
+pub fn check_for_internet(
+    /// the url to check connectivity against
+    api_url: &str,
+) -> bool {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap_or_else(|_| reqwest::blocking::Client::new());
 
     client
-        .head(crate::getopt!(http.api))
+        .head(api_url)
         .send()
         .map(|resp| resp.status().is_success())
         .unwrap_or(false)
+}
+
+/// check if there's internet access using the configured api url
+#[cfg(feature = "cli")]
+#[must_use]
+pub fn check_for_internet_from_config() -> bool {
+    check_for_internet(&crate::getopt!(http.api))
 }
 
 /// write some json data to a given file

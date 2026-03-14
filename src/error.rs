@@ -1,8 +1,8 @@
 //! error handling stuff
 use thiserror::Error;
 
-#[derive(Debug, Error)]
 /// An error
+#[derive(Debug, Error)]
 pub enum E6Error {
     /// an IO error
     #[error("i/o error: {0}")]

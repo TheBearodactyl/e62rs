@@ -2,7 +2,6 @@
 use {
     crate::{
         client::E6Client,
-        getopt,
         models::{E6PostResponse, E6PostsResponse},
     },
     chrono::{Datelike, Days, Local},
@@ -15,8 +14,12 @@ use {
 };
 
 impl E6Client {
-    /// try to get the latest posts
-    pub async fn get_latest_posts(&self) -> Result<E6PostsResponse> {
+    /// try to get the latest posts, filtering with the given blacklist
+    ///
+    /// # Arguments
+    ///
+    /// * `blacklist` - the blacklist rules to filter against
+    pub async fn get_latest_posts_with(&self, blacklist: &[String]) -> Result<E6PostsResponse> {
         let url = format!("{}/posts.json", self.base_url);
         let bytes = self.get_cached_or_fetch(&url).await?;
         let mut posts: E6PostsResponse =
@@ -33,21 +36,28 @@ impl E6Client {
             });
         }
 
-        if !getopt!(search.blacklist).is_empty() {
-            posts = posts.filter_blacklisted(&[]);
+        if !blacklist.is_empty() {
+            posts = posts.filter_blacklisted_by(&[], blacklist);
         }
 
         debug!(count = posts.posts.len(), "fetched latest posts");
         Ok(posts)
     }
 
-    #[instrument(skip(self, tags))]
-    /// search posts with the given tags (paginated)
-    pub async fn search_posts(
+    /// try to get the latest posts using the configured blacklist
+    #[cfg(feature = "cli")]
+    pub async fn get_latest_posts(&self) -> Result<E6PostsResponse> {
+        self.get_latest_posts_with(&crate::getopt!(search.blacklist)).await
+    }
+
+    #[instrument(skip(self, tags, blacklist))]
+    /// search posts with the given tags (paginated), filtering with the given blacklist
+    pub async fn search_posts_with(
         &self,
         tags: &[String],
         limit: Option<u64>,
         page_before_id: Option<i64>,
+        blacklist: &[String],
     ) -> Result<E6PostsResponse> {
         let limit = limit.unwrap_or(20).min(320);
         let mut url = format!(
@@ -83,7 +93,7 @@ impl E6Client {
             });
         }
 
-        posts = posts.filter_blacklisted(tags);
+        posts = posts.filter_blacklisted_by(tags, blacklist);
 
         if posts.posts.len() < count_before {
             info!(
@@ -94,6 +104,19 @@ impl E6Client {
         }
 
         Ok(posts)
+    }
+
+    /// search posts with the given tags using the configured blacklist
+    #[cfg(feature = "cli")]
+    #[instrument(skip(self, tags))]
+    pub async fn search_posts(
+        &self,
+        tags: &[String],
+        limit: Option<u64>,
+        page_before_id: Option<i64>,
+    ) -> Result<E6PostsResponse> {
+        self.search_posts_with(tags, limit, page_before_id, &crate::getopt!(search.blacklist))
+            .await
     }
 
     #[instrument(skip(self))]
@@ -120,9 +143,14 @@ impl E6Client {
         Ok(post)
     }
 
-    /// get posts by their ids
-    #[instrument(skip(self, ids), fields(count = ids.len()))]
-    pub async fn get_posts_by_ids(&self, ids: &[i64]) -> Result<Vec<E6PostResponse>> {
+    /// get posts by their ids with explicit concurrency limit and blacklist
+    #[instrument(skip(self, ids, blacklist), fields(count = ids.len()))]
+    pub async fn get_posts_by_ids_with(
+        &self,
+        ids: &[i64],
+        concurrent_limit: usize,
+        blacklist: &[String],
+    ) -> Result<Vec<E6PostResponse>> {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -133,7 +161,7 @@ impl E6Client {
 
         for (i, cached_post) in cached_results.into_iter().enumerate() {
             match cached_post {
-                Some(post) if !post.is_blacklisted() => {
+                Some(post) if !post.is_blacklisted_by(blacklist) => {
                     posts.push(E6PostResponse { post });
                 }
                 Some(_) => {}
@@ -151,7 +179,6 @@ impl E6Client {
             return Ok(posts);
         }
 
-        let concurrent_limit = getopt!(download.threads);
         let semaphore = std::sync::Arc::new(Semaphore::new(concurrent_limit));
         let fetch_futures: Vec<_> = missing_ids
             .into_iter()
@@ -169,7 +196,7 @@ impl E6Client {
         let results = futures::future::join_all(fetch_futures).await;
 
         for result in results.into_iter().flatten() {
-            if !result.post.is_blacklisted() {
+            if !result.post.is_blacklisted_by(blacklist) {
                 posts.push(result);
             }
         }
@@ -177,17 +204,34 @@ impl E6Client {
         Ok(posts)
     }
 
-    #[instrument(skip(self), name = "update_tags")]
-    /// update the local tag databases
-    pub async fn update_tags(&self) -> Result<()> {
+    /// get posts by their ids using the configured concurrency limit and blacklist
+    #[cfg(feature = "cli")]
+    #[instrument(skip(self, ids), fields(count = ids.len()))]
+    pub async fn get_posts_by_ids(&self, ids: &[i64]) -> Result<Vec<E6PostResponse>> {
+        self.get_posts_by_ids_with(
+            ids,
+            crate::getopt!(download.threads),
+            &crate::getopt!(search.blacklist),
+        )
+        .await
+    }
+
+    #[instrument(skip(self), name = "update_tags_with")]
+    /// update the local tag databases with explicit file paths
+    pub async fn update_tags_with(
+        &self,
+        tags_path: &str,
+        aliases_path: &str,
+        implications_path: &str,
+    ) -> Result<()> {
         let now = Local::now()
             .checked_sub_days(Days::new(1))
             .unwrap_or(Local::now());
         let date_str = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
         let files = [
-            ("tags", getopt!(completion.tags)),
-            ("tag_aliases", getopt!(completion.aliases)),
-            ("tag_implications", getopt!(completion.implications)),
+            ("tags", tags_path),
+            ("tag_aliases", aliases_path),
+            ("tag_implications", implications_path),
         ];
 
         for (ty, local_file) in files {
@@ -232,13 +276,13 @@ impl E6Client {
             gz.read_to_end(&mut decompressed)
                 .context(format!("failed to decompress {}", ty))?;
 
-            if let Some(parent) = Path::new(&local_file).parent() {
+            if let Some(parent) = Path::new(local_file).parent() {
                 fs::create_dir_all(parent).await?;
             }
 
             let temp_file = format!("{}.tmp", local_file);
             fs::write(&temp_file, &decompressed).await?;
-            fs::rename(&temp_file, &local_file).await?;
+            fs::rename(&temp_file, local_file).await?;
             fs::write(&hash_file, remote_hash_hex.as_bytes()).await?;
 
             info!(ty, path = %local_file, "✓ Updated");
@@ -246,5 +290,17 @@ impl E6Client {
 
         info!("all tag dbs are up to date");
         Ok(())
+    }
+
+    /// update the local tag databases using the configured paths
+    #[cfg(feature = "cli")]
+    #[instrument(skip(self), name = "update_tags")]
+    pub async fn update_tags(&self) -> Result<()> {
+        self.update_tags_with(
+            &crate::getopt!(completion.tags),
+            &crate::getopt!(completion.aliases),
+            &crate::getopt!(completion.implications),
+        )
+        .await
     }
 }

@@ -28,7 +28,12 @@ use {
     owo_colors::OwoColorize,
     qrcode::QrCode,
     serde::{Deserialize, Serialize},
-    std::{path::PathBuf, str::FromStr, sync::{Arc, Mutex}, time::Duration},
+    std::{
+        path::PathBuf,
+        str::FromStr,
+        sync::{Arc, Mutex},
+        time::Duration,
+    },
     tokio::{fs, sync::Semaphore},
     tracing::{debug, info, warn},
 };
@@ -87,9 +92,7 @@ impl E6Ui {
                 .expect("Failed to create output directory");
         }
 
-        let history = Arc::new(Mutex::new(
-            SearchHistory::load().unwrap_or_default(),
-        ));
+        let history = Arc::new(Mutex::new(SearchHistory::load().unwrap_or_default()));
 
         Self {
             client,
@@ -99,8 +102,6 @@ impl E6Ui {
             history,
         }
     }
-
-    // Add this to the impl E6Ui block in mod.rs:
 
     /// Create a BBF (Bound Book Format) file from a pool
     ///
@@ -239,7 +240,11 @@ impl E6Ui {
                 if !recent.is_empty() {
                     println!("{}", "Recent searches:".bright_black());
                     for (i, entry) in recent.iter().take(5).enumerate() {
-                        println!("  {} {}", format!("{}.", i + 1).bright_black(), entry.bright_black());
+                        println!(
+                            "  {} {}",
+                            format!("{}.", i + 1).bright_black(),
+                            entry.bright_black()
+                        );
                     }
                     println!();
                 }
@@ -940,7 +945,7 @@ impl E6Ui {
             .await
             .map_err(Report::new)?;
 
-        type ArtistResult = Result<(u64, u64, u64), String>; // (new, skipped, blacklisted)
+        type ArtistResult = Result<(u64, u64, u64), String>;
         let mut handles = Vec::with_capacity(selected_artists.len());
 
         for artist in selected_artists {
